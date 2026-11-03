@@ -1,0 +1,219 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Unique user ID from Firebase Auth" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoUrl": { "type": "string", "description": "User profile photo URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last profile update timestamp" }
+      },
+      "required": ["userId", "email", "createdAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A project containing multiple applications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "dataRetentionDays": { "type": "integer" },
+        "piiScrubbingEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "ownerId", "createdAt"]
+    },
+    "Application": {
+      "title": "Application",
+      "description": "An application within a project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "name": { "type": "string" },
+        "platform": { "type": "string" },
+        "packageName": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "sdkSetupStatus": { "type": "string" },
+        "agentConnectionStatus": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "name", "ownerId", "createdAt"]
+    },
+    "CrashReport": {
+      "title": "Crash Report",
+      "description": "Individual crash event report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "applicationId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "exceptionType": { "type": "string" },
+        "message": { "type": "string" },
+        "stackTrace": { "type": "string" },
+        "deviceModel": { "type": "string" },
+        "osVersion": { "type": "string" },
+        "appVersion": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isResolved": { "type": "boolean" },
+        "severity": { "type": "string" },
+        "userId": { "type": "string" },
+        "source": { "type": "string" }
+      },
+      "required": ["id", "applicationId", "projectId", "exceptionType", "timestamp"]
+    },
+    "Issue": {
+      "title": "Issue",
+      "description": "Grouped crashes forming a single issue",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "applicationId": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "fingerprint": { "type": "string" },
+        "severity": { "type": "string" },
+        "status": { "type": "string" },
+        "occurrenceCount": { "type": "integer" },
+        "affectedUsers": { "type": "integer" },
+        "firstSeen": { "type": "string", "format": "date-time" },
+        "lastOccurrence": { "type": "string", "format": "date-time" },
+        "affectedVersions": { "type": "string" },
+        "source": { "type": "string" },
+        "diagnosisResult": { "type": "string" },
+        "trend": { "type": "number" },
+        "mostAffectedOs": { "type": "string" },
+        "mostAffectedDevice": { "type": "string" }
+      },
+      "required": ["id", "projectId", "applicationId", "title", "fingerprint", "firstSeen"]
+    },
+    "AIDiagnosis": {
+      "title": "AI Diagnosis",
+      "description": "AI-generated diagnosis for a crash",
+      "type": "object",
+      "properties": {
+        "crashId": { "type": "string" },
+        "summary": { "type": "string" },
+        "rootCause": { "type": "string" },
+        "certainty": { "type": "string" },
+        "sourceLocation": { "type": "string" },
+        "githubUrl": { "type": "string" },
+        "technicalEvidence": { "type": "string" },
+        "executionContext": { "type": "string" },
+        "whyItHappened": { "type": "string" },
+        "solution": { "type": "string" },
+        "suggestedCode": { "type": "string" },
+        "missingInformation": { "type": "string" },
+        "diffAnalysis": { "type": "string" },
+        "confidence": { "type": "number" },
+        "category": { "type": "string" },
+        "modelId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["crashId", "summary", "rootCause", "certainty", "createdAt"]
+    },
+    "AIProvider": {
+      "title": "AI Provider",
+      "description": "Configured AI provider for a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "apiKey": { "type": "string" },
+        "baseUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastSyncAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "type", "createdAt"]
+    },
+    "ModelTeam": {
+      "title": "Model Team",
+      "description": "A team of AI models",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "goal": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "leaderMemberId": { "type": "string" },
+        "collaborationStyle": { "type": "string" },
+        "usageLimitMonthly": { "type": "number" },
+        "isPublic": { "type": "boolean" },
+        "isTemplate": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "ownerId", "createdAt"]
+    },
+    "TeamExecution": {
+      "title": "Team Execution",
+      "description": "A task execution by a model team",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teamId": { "type": "string" },
+        "userId": { "type": "string" },
+        "prompt": { "type": "string" },
+        "status": { "type": "string" },
+        "finalResult": { "type": "string" },
+        "error": { "type": "string" },
+        "totalTokens": { "type": "integer" },
+        "totalCost": { "type": "number" },
+        "totalRequests": { "type": "integer" },
+        "projectId": { "type": "string" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "teamId", "userId", "prompt", "status", "startedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": "Project",
+      "description": "User projects"
+    },
+    "/users/{userId}/projects/{projectId}/applications/{applicationId}": {
+      "schema": "Application",
+      "description": "Applications within a project"
+    },
+    "/users/{userId}/projects/{projectId}/crashes/{crashId}": {
+      "schema": "CrashReport",
+      "description": "Crash reports for a project"
+    },
+    "/users/{userId}/projects/{projectId}/issues/{issueId}": {
+      "schema": "Issue",
+      "description": "Grouped crash issues"
+    },
+    "/users/{userId}/projects/{projectId}/diagnoses/{crashId}": {
+      "schema": "AIDiagnosis",
+      "description": "AI diagnoses for crashes"
+    },
+    "/users/{userId}/ai_providers/{providerId}": {
+      "schema": "AIProvider",
+      "description": "Configured AI providers (BYOK)"
+    },
+    "/users/{userId}/model_teams/{teamId}": {
+      "schema": "ModelTeam",
+      "description": "User's AI model teams"
+    },
+    "/users/{userId}/team_executions/{executionId}": {
+      "schema": "TeamExecution",
+      "description": "Team execution logs"
+    }
+  }
+}

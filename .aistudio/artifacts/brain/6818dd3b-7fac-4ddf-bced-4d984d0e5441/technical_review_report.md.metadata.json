@@ -1,0 +1,5 @@
+{
+  "summary":  "Technical Review Report for Crash Intelligence. Confirms functional data sources (Sentry, Bugsnag), real-time database aggregation, AI-driven evidence-based diagnosis, and strict zero-fake-data compliance. Includes setup instructions for production API keys.",
+  "updatedAt":  "2026-10-31T15:05:10.388848769Z",
+  "userFacing":  true
+}

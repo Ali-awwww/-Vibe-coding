@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ---------------------------------------------------------
+    // 1. GLOBAL HELPERS
+    // ---------------------------------------------------------
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // 2. USER PROFILES
+    // ---------------------------------------------------------
+    function isValidUser(data) {
+      return data.userId == request.auth.uid &&
+             data.email is string && data.email.size() <= 200 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'photoUrl', 'updatedAt']);
+    }
+
+    // ---------------------------------------------------------
+    // 3. PROJECTS & SUBRESOURCES
+    // ---------------------------------------------------------
+    function isValidProject(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.ownerId == request.auth.uid &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    match /users/{userId}/projects/{projectId} {
+      allow list, get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidProject(incoming());
+      allow update: if isOwner(userId) && isValidProject(incoming()) &&
+                       incoming().id == existing().id &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'dataRetentionDays', 'piiScrubbingEnabled', 'updatedAt']);
+      allow delete: if isOwner(userId);
+
+      // --- Applications ---
+      function isValidApplication(data) {
+        return data.id is string && data.projectId is string &&
+               data.name is string && data.name.size() >= 1 &&
+               data.ownerId == request.auth.uid &&
+               data.createdAt is timestamp && data.createdAt <= request.time;
+      }
+
+      match /applications/{applicationId} {
+        allow list, get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidApplication(incoming());
+        allow update: if isOwner(userId) && isValidApplication(incoming()) &&
+                         incoming().id == existing().id &&
+                         incoming().projectId == existing().projectId &&
+                         incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId);
+      }
+
+      // --- Crashes ---
+      function isValidCrash(data) {
+        return data.id is string && data.applicationId is string &&
+               data.projectId is string && data.exceptionType is string &&
+               data.timestamp is timestamp && data.timestamp <= request.time;
+      }
+
+      match /crashes/{crashId} {
+        allow list, get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidCrash(incoming());
+        allow update: if isOwner(userId) && isValidCrash(incoming()) &&
+                         incoming().id == existing().id;
+        allow delete: if isOwner(userId);
+      }
+
+      // --- Issues ---
+      match /issues/{issueId} {
+        allow list, get: if isOwner(userId);
+        allow create: if isOwner(userId); // Simplified for briefing
+        allow update, delete: if isOwner(userId);
+      }
+
+      // --- Diagnoses ---
+      match /diagnoses/{crashId} {
+        allow list, get: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update, delete: if isOwner(userId);
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 4. AI PROVIDERS (BYOK)
+    // ---------------------------------------------------------
+    match /users/{userId}/ai_providers/{providerId} {
+      allow list, get: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update, delete: if isOwner(userId);
+    }
+
+    // ---------------------------------------------------------
+    // 5. MODEL TEAMS & EXECUTIONS
+    // ---------------------------------------------------------
+    match /users/{userId}/model_teams/{teamId} {
+      allow list, get: if isOwner(userId);
+      allow create, update, delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/team_executions/{executionId} {
+      allow list, get: if isOwner(userId);
+      allow create, update, delete: if isOwner(userId);
+    }
+  }
+}

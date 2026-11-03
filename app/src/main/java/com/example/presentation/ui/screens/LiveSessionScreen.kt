@@ -1,0 +1,338 @@
+package com.example.presentation.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.example.domain.model.*
+import com.example.presentation.navigation.Screen
+import com.example.presentation.viewmodel.LiveTestingViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LiveSessionScreen(
+    sessionId: String,
+    navController: NavController,
+    viewModel: LiveTestingViewModel
+) {
+    val session by viewModel.activeSession.collectAsState()
+    val events by viewModel.events.collectAsState()
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(sessionId) {
+        viewModel.observeSession(sessionId)
+        viewModel.observeEvents(sessionId)
+    }
+
+    // Auto-scroll to bottom when new events arrive
+    LaunchedEffect(events.size) {
+        if (events.isNotEmpty()) {
+            listState.animateScrollToItem(events.size - 1)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("جلسة اختبار مباشرة", style = MaterialTheme.typography.titleMedium)
+                        session?.let {
+                            Text(
+                                "Build: ${it.buildId} (${it.version})",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    session?.let {
+                        if (it.status != TestSessionStatus.COMPLETED && it.status != TestSessionStatus.FAILED) {
+                            TextButton(onClick = { viewModel.stopSession() }) {
+                                Text("إنهاء الجلسة", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // Status Header
+            session?.let { currentSession ->
+                SessionStatusHeader(currentSession)
+            }
+
+            Divider()
+
+            // Events List
+            Box(modifier = Modifier.weight(1f)) {
+                if (events.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("في انتظار الأحداث من التطبيق...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(events) { event ->
+                            EventItem(event)
+                        }
+                        
+                        if (session?.status == TestSessionStatus.CRASH_DETECTED) {
+                            item {
+                                CrashDetectedAlert(
+                                    onViewDetails = {
+                                        session?.crashId?.let { id ->
+                                            navController.navigate(Screen.CrashDetail(id))
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Command input (Simulation)
+            if (session?.status == TestSessionStatus.APP_RUNNING) {
+                CommandInput(onSendCommand = { cmd -> viewModel.sendCommandToAgent(session!!.id, cmd) })
+            }
+        }
+    }
+}
+
+@Composable
+fun SessionStatusHeader(session: TestSession) {
+    val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(
+                            when(session.status) {
+                                TestSessionStatus.APP_RUNNING -> Color.Green
+                                TestSessionStatus.CRASH_DETECTED -> Color.Red
+                                TestSessionStatus.COMPLETED -> Color.Blue
+                                else -> Color.Gray
+                            }
+                        )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = when(session.status) {
+                        TestSessionStatus.PREPARING -> "جاري التجهيز..."
+                        TestSessionStatus.CONNECTED -> "متصل بالجهاز"
+                        TestSessionStatus.APP_RUNNING -> "التطبيق يعمل حاليًا"
+                        TestSessionStatus.CRASH_DETECTED -> "تم رصد انهيار (Crash)!"
+                        TestSessionStatus.WAITING_FOR_REPORT -> "في انتظار التقرير..."
+                        TestSessionStatus.COMPLETED -> "انتهى الاختبار"
+                        TestSessionStatus.FAILED -> "فشل الاختبار"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "الجهاز: ${session.deviceName} | OS: ${session.os}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                "بدأ: ${dateFormat.format(Date(session.startTime))}",
+                style = MaterialTheme.typography.labelSmall
+            )
+            session.endTime?.let {
+                Text(
+                    "انتهى: ${dateFormat.format(Date(it))}",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EventItem(event: TestEvent) {
+    val dateFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
+    
+    Row(verticalAlignment = Alignment.Top) {
+        Text(
+            dateFormat.format(Date(event.timestamp)),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(80.dp),
+            fontFamily = FontFamily.Monospace
+        )
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = when(event.type) {
+                        TestEventType.APP_START -> Icons.Default.Launch
+                        TestEventType.SCREEN_TRANSITION -> Icons.Default.Screenshot
+                        TestEventType.SDK_EVENT -> Icons.Default.Info
+                        TestEventType.NON_FATAL_ERROR -> Icons.Default.Warning
+                        TestEventType.NETWORK_REQUEST -> Icons.Default.Http
+                        TestEventType.APP_STATE_CHANGE -> Icons.Default.SwapHoriz
+                        TestEventType.ANR -> Icons.Default.Timer
+                        TestEventType.CRASH -> Icons.Default.Dangerous
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = when(event.type) {
+                        TestEventType.CRASH, TestEventType.ANR -> MaterialTheme.colorScheme.error
+                        TestEventType.NON_FATAL_ERROR -> MaterialTheme.colorScheme.tertiary
+                        TestEventType.NETWORK_REQUEST -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    event.type.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Text(
+                event.details,
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = if (event.type == TestEventType.CRASH) FontFamily.Monospace else FontFamily.Default,
+                color = if (event.type == TestEventType.CRASH) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                fontSize = if (event.type == TestEventType.CRASH) 12.sp else 14.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun CrashDetectedAlert(onViewDetails: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Dangerous, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "تم رصد انهيار مفاجئ!",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "توقف التطبيق عن العمل بسبب خطأ برمجية. تم جلب تقرير الانهيار وتحليله بواسطة محرك الذكاء الاصطناعي.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onViewDetails,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("مشاهدة تقرير الانهيار والحل المقترح")
+            }
+        }
+    }
+}
+
+@Composable
+fun CommandInput(onSendCommand: (String) -> Unit) {
+    var command by remember { mutableStateOf("") }
+    
+    Surface(
+        tonalElevation = 4.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(8.dp)
+                .navigationBarsPadding()
+                .imePadding(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = command,
+                onValueChange = { command = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("أرسل أمرًا للتطبيق...") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.medium
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(
+                onClick = { 
+                    if (command.isNotBlank()) {
+                        onSendCommand(command)
+                        command = ""
+                    }
+                },
+                enabled = command.isNotBlank()
+            ) {
+                Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}

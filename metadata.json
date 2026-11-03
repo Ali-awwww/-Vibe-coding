@@ -1,0 +1,8 @@
+{
+  "name": "Crash Intelligence AI",
+  "description": "A native Android tool for developers to monitor, analyze, and resolve app crashes using AI-powered diagnostics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
