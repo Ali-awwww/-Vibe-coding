@@ -137,6 +137,9 @@ tasks.withType<Test> {
     if (localRobolectricDir.exists()) {
         systemProperty("robolectric.offline", "true")
         systemProperty("robolectric.dependency.dir", localRobolectricDir.absolutePath)
+        systemProperty("robolectric.default.sdk", "36")
+    } else {
+        systemProperty("robolectric.default.sdk", "34")
     }
     testLogging {
         events("passed", "failed", "skipped")

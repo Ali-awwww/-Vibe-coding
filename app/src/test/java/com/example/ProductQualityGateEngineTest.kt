@@ -14,7 +14,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config
 class ProductQualityGateEngineTest {
 
     private lateinit var engine: ProductQualityGateEngine

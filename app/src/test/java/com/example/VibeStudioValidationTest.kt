@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config
 @OptIn(ExperimentalCoroutinesApi::class)
 class VibeStudioValidationTest {
 
