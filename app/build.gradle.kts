@@ -133,8 +133,8 @@ dependencies {
 tasks.withType<Test> {
     failFast = true
     timeout.set(Duration.ofMinutes(2))
-    systemProperty("robolectric.offline", "true")
-    systemProperty("robolectric.dependency.dir", "/home/appuser/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7")
+    // Let Robolectric download the SDK artifacts it needs instead of relying on
+    // a developer-specific Maven cache path that does not exist on CI runners.
     testLogging {
         events("passed", "failed", "skipped")
     }
