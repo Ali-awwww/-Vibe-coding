@@ -1,0 +1,6 @@
+{
+  "summary": "خطة تفصيلية لإضافة مسارات عمل (GitHub Workflows) متكاملة تشمل فحص الجودة والأمان (Lint & Security Audit)، الفحص التلقائي لطلبات السحب (PR Validation)، وأتمتة الإصدارات (Release Automation) لتطبيق Crash Intelligence AI.",
+  "updatedAt": "2026-11-03T04:00:11.723926111Z",
+  "requestFeedback": true,
+  "userFacing": true
+}
