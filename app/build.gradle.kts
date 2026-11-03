@@ -133,8 +133,11 @@ dependencies {
 tasks.withType<Test> {
     failFast = true
     timeout.set(Duration.ofMinutes(2))
-    // Let Robolectric download the SDK artifacts it needs instead of relying on
-    // a developer-specific Maven cache path that does not exist on CI runners.
+    val localRobolectricDir = file("/home/appuser/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7")
+    if (localRobolectricDir.exists()) {
+        systemProperty("robolectric.offline", "true")
+        systemProperty("robolectric.dependency.dir", localRobolectricDir.absolutePath)
+    }
     testLogging {
         events("passed", "failed", "skipped")
     }
