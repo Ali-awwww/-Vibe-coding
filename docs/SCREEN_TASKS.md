@@ -572,3 +572,5 @@ These objectives are defined per destination. They do not require auditing or im
 - **Test maintenance:** commit `38374002b5e5e821fadc31b46284f413dbfaf14d` updates the existing invalid-login negative-path test to instantiate the Supabase-backed repository with a failing API stub instead of the removed Firebase/Room constructor. The test has been edited but has NOT been executed.
 
 - **Recovery UX safety:** commit `809831c5c3ca963e318c649700bca60640b7ace7` removes the misleading "new password" entry from the recovery mode and disables submission with an explicit notice until the email-verification/deep-link recovery flow is implemented. The repository continues to reject direct password replacement.
+
+- **Identity model correctness:** commit `2b5041232f2c05265b280ec2ff14fc35cfd5b0f9` maps Supabase `created_at` into the app's `UserAccount.createdAt` rather than resetting the account creation timestamp whenever the session is restored.
