@@ -117,22 +117,28 @@ class AuthRepositoryImpl(
             return
         }
 
-        val refreshed = runCatching {
+        try {
             val response = api.refreshSession(
                 publishableKey = publishableKey,
                 request = SupabaseRefreshGrantRequest(stored.refreshToken)
             )
-            requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
-                .toStoredSession()
+            if (!response.isSuccessful) {
+                // Revoke local identity only when the refresh credential is rejected.
+                if (response.code() == 400 || response.code() == 401 || response.code() == 403) {
+                    sessionStore.clear()
+                }
+                _currentUser.value = null
+                return
+            }
+            val refreshed = response.body()?.toStoredSession()
                 ?: throw IllegalStateException("لم يُرجع Supabase جلسة مجددة صالحة.")
-        }.getOrNull()
-
-        if (refreshed == null) {
-            sessionStore.clear()
-            _currentUser.value = null
-        } else {
             sessionStore.write(refreshed)
             _currentUser.value = refreshed.user.toAccount()
+        } catch (_: java.io.IOException) {
+            // Preserve the encrypted refresh token during transient connectivity failures.
+            _currentUser.value = null
+        } catch (_: Exception) {
+            _currentUser.value = null
         }
     }
 
