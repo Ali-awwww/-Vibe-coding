@@ -59,6 +59,7 @@ fun LoginScreen(
     }
     val passwordsMatch = password == confirmPassword
     val canSubmit = !actionState.isLoading &&
+        mode != AuthMode.RECOVER_PASSWORD &&
         emailValid &&
         password.isNotBlank() &&
         (mode == AuthMode.SIGN_IN ||
@@ -245,33 +246,41 @@ fun LoginScreen(
                         keyboardType = KeyboardType.Email
                     )
 
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = {
-                            password = it
-                            validationError = null
-                            viewModel.clearMessages()
-                        },
-                        label = { Text(if (mode == AuthMode.RECOVER_PASSWORD) "كلمة المرور الجديدة" else "كلمة المرور") },
-                        leadingIcon = { Icon(Icons.Default.Lock, null, tint = CyberCyan) },
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور",
-                                    tint = MutedText
-                                )
-                            }
-                        },
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(13.dp),
-                        colors = cyberFieldColors()
-                    )
+                    if (mode == AuthMode.RECOVER_PASSWORD) {
+                        Text(
+                            text = "استعادة كلمة المرور غير مفعّلة بعد. لن نطلب كلمة مرور جديدة قبل إتمام التحقق من ملكية البريد الإلكتروني وربط رابط الاستعادة بالتطبيق.",
+                            color = MutedText,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = {
+                                password = it
+                                validationError = null
+                                viewModel.clearMessages()
+                            },
+                            label = { Text("كلمة المرور") },
+                            leadingIcon = { Icon(Icons.Default.Lock, null, tint = CyberCyan) },
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور",
+                                        tint = MutedText
+                                    )
+                                }
+                            },
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(13.dp),
+                            colors = cyberFieldColors()
+                        )
+                    }
 
-                    if (mode != AuthMode.SIGN_IN) {
+                    if (mode == AuthMode.SIGN_UP) {
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { confirmPassword = it; validationError = null },
@@ -340,7 +349,7 @@ fun LoginScreen(
                                 when (mode) {
                                     AuthMode.SIGN_IN -> "دخول إلى مساحة العمل"
                                     AuthMode.SIGN_UP -> "إنشاء الحساب"
-                                    AuthMode.RECOVER_PASSWORD -> "تحديث كلمة المرور"
+                                    AuthMode.RECOVER_PASSWORD -> "استعادة كلمة المرور غير متاحة حاليًا"
                                 },
                                 fontWeight = FontWeight.Bold
                             )
