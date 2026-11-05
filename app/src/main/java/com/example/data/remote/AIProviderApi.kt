@@ -8,7 +8,7 @@ import retrofit2.http.Query
 
 interface OpenRouterApi {
     @GET("models")
-    suspend fun getModels(): OpenRouterModelsResponse
+    suspend fun getModels(@Header("Authorization") token: String): OpenRouterModelsResponse
 
     @POST("chat/completions")
     suspend fun generateCompletion(
