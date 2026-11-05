@@ -139,7 +139,7 @@ tasks.withType<Test> {
         systemProperty("robolectric.dependency.dir", localRobolectricDir.absolutePath)
         systemProperty("robolectric.default.sdk", "36")
     } else {
-        systemProperty("robolectric.default.sdk", "34")
+        systemProperty("robolectric.default.sdk", "35")
     }
     testLogging {
         events("passed", "failed", "skipped")
