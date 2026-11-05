@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -29,6 +31,7 @@ class AuthRepositoryImpl(
     private val sessionStore: SupabaseSessionStore
 ) : AuthRepository {
 
+    private val refreshMutex = Mutex()
     private val _currentUser = MutableStateFlow(
         sessionStore.read()?.takeIf { it.expiresAtEpochSeconds > nowEpochSeconds() }?.user?.toAccount()
     )
@@ -111,7 +114,7 @@ class AuthRepositoryImpl(
             )
         )
 
-    private suspend fun refreshStoredSessionIfNeeded() {
+    private suspend fun refreshStoredSessionIfNeeded() = refreshMutex.withLock {
         val stored = sessionStore.read() ?: run {
             _currentUser.value = null
             return
