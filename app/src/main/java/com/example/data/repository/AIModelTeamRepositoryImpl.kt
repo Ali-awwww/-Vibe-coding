@@ -28,7 +28,8 @@ class AIModelTeamRepositoryImpl(private val context: Context) : AIModelTeamRepos
             null
         }
     }
-    private fun requireUserId(): String = auth?.currentUser?.uid ?: "usr_dev_master"
+    private fun requireUserId(): String = auth?.currentUser?.uid?.takeIf { it.isNotBlank() }
+        ?: throw IllegalStateException("Authentication is required for team data operations.")
 
     private val localTeams = java.util.concurrent.ConcurrentHashMap<String, ModelTeam>()
     private val localExecutions = java.util.concurrent.ConcurrentHashMap<String, TeamExecution>()
