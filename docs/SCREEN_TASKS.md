@@ -411,3 +411,13 @@ These objectives are defined per destination. They do not require auditing or im
 - For the selected screen: inspect its code and dependencies, refine its tasks, implement, run relevant tests, record exact results and update only its status.
 - All other objectives remain planned work; their presence here does not mean they were inspected or implemented.
 - Suggested dependency path: Login/session identity → Projects/Applications context → Crashes → CrashDetail → DebugSymbols → FixAssistant → FixHistory. This is a proposed sequence, not a completion claim.
+
+
+### 2026-11-05 — Login screen implementation batch
+- **Commit:** `61457a52390321e1c4146651547257d01780c1ce` (Login UI); `40dd91a7c8532dcffbfbe709f3e7f8a5ad98b780` (local auth fallback removal).
+- **Files:** `LoginScreen.kt`, `AuthRepositoryImpl.kt`.
+- **Implemented:** replaced prefilled demo credentials and the quick-demo-login action with empty credential fields; added email/password validation, sign-up confirmation checks, clearer inline validation/errors, a cybernetic space-console visual treatment (dark orbital grid, cyan/violet accents, engineering status panel), and explicit failure when local auth storage is not configured. Removed automatic creation of the hard-coded developer account and its hard-coded sign-in bypass.
+- **Static review:** re-fetched both files from `main`; confirmed the demo credential strings and developer-account branch are absent from the updated auth repository and the new login screen.
+- **Not verified:** Gradle compilation, unit/UI tests, emulator rendering, device behavior, persistence/session restoration and end-to-end sign-up/sign-in.
+- **Known remaining risks:** local sign-in state is held in memory and may not survive process death; password recovery currently changes a locally stored password without an email ownership challenge; Firebase-backed sign-up/sign-in behavior is not yet integrated into these repository methods. Do not mark Login complete until these are resolved and tested.
+- **Status:** Login remains [ ] Not audited/verified. This batch is a partial implementation, not completion.
