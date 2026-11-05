@@ -56,7 +56,11 @@ class TeamValidationViewModel(
         }
     }
 
-    private fun getUserId(): String = authRepository.getCurrentUserSync()?.id ?: "usr_dev_master"
+    private fun getUserId(): String? = authRepository.getCurrentUserSync()?.id?.takeIf { it.isNotBlank() }
+
+    private fun requireAuthenticatedUserId(): String? = getUserId().also { userId ->
+        if (userId == null) _uiState.update { it.copy(errorMessage = "سجّل الدخول بحساب صالح لتشغيل اختبارات التحقق.") }
+    }
 
     fun selectTab(tab: ValidationTab) {
         _uiState.update { it.copy(selectedTab = tab) }
@@ -76,7 +80,7 @@ class TeamValidationViewModel(
 
     fun runAllMatrixTests() {
         if (_uiState.value.matrixProgress.isRunning) return
-        val userId = getUserId()
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             validationEngine.runFullValidationSuite(userId).collect { progress ->
                 _uiState.update { current ->
