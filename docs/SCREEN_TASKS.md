@@ -694,3 +694,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Implementation commits:** `c88526baad5a163df964a1f080abede7cb7224d0` (cosmic scaffold/backdrop/panel introduction), `61b1b6ec21b93c0b2ed5901c8aa01003c6c0dcab` (consistent panel styling), `a746f4b67a9cb937fbed2527abc7d9eccdb00bd7` (unused-import cleanup).
 - **Verification status:** source was re-fetched after edits and the resulting content SHA is `74a084137eb146b42293f72f415314ba81c745c1`. No Gradle build, unit tests, screenshot capture, emulator run, or physical Android device validation was executed. Do not mark the dashboard audited or visually verified until those checks are performed.
 - **Scope boundary:** this is a focused home-dashboard styling pass, not the gated 27-route screen audit. Supabase migration and its acceptance gate remain unchanged.
+
+
+## 2026-11-06 — Index missing team execution project foreign key (Supabase migration applied)
+
+- **Finding:** Supabase Performance Advisor reported `public.team_executions.project_id` foreign key without a covering index. Catalog inspection confirmed the table had indexes on `id`, `(team_id, started_at_ms DESC)`, and `(user_id, started_at_ms DESC)`, but not `project_id`.
+- **Change:** added `supabase/migrations/20261106010000_index_team_executions_project_id.sql` with `CREATE INDEX IF NOT EXISTS team_executions_project_id_idx ON public.team_executions (project_id);`.
+- **Commits:** migration file `0a2f6d80560335390aeb0eeb76fb6640b661efbb`; this documentation update records the applied change.
+- **Backend verification:** Supabase `apply_migration` returned success; a subsequent `pg_indexes` query confirmed the index definition. The Performance Advisor no longer reports the `unindexed_foreign_keys` finding for this FK. It now reports 14 INFO-level unused indexes, including the new index; treat those as workload-dependent notices in this pre-traffic environment and do not remove the index solely on that basis.
+- **Limitations:** no query-plan/real workload benchmark, Android build, test suite, or device validation was executed. The index change does not complete the Supabase cloud feature gate.
