@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppDatabase
 import com.example.data.remote.OpenRouterApi
+import com.example.data.remote.supabase.*
 import com.example.data.remote.OpenRouterChatRequest
 import com.example.data.remote.OpenRouterChatResponse
 import com.example.data.repository.AIModelRepositoryImpl
@@ -19,6 +20,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.IOException
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -90,9 +92,51 @@ class ResilienceAndNegativePathTest {
 
     @Test
     fun `test invalid login credentials return failure result`() = runTest(testDispatcher) {
+        val unavailableAuthApi = object : SupabaseAuthApi {
+            override suspend fun signUp(
+                publishableKey: String,
+                redirectTo: String?,
+                request: SupabaseSignUpRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("network unavailable")
+
+            override suspend fun signInWithPassword(
+                publishableKey: String,
+                grantType: String,
+                request: SupabasePasswordGrantRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("network unavailable")
+
+            override suspend fun refreshSession(
+                publishableKey: String,
+                grantType: String,
+                request: SupabaseRefreshGrantRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("network unavailable")
+
+            override suspend fun verifyEmailOtp(
+                publishableKey: String,
+                request: SupabaseVerifyOtpRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("network unavailable")
+
+            override suspend fun requestPasswordRecovery(
+                publishableKey: String,
+                redirectTo: String?,
+                request: SupabaseRecoveryRequest
+            ): retrofit2.Response<Unit> = throw IOException("network unavailable")
+
+            override suspend fun updatePassword(
+                publishableKey: String,
+                bearerToken: String,
+                request: SupabaseUpdateUserRequest
+            ): retrofit2.Response<SupabaseAuthUser> = throw IOException("network unavailable")
+
+            override suspend fun signOut(
+                publishableKey: String,
+                bearerToken: String
+            ): retrofit2.Response<Unit> = throw IOException("network unavailable")
+        }
         val authRepo = com.example.data.repository.AuthRepositoryImpl(
-            null,
-            null
+            api = unavailableAuthApi,
+            publishableKey = "test-publishable-key",
+            sessionStore = SupabaseSessionStore(context)
         )
         val result = authRepo.signIn("wrong@example.com", "bad_pass")
         
