@@ -496,6 +496,16 @@ These objectives are defined per destination. They do not require auditing or im
 - **Known remaining risks:** local sign-in state is held in memory and may not survive process death; password recovery currently changes a locally stored password without an email ownership challenge; Firebase-backed sign-up/sign-in behavior is not yet integrated into these repository methods. Do not mark Login complete until these are resolved and tested.
 - **Status:** Login remains [ ] Not audited/verified. This batch is a partial implementation, not completion.
 
+### 2026-11-05 — Supabase project membership and table privilege hardening
+- **Database migration:** `harden_public_table_grants_and_project_membership` applied successfully to `hgfgbjomwhogpswpqusk`.
+- Revoked all direct table privileges from `anon` across the `public` schema. Authenticated clients retain only SELECT/INSERT/UPDATE/DELETE table privileges, subject to RLS; elevated table privileges such as TRUNCATE, REFERENCES and TRIGGER are not granted.
+- Restricted `projects` updates to the explicit mutable columns `name`, `description`, `data_retention_days`, and `pii_scrubbing_enabled`. Client updates cannot change `owner_id`.
+- Restricted `project_members` updates to `role`, `user_email`, and `display_name`; client updates cannot change `user_id` or `project_id`.
+- Replaced membership insert/update policy logic: project owners may appoint ADMIN/DEVELOPER/VIEWER; admins may only add/change DEVELOPER/VIEWER; no membership row may be assigned OWNER. The actual project owner remains represented by `projects.owner_id`.
+- **Verification:** confirmed no direct anon SELECT/INSERT grants on projects/members; authenticated SELECT remains granted; column privilege checks confirmed authenticated clients cannot update project `owner_id` or membership `user_id`, while allowed project name and member role updates remain permitted. Confirmed RLS enabled on all 9 public tables. Supabase security advisor returned zero lints.
+- **Limitations:** this verifies catalog privileges, policy definitions and advisor output, not a live two-user REST/API attack test. Real owner/admin/non-member test identities and end-to-end authorization tests remain required before production.
+- **Android status:** Supabase is still not connected to the Android client; Firebase replacement, Gradle build and device tests remain pending. Priority 0 gate remains open.
+
 ### 2026-11-05 — Supabase client configuration and RLS security review
 - **Commit:** `10d2840e7a9c0521733b412be929acbaabfe4f89`.
 - **File:** `.env.example`.
