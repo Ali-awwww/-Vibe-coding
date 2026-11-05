@@ -14,7 +14,7 @@
 - **Android integration:** configure Supabase Kotlin client and secure auth-session persistence. Remove Firebase SDK/configuration and obsolete code only after its replacement is implemented and verified.
 - **Execution order:** create isolated project → inventory Firebase usage/data models → design schema, migrations, RLS and Storage buckets → implement required Edge Functions → integrate Android repositories/auth/session → remove obsolete Firebase dependencies/config → test authentication, authorization boundaries, CRUD, uploads/downloads and failure/offline behavior.
 - **Acceptance:** no production feature depends on Firebase; all cloud access is scoped to authenticated users and authorized projects; RLS and negative authorization tests pass; no secrets in source control; Android build and end-to-end flows are verified.
-- **Current status:** requested and recorded. New project creation is pending confirmation of the Supabase organization. Existing `qabasapp` was inspected and must remain untouched; no new project has been created.
+- **Current status (2026-11-05):** dedicated Supabase project successfully created and verified as `ACTIVE_HEALTHY`: `vibe-coding` (`hgfgbjomwhogpswpqusk`), organization `Developer Abu Mu'adh`, region `eu-west-1`, API URL `https://hgfgbjomwhogpswpqusk.supabase.co`. Initial `public` schema is empty and migration history is empty. Existing `qabasapp` remains untouched. Firebase inventory, schema design, RLS, Android integration and Firebase removal are still pending; do not treat migration as complete.
 
 ## Navigation screen inventory
 
