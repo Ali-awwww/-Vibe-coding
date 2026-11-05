@@ -33,11 +33,18 @@ fun LiveTestingScreen(
     val applications by viewModel.applications.collectAsState()
     val selectedProjectId by viewModel.selectedProjectId.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val operationError by viewModel.operationError.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     val sessions by viewModel.sessions.collectAsState()
 
     var showStartDialog by remember { mutableStateOf<Application?>(null) }
 
+    LaunchedEffect(operationError) {
+        operationError?.let { snackbarHostState.showSnackbar(it) }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.live_testing)) },
