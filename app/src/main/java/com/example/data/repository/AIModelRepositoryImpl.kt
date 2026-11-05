@@ -90,20 +90,7 @@ class AIModelRepositoryImpl(
                 
                 fetchedModels + virtualFreeModel
             }
-            AIProviderType.HUGGING_FACE -> {
-                throw UnsupportedOperationException("Hugging Face inference is not configured yet. This provider is intentionally unavailable.")
-                response.map { data ->
-                    AIModel(
-                        id = "${provider.id}:${data.modelId}",
-                        providerId = provider.id,
-                        apiId = data.modelId,
-                        name = data.modelId.substringAfter("/"),
-                        isFree = true,
-                        capabilities = listOf(AICapability.REASONING),
-                        category = AIModelCategory.FREE
-                    )
-                }
-            }
+            AIProviderType.HUGGING_FACE -> throw UnsupportedOperationException("Hugging Face inference is not configured yet.")
             AIProviderType.GOOGLE_GEMINI -> {
                 listOf(
                     AIModel(
@@ -158,11 +145,15 @@ class AIModelRepositoryImpl(
                 model.generateContent("test")
             }
             AIProviderType.OPEN_ROUTER -> {
+                val listedModels = openRouterApi.getModels("Bearer $apiKey").data
+                val testModel = listedModels.firstOrNull { it.pricing.prompt == "0" && it.pricing.completion == "0" }
+                    ?: listedModels.firstOrNull()
+                    ?: throw Exception("OpenRouter returned no models")
                 val response = openRouterApi.generateCompletion(
                     "Bearer $apiKey",
                     OpenRouterChatRequest(
-                        model = "google/gemini-flash-1.5",
-                        messages = listOf(ChatMessage("user", "hi"))
+                        model = testModel.id,
+                        messages = listOf(ChatMessage("user", "ping"))
                     )
                 )
                 if (response.choices.firstOrNull()?.message?.content.isNullOrBlank()) {
