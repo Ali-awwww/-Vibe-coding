@@ -317,7 +317,6 @@ fun StartTestingDialog(
 ) {
     var version by remember { mutableStateOf("1.0.0") }
     var buildId by remember { mutableStateOf("B${System.currentTimeMillis().toString().takeLast(6)}") }
-    var triggerCrash by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -340,26 +339,15 @@ fun StartTestingDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = triggerCrash,
-                        onCheckedChange = { triggerCrash = it }
-                    )
-                    Text("محاكاة انهيار (Simulate Crash)")
-                }
-                
                 Text(
-                    "ملاحظة: تأكد من أن تطبيقك يحتوي على SDK الخاص بـ Crash Intelligence ومرتبط بالعميل المحلي.",
+                    "الاختبار المباشر غير متاح حتى يتم تثبيت Agent حقيقي وربطه. لن تُنشأ جلسة أو نتائج محاكاة.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         },
         confirmButton = {
-            Button(onClick = { 
-                val finalBuildId = if (triggerCrash) "crash-$buildId" else buildId
-                onConfirm(version, finalBuildId) 
-            }) {
+            Button(onClick = { onConfirm(version, buildId) }) {
                 Text("بدء")
             }
         },
