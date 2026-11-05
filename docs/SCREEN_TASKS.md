@@ -82,6 +82,17 @@ Complete each slice end-to-end before marking it complete. Visual redesign and f
 - Commits: `6fab4b90c3cd99d045c3ce9a887885a5f0c5db7d`, `00f8b4e071ec0198999e46e4449253a037fed5b5`, `72670cd8cca161217ab87b5b23be52f59ed1a7ad`.
 - Verification: source edits were accepted by GitHub. No Gradle build, unit test, emulator/device run, or live GitHub PR flow was executed. This is a targeted UI/ViewModel guard, not a repository-wide removal of `usr_dev_master`; other fallback references remain open in the shared prerequisite checklist.
 
+## 2026-11-06 — Cross-feature fallback identity hardening (source changes; runtime unverified)
+
+- `AIModelTeamRepositoryImpl.kt`: replaced the implicit `usr_dev_master` identity with an explicit authentication failure for repository operations requiring a user.
+- `CrashRepositoryImpl.kt`: removed the shared fallback from its authentication helper and from AI fix/verification model selection. Missing or unverifiable identity now fails closed rather than routing work to a shared developer account.
+- `TeamValidationViewModel.kt`: validation runs now require a non-blank authenticated user and surface a sign-in message otherwise.
+- `TeamChatViewModel.kt`: initial team loading and user-scoped team actions now stop with an authentication message when no current user exists.
+- `DevDebugCenterViewModel.kt`: clears workspace data and reports the sign-in requirement instead of loading a shared developer workspace.
+- Commits: `4989f52952991c9b09d7c0edacfd55c826ad7421`, `ee1520ab5b63b95d5ff92d8b0401a3126ffa42e4`, `d42e86fd8bd931dedd15d18fee7473bb280ba3fc`, `3357dad8819df4d5ef8c876d4b129313d13b459d`, `9b9b64721d3e43b67c16be5ead6a4f65ea9956f0`, `f18fcfd70e3bc4e0c10cad993b75402003c3a31e`.
+- Verification: all edited source files were re-fetched from `main`; the targeted fallback strings were checked. No Gradle build, automated test, emulator/device run, or backend authorization test was executed.
+- Remaining: `SeedData.kt` still contains a developer-owned sample project and member fixtures. Treat this as demo/seed data requiring an explicit production-seeding review; do not silently assign those records to a real user. The repository-wide identity audit remains open, including all remaining user/workspace/project fallback patterns.
+
 ## Navigation screen inventory
 
 | # | Route / destination | UI implementation | Parameters | Audit status |
