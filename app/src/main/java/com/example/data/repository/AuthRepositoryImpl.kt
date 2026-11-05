@@ -4,7 +4,6 @@ import com.example.data.remote.supabase.SupabaseAuthApi
 import com.example.data.remote.supabase.SupabaseAuthResponse
 import com.example.data.remote.supabase.SupabasePasswordGrantRequest
 import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
-import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseSessionStore
 import com.example.data.remote.supabase.SupabaseSignUpRequest
 import com.example.data.remote.supabase.SupabaseStoredSession
@@ -82,10 +81,12 @@ class AuthRepositoryImpl(
         val session = sessionStore.read()
         try {
             if (session != null && publishableKey.isNotBlank()) {
-                api.signOut(
-                    publishableKey = publishableKey,
-                    bearerToken = "Bearer ${session.accessToken}"
-                )
+                runCatching {
+                    api.signOut(
+                        publishableKey = publishableKey,
+                        bearerToken = "Bearer ${session.accessToken}"
+                    )
+                }
             }
         } finally {
             sessionStore.clear()
