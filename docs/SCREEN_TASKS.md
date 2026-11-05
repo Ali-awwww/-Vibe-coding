@@ -180,6 +180,19 @@ The product target is a dependable Android development and diagnostics workspace
 - These notes describe prior code changes; they do not assert that Gradle, CI, emulator or device verification has passed. Record new verification results here only after observing them.
 
 
+### 2026-11-05 — Supabase team persistence schema
+- Applied migration `add_model_teams_and_executions` to project `hgfgbjomwhogpswpqusk`.
+- Added `public.model_teams` with JSONB storage for members/settings/governance and owner-bound UUID.
+- Added `public.team_executions` with execution state, steps, messages, shared memory, usage, failover and attachment metadata; references team, authenticated user and optional project.
+- Enabled RLS and added owner-only SELECT/INSERT/UPDATE/DELETE policies. Execution access additionally requires ownership of the parent team.
+- Added owner/time indexes and authenticated grants.
+- Verified both tables and all four policies per table through Supabase metadata; security advisor returned zero lints after migration.
+- Existing public schema currently has 9 core tables including these two team tables. All are empty; no Firebase data has been migrated.
+- **Limitations:** RLS was inspected through catalog metadata and Supabase advisor only; it has not yet been exercised using separate real authenticated test accounts. Team data remains JSONB aggregate storage matching current Kotlin model shape; normalization may be required if team collaboration expands to independent membership/message queries.
+- **Android integration:** still not implemented. No Kotlin/Gradle changes, no app build, and no device tests in this batch.
+- **Next:** model remaining repository data (integrations, GitHub connections, symbols, fixes, validations, notifications, AI provider settings, Vibe workspaces) against domain models, then implement Supabase auth/session and repository adapters.
+- **Gate:** Supabase integration remains Priority 0 and blocks ordinary screen tasks.
+
 ### 2026-11-05 — Firebase dependency inventory and Android SDK compatibility review
 - **Repository scan:** GitHub code search for `firebase` identified Firebase references in `AuthRepositoryImpl.kt`, `CrashRepositoryImpl.kt`, `AIModelTeamRepositoryImpl.kt`, `DependencyProvider.kt`, `FirebaseUtil.kt`, `CrashIntelligenceApp.kt`, `SdkIntegrationRepositoryImpl.kt`, `SeedData.kt`, `Models.kt`, `SetupGuideScreen.kt`, `IntegrationsScreen.kt`, `WorkspaceGitEngine.kt`, `VibeQualityTestingEngine.kt`, `ProductQualityGateEngine.kt`, test sources, and Firebase-specific resources/configuration. This is a search-derived inventory and each candidate still needs contextual review before removal.
 - **Confirmed runtime wiring:** `DependencyProvider` constructs Firebase Auth and Firestore and injects them into repositories; `CrashIntelligenceApp` calls Firebase initialization; `FirebaseUtil` contains a fake programmatic FirebaseOptions fallback; `AuthRepositoryImpl` uses Firebase Auth + Firestore profiles and still has a local Room auth branch; `CrashRepositoryImpl` and `AIModelTeamRepositoryImpl` use Firestore. `AIModelTeamRepositoryImpl` stores teams and executions under user-scoped Firestore subcollections.
