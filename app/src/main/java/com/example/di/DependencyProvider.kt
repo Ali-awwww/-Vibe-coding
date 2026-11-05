@@ -8,7 +8,10 @@ import com.example.data.repository.CrashRepositoryImpl
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.CrashRepository
 
+import com.example.BuildConfig
 import com.example.R
+import com.example.data.remote.supabase.SupabaseAuthApi
+import com.example.data.remote.supabase.SupabaseSessionStore
 import com.example.data.remote.*
 import com.example.data.repository.*
 import com.example.domain.repository.*
@@ -92,6 +95,13 @@ object DependencyProvider {
         .addConverterFactory(MoshiConverterFactory.create())
         .build()
 
+    private val supabaseRetrofit = Retrofit.Builder()
+        .baseUrl(BuildConfig.SUPABASE_URL.trimEnd('/') + "/")
+        .addConverterFactory(MoshiConverterFactory.create())
+        .build()
+
+    private val supabaseAuthApi = supabaseRetrofit.create(SupabaseAuthApi::class.java)
+
     private val openRouterRetrofit = Retrofit.Builder()
         .baseUrl("https://openrouter.ai/api/v1/")
         .addConverterFactory(MoshiConverterFactory.create())
@@ -125,9 +135,9 @@ object DependencyProvider {
     fun provideAuthRepository(context: Context): AuthRepository {
         return authRepository ?: synchronized(this) {
             authRepository ?: AuthRepositoryImpl(
-                db = getFirestore(context),
-                auth = getFirebaseAuth(context),
-                crashDao = getDatabase(context).crashDao()
+                api = supabaseAuthApi,
+                publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
+                sessionStore = SupabaseSessionStore(context.applicationContext)
             ).also { authRepository = it }
         }
     }
