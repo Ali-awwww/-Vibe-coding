@@ -103,7 +103,7 @@ fun AppNavigation() {
             val fixAssistantViewModel: FixAssistantViewModel = viewModel {
                 DependencyProvider.provideFixAssistantViewModel(context)
             }
-            val currentUserId = mainViewModel.currentUser.collectAsState().value?.id ?: "usr_dev_master"
+            val currentUserId = mainViewModel.currentUser.collectAsState().value?.id
             FixAssistantScreen(
                 crashId = route.crashId,
                 navController = navController,
