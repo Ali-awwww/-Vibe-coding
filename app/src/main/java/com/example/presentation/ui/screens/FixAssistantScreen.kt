@@ -36,7 +36,7 @@ fun FixAssistantScreen(
     crashId: String,
     navController: NavController,
     viewModel: FixAssistantViewModel,
-    userId: String = "usr_dev_master"
+    userId: String?
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -134,8 +134,9 @@ fun FixAssistantScreen(
                             isCreatingPr = uiState.isCreatingPr,
                             isVerifying = uiState.isVerifying,
                             prUrl = uiState.prUrl,
+                            canCreatePr = !userId.isNullOrBlank(),
                             onCopy = { clipboardManager.setText(AnnotatedString(fix.suggestedCode)) },
-                            onCreatePr = { viewModel.applyFixAndCreatePr(fix.id, userId) },
+                            onCreatePr = { userId?.takeIf { it.isNotBlank() }?.let { viewModel.applyFixAndCreatePr(fix.id, it) } },
                             onVerifyFix = { showVerifyDialog = true }
                         )
                     }
@@ -224,6 +225,7 @@ fun FixSuggestionCard(
     isCreatingPr: Boolean,
     isVerifying: Boolean,
     prUrl: String?,
+    canCreatePr: Boolean,
     onCopy: () -> Unit,
     onCreatePr: () -> Unit,
     onVerifyFix: () -> Unit
@@ -291,7 +293,7 @@ fun FixSuggestionCard(
                 }
             } else {
                 Text(
-                    stringResource(R.string.pr_disclaimer),
+                    if (canCreatePr) stringResource(R.string.pr_disclaimer) else "يلزم تسجيل الدخول بحساب صالح لإنشاء Pull Request.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -299,7 +301,7 @@ fun FixSuggestionCard(
                 Button(
                     onClick = onCreatePr,
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isCreatingPr,
+                    enabled = !isCreatingPr && canCreatePr,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     if (isCreatingPr) {
