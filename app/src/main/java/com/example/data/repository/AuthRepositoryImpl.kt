@@ -1,287 +1,145 @@
 package com.example.data.repository
 
-import android.content.Context
-import android.util.Log
-import androidx.credentials.ClearCredentialStateRequest
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.example.R
-import com.example.data.local.CrashDao
-import com.example.domain.model.AuditLog
+import com.example.data.remote.supabase.SupabaseAuthApi
+import com.example.data.remote.supabase.SupabaseAuthResponse
+import com.example.data.remote.supabase.SupabasePasswordGrantRequest
+import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
+import com.example.data.remote.supabase.SupabaseRecoveryRequest
+import com.example.data.remote.supabase.SupabaseSessionStore
+import com.example.data.remote.supabase.SupabaseSignUpRequest
+import com.example.data.remote.supabase.SupabaseStoredSession
+import com.example.data.remote.supabase.SupabaseUserMetadata
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
-import com.example.util.SecurityUtils
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import java.util.UUID
 
+/**
+ * Supabase is the only identity authority in this repository.
+ * No Firebase or Room credential fallback is permitted here.
+ */
 class AuthRepositoryImpl(
-    private val db: FirebaseFirestore? = null,
-    private val auth: FirebaseAuth? = null,
-    private val crashDao: CrashDao? = null
+    private val api: SupabaseAuthApi,
+    private val publishableKey: String,
+    private val sessionStore: SupabaseSessionStore
 ) : AuthRepository {
 
-    private val _localCurrentUser = MutableStateFlow<UserAccount?>(null)
+    private val _currentUser = MutableStateFlow(
+        sessionStore.read()?.takeIf { it.expiresAtEpochSeconds > nowEpochSeconds() }?.user?.toAccount()
+    )
 
-    override val currentUser: Flow<UserAccount?> = callbackFlow {
-        val currentAuth = auth
-        if (currentAuth == null) {
-            val job = CoroutineScope(Dispatchers.IO).launch {
-                _localCurrentUser.collect { user ->
-                    trySend(user)
-                }
-            }
-            awaitClose { job.cancel() }
-            return@callbackFlow
-        }
+    override val currentUser: Flow<UserAccount?> = _currentUser.asStateFlow()
 
-        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-            val firebaseUser = firebaseAuth.currentUser
-            if (firebaseUser != null) {
-                val currentDb = db
-                if (currentDb != null) {
-                    val docRef = currentDb.collection("users").document(firebaseUser.uid)
-                    val registration = docRef.addSnapshotListener { snapshot, error ->
-                        if (error != null) {
-                            Log.e("Auth", "Error fetching user profile", error)
-                            return@addSnapshotListener
-                        }
-                        if (snapshot != null && snapshot.exists()) {
-                            val userAccount = snapshot.toObject(UserAccount::class.java)
-                            trySend(userAccount)
-                        } else {
-                            trySend(UserAccount(
-                                id = firebaseUser.uid,
-                                email = firebaseUser.email ?: "",
-                                displayName = firebaseUser.displayName ?: "",
-                                createdAt = System.currentTimeMillis()
-                            ))
-                        }
-                    }
-                } else {
-                    trySend(UserAccount(
-                        id = firebaseUser.uid,
-                        email = firebaseUser.email ?: "",
-                        displayName = firebaseUser.displayName ?: "",
-                        createdAt = System.currentTimeMillis()
-                    ))
-                }
-            } else {
-                // Firebase is the active auth authority; never fall back to a stale local identity.
-                trySend(null)
-            }
-        }
-        currentAuth.addAuthStateListener(listener)
-        awaitClose {
-            currentAuth.removeAuthStateListener(listener)
-        }
-    }
-
-    override fun getCurrentUserSync(): UserAccount? {
-        val firebaseUser = auth?.currentUser
-        if (firebaseUser != null) {
-            return UserAccount(
-                id = firebaseUser.uid,
-                email = firebaseUser.email ?: "",
-                displayName = firebaseUser.displayName ?: "",
-                createdAt = System.currentTimeMillis()
-            )
-        }
-        return _localCurrentUser.value
-    }
+    override fun getCurrentUserSync(): UserAccount? = _currentUser.value
 
     override suspend fun signUp(
         email: String,
         password: String,
         displayName: String,
         organization: String
-    ): Result<UserAccount> {
-        val firebaseAuth = auth
-        if (firebaseAuth != null) {
-            return runCatching {
-                val result = firebaseAuth.createUserWithEmailAndPassword(email.trim(), password).await()
-                val firebaseUser = result.user ?: throw IllegalStateException("تعذر إنشاء حساب المصادقة.")
-                runCatching {
-                    firebaseUser.updateProfile(
-                        com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                            .setDisplayName(displayName.trim())
-                            .build()
-                    ).await()
-                }.onFailure { error ->
-                    Log.w("Auth", "Account created, but display-name update failed", error)
-                }
-                val account = UserAccount(
-                    id = firebaseUser.uid,
-                    email = firebaseUser.email ?: email.trim(),
-                    displayName = firebaseUser.displayName ?: displayName.trim(),
-                    organization = organization.trim(),
-                    createdAt = System.currentTimeMillis(),
-                    lastLoginAt = System.currentTimeMillis()
-                )
-                runCatching {
-                    db?.collection("users")?.document(firebaseUser.uid)
-                        ?.set(
-                            mapOf(
-                                "id" to account.id,
-                                "email" to account.email,
-                                "displayName" to account.displayName,
-                                "organization" to account.organization,
-                                "createdAt" to account.createdAt,
-                                "lastLoginAt" to account.lastLoginAt
-                            ),
-                            SetOptions.merge()
-                        )?.await()
-                }.onFailure { error ->
-                    Log.w("Auth", "Account created, but profile synchronization failed", error)
-                }
-                account
-            }
-        }
-
-        val dao = crashDao
-        if (dao != null) {
-            val existing = dao.getUserByEmail(email.trim())
-            if (existing != null) {
-                return Result.failure(IllegalArgumentException("البريد الإلكتروني مسجل مسبقاً"))
-            }
-            val salt = SecurityUtils.generateSalt()
-            val hash = SecurityUtils.hashPassword(password, salt)
-            val newUser = UserAccount(
-                id = UUID.randomUUID().toString(),
+    ): Result<UserAccount> = runCatching {
+        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        val response = api.signUp(
+            publishableKey = publishableKey,
+            request = SupabaseSignUpRequest(
                 email = email.trim(),
-                passwordHash = hash,
-                salt = salt,
-                displayName = displayName.ifBlank { email.substringBefore("@") },
-                organization = organization.ifBlank { "Independent Team" },
-                createdAt = System.currentTimeMillis(),
-                lastLoginAt = System.currentTimeMillis()
+                password = password,
+                data = SupabaseUserMetadata(
+                    displayName = displayName.trim(),
+                    organization = organization.trim()
+                )
             )
-            dao.insertUser(newUser)
-            _localCurrentUser.value = newUser
-            return Result.success(newUser)
-        }
-        return Result.failure(IllegalStateException("تخزين الحسابات المحلية غير مهيأ."))
+        )
+        val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
+        val session = body.toStoredSession()
+            ?: throw IllegalStateException(
+                "تم إرسال طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول."
+            )
+        sessionStore.write(session)
+        session.user.toAccount()
     }
 
-    override suspend fun signIn(email: String, password: String): Result<UserAccount> {
-        val firebaseAuth = auth
-        if (firebaseAuth != null) {
-            return runCatching {
-                val result = firebaseAuth.signInWithEmailAndPassword(email.trim(), password).await()
-                val firebaseUser = result.user ?: throw IllegalStateException("تعذر استعادة حساب المصادقة.")
-                val account = UserAccount(
-                    id = firebaseUser.uid,
-                    email = firebaseUser.email ?: email.trim(),
-                    displayName = firebaseUser.displayName ?: "",
-                    createdAt = System.currentTimeMillis(),
-                    lastLoginAt = System.currentTimeMillis()
-                )
-                runCatching {
-                    db?.collection("users")?.document(firebaseUser.uid)
-                        ?.set(
-                            mapOf(
-                                "id" to account.id,
-                                "email" to account.email,
-                                "displayName" to account.displayName,
-                                "lastLoginAt" to account.lastLoginAt
-                            ),
-                            SetOptions.merge()
-                        )?.await()
-                }.onFailure { error ->
-                    Log.w("Auth", "Signed in, but profile synchronization failed", error)
-                }
-                account
-            }
-        }
-
-        val dao = crashDao
-        if (dao != null) {
-            val user = dao.getUserByEmail(email.trim())
-            if (user != null) {
-                if (user.passwordHash.isNotBlank() && user.salt.isNotBlank() &&
-                    SecurityUtils.verifyPassword(password, user.salt, user.passwordHash)
-                ) {
-                    dao.updateLastLogin(user.id, System.currentTimeMillis())
-                    val updated = user.copy(lastLoginAt = System.currentTimeMillis())
-                    _localCurrentUser.value = updated
-                    return Result.success(updated)
-                } else {
-                    return Result.failure(IllegalArgumentException("كلمة المرور غير صحيحة"))
-                }
-            }
-            return Result.failure(IllegalArgumentException("المستخدم غير موجود"))
-        }
-
-        return Result.failure(IllegalStateException("المصادقة المحلية غير مهيأة؛ تعذر التحقق من بيانات الاعتماد."))
+    override suspend fun signIn(email: String, password: String): Result<UserAccount> = runCatching {
+        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        val response = api.signInWithPassword(
+            publishableKey = publishableKey,
+            request = SupabasePasswordGrantRequest(email = email.trim(), password = password)
+        )
+        val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
+        val session = body.toStoredSession()
+            ?: throw IllegalStateException("لم يُرجع Supabase جلسة مصادقة صالحة.")
+        sessionStore.write(session)
+        session.user.toAccount()
     }
 
     override suspend fun signOut() {
-        auth?.signOut()
-        _localCurrentUser.value = null
+        val session = sessionStore.read()
+        try {
+            if (session != null && publishableKey.isNotBlank()) {
+                api.signOut(
+                    publishableKey = publishableKey,
+                    bearerToken = "Bearer ${session.accessToken}"
+                )
+            }
+        } finally {
+            sessionStore.clear()
+            _currentUser.value = null
+        }
     }
 
-    override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> {
-        val firebaseAuth = auth
-        if (firebaseAuth != null) {
-            return runCatching {
-                firebaseAuth.sendPasswordResetEmail(email.trim()).await()
-                Unit
-            }
-        }
-
-        return Result.failure(
+    override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =
+        Result.failure(
             UnsupportedOperationException(
-                "استعادة كلمة المرور للحسابات المحلية غير متاحة؛ لا يمكن تغييرها دون التحقق من ملكية البريد الإلكتروني."
+                "استعادة كلمة المرور لم تُفعّل بعد؛ يجب إكمال التحقق من رابط البريد وتدفق تعيين كلمة المرور الجديدة أولاً."
             )
         )
-    }
 
-    override suspend fun signInWithGoogle(idToken: String): Result<Unit> = runCatching {
-        val currentAuth = auth ?: throw IllegalStateException("Auth not initialized")
-        val currentDb = db ?: throw IllegalStateException("Firestore not initialized")
-        val credential = GoogleAuthProvider.getCredential(idToken, null)
-        val authResult = currentAuth.signInWithCredential(credential).await()
-        val firebaseUser = authResult.user ?: throw IllegalStateException("Auth failed")
-
-        val userDoc = currentDb.collection("users").document(firebaseUser.uid)
-        val profile = mapOf(
-            "id" to firebaseUser.uid,
-            "email" to firebaseUser.email,
-            "displayName" to firebaseUser.displayName,
-            "lastLoginAt" to FieldValue.serverTimestamp(),
-            "createdAt" to FieldValue.serverTimestamp()
+    override suspend fun signInWithGoogle(idToken: String): Result<Unit> =
+        Result.failure(
+            UnsupportedOperationException(
+                "تسجيل الدخول عبر Google لم يُربط بعد بمزوّد OAuth في Supabase."
+            )
         )
-        userDoc.set(profile, SetOptions.merge()).await()
 
-        val auditRef = currentDb.collection("audit_logs").document()
-        auditRef.set(mapOf(
-            "id" to auditRef.id,
-            "userId" to firebaseUser.uid,
-            "userEmail" to firebaseUser.email,
-            "action" to "USER_LOGIN_GOOGLE",
-            "details" to "Successful Google Sign-In",
-            "timestamp" to FieldValue.serverTimestamp()
-        )).await()
-
-        Unit
+    private fun SupabaseAuthResponse.toStoredSession(): SupabaseStoredSession? {
+        val access = accessToken?.takeIf(String::isNotBlank) ?: return null
+        val refresh = refreshToken?.takeIf(String::isNotBlank) ?: return null
+        val authUser = user ?: return null
+        val expires = expiresIn ?: return null
+        return SupabaseStoredSession(
+            accessToken = access,
+            refreshToken = refresh,
+            expiresAtEpochSeconds = nowEpochSeconds() + expires,
+            user = authUser
+        )
     }
+
+    private fun requireSuccessfulBody(
+        successful: Boolean,
+        body: SupabaseAuthResponse?,
+        responseMessage: String
+    ): SupabaseAuthResponse {
+        if (!successful) {
+            throw IllegalStateException(
+                responseMessage.takeIf(String::isNotBlank)
+                    ?: "رفض خادم Supabase طلب المصادقة."
+            )
+        }
+        return body ?: throw IllegalStateException("استجابة المصادقة من Supabase فارغة.")
+    }
+
+    private fun com.example.data.remote.supabase.SupabaseAuthUser.toAccount(): UserAccount {
+        val metadata = userMetadata.orEmpty()
+        return UserAccount(
+            id = id,
+            email = email.orEmpty(),
+            displayName = metadata["display_name"].orEmpty(),
+            organization = metadata["organization"].orEmpty(),
+            createdAt = nowEpochSeconds() * 1000L,
+            lastLoginAt = nowEpochSeconds() * 1000L
+        )
+    }
+
+    private fun nowEpochSeconds(): Long = System.currentTimeMillis() / 1000L
 }
