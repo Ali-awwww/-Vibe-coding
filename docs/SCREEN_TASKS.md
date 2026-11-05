@@ -568,3 +568,5 @@ These objectives are defined per destination. They do not require auditing or im
 
 - **Follow-up hardening commit:** `fca39e7f15a5c1436d1dc6ca8f681ca5f6bdf23b` preserves the encrypted refresh token when refresh fails due to transient I/O or server errors; it clears the session only for rejected refresh credentials (HTTP 400/401/403). The signed-in state remains null until a later retry.
 - **Migration impact:** existing Firebase identities are not automatically imported or linked to Supabase Auth. Existing Firebase users may need a new Supabase account until a verified identity/data migration path is implemented. This is a known migration gap, not a completed migration.
+
+- **Test maintenance:** commit `38374002b5e5e821fadc31b46284f413dbfaf14d` updates the existing invalid-login negative-path test to instantiate the Supabase-backed repository with a failing API stub instead of the removed Firebase/Room constructor. The test has been edited but has NOT been executed.
