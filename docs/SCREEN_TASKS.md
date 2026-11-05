@@ -18,7 +18,7 @@
 
 ## Priority 0 — Supabase migration by feature slice (2026-11-05; execution model updated 2026-11-06)
 
-> **Execution gate:** Supabase platform foundations (secure Auth/session handling, compatible Android API wiring, schema/RLS conventions) are prerequisites. After those foundations, migrate cloud functionality incrementally by feature slice, in dependency order. A slice includes its screen(s), ViewModel, repository/use cases, domain/DTO mapping, database objects and RLS policies, and tests. Do not claim a screen's cloud integration is complete until its entire slice is implemented and verified. This gate does not prohibit independent reliability, architecture, UI-component or local-only work.
+> **Execution gate:** Supabase platform foundations (secure Auth/session handling, compatible Android API wiring, schema/RLS conventions) are prerequisites. After those foundations, migrate cloud functionality incrementally by feature slice, in dependency order. A slice includes its screen(s), ViewModel, repository/use cases, domain/DTO mapping, database objects and RLS policies, visual/interaction redesign, accessibility/localization, and tests. Do not split screen work into a later visual-redesign phase: whenever a screen is taken up, complete its visual design and UX together with its real functionality and required cloud integration, then verify the combined result. Do not claim a screen is complete until its entire slice is implemented and verified. This gate does not prohibit independent reliability, architecture, UI-component or local-only work.
 
 ### Shared prerequisites — required before cloud feature slices
 
@@ -31,7 +31,7 @@
 
 ### Ordered cloud feature slices
 
-Complete each slice end-to-end before marking its cloud integration complete. The screen audit for that slice may proceed once its backend and authorization behavior are verified.
+Complete each slice end-to-end before marking it complete. Visual redesign and functional/backend work are part of the same screen task, not separate future passes. A screen is complete only when its intended visual target, interactions, data behavior, authorization and relevant tests meet acceptance criteria. The Supabase foundation remains a shared prerequisite; independent visual/component work may continue where it does not falsely imply unfinished cloud features are operational.
 
 1. **Identity and account — `Login`, profile/session flows**
    - [ ] Finish Supabase Auth repository contract and verified recovery/deep-link flow.
