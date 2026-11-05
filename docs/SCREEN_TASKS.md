@@ -586,3 +586,38 @@ These objectives are defined per destination. They do not require auditing or im
 - **Team repository migration risk:** `AIModelTeamRepositoryImpl` still uses Firebase Auth/Firestore, has the same `usr_dev_master` fallback, and catches Firestore write failures while returning apparent success after updating only in-memory maps. This can report persistence success when no remote write occurred. Replace this with authenticated Supabase operations and explicit failure propagation; do not preserve silent local success as a cloud result.
 - **Current scope decision:** next implementation work remains on the Supabase foundation and Firebase-backed repositories. No ordinary screen audit has started. Keep all screen audit checkboxes untouched until the Priority 0 gate is verified.
 - **Verification status:** this entry is based on source inspection of the current `main` files only. No Gradle build, unit/instrumentation test, Supabase Auth request, deep-link round trip, multi-user RLS test, emulator or device run was performed in this pass. These findings are blockers, not completed acceptance criteria.
+
+## Updated execution policy — parallel progress without bypassing the Supabase gate (2026-11-06)
+
+The project must not stall while the Supabase migration is in progress. Work is split into parallel tracks; the Supabase gate still controls production cloud-data integration and ordinary screen audits, but it does NOT prohibit independent engineering work.
+
+### Active parallel tracks
+
+1. **Track A — Supabase foundation (continuous):** finish the verified Auth lifecycle, migrate Firebase-backed repositories in dependency-aware slices, eliminate shared fallback identities, validate RLS with multiple real identities, and remove Firebase only after replacements pass.
+2. **Track B — independent application reliability:** inspect and fix build configuration, dependency wiring, lifecycle/concurrency defects, crash-prone code paths, persistence correctness, error propagation, and security issues that do not require changing the unfinished cloud data contract.
+3. **Track C — diagnostic and AI execution integrity:** improve repository/domain-layer correctness and provider request handling; ensure every reported status is evidence-backed, failures remain visible, and unsupported Agent/live operations remain disabled. Do not represent local fixtures or in-memory state as persisted cloud success.
+4. **Track D — engineering foundations and documentation:** improve test coverage, test fixtures, static checks, architecture boundaries and this task register. Record exact files/commits and distinguish source inspection from executed verification.
+
+### Work allowed before the gate closes
+
+- Fix confirmed bugs, security defects, crashes, race conditions and incorrect success/error reporting.
+- Improve shared architecture, domain models, repository contracts, dependency injection and testability where changes do not assume an unverified Supabase behavior.
+- Implement or strengthen local-only functionality when its persistence semantics are explicit and it does not masquerade as cloud synchronization.
+- Add tests and documentation for existing behavior and migration boundaries.
+- Continue backend/auth migration in parallel with the above.
+
+### Work still gated
+
+- Do not begin the ordinary 27-route screen audit, broad screen redesign queue, or mark any screen audited/verified until the Supabase acceptance criteria above are met.
+- Do not enable cloud-dependent UI flows against incomplete repositories, remove Firebase prematurely, or claim multi-user isolation/build/runtime success without executed evidence.
+
+### Operating rules for each implementation batch
+
+- Select the highest-impact independently actionable defect or migration slice; do not spend a whole batch merely re-reading or re-documenting already-known blockers.
+- Inspect the current main source and latest file SHA immediately before each edit. Re-fetch after writing and verify the resulting content/commit.
+- Keep changes small and dependency-aware; do not edit the same file concurrently.
+- Update the task register with implementation evidence, exact commits, remaining risks and explicit verification status.
+- Never mark a task complete based only on code being written. Record build, tests, API checks and device validation only when actually executed.
+- When a path is blocked by a platform security control, stop that operation and report the limitation; do not attempt to bypass it.
+
+**Current operating decision:** continue Supabase migration while making measurable progress on independent reliability, architecture, diagnostic integrity and test foundations. The screen-audit gate remains unchanged.
