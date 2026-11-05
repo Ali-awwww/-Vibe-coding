@@ -496,6 +496,16 @@ These objectives are defined per destination. They do not require auditing or im
 - **Known remaining risks:** local sign-in state is held in memory and may not survive process death; password recovery currently changes a locally stored password without an email ownership challenge; Firebase-backed sign-up/sign-in behavior is not yet integrated into these repository methods. Do not mark Login complete until these are resolved and tested.
 - **Status:** Login remains [ ] Not audited/verified. This batch is a partial implementation, not completion.
 
+### 2026-11-05 — Supabase client configuration and RLS security review
+- **Commit:** `10d2840e7a9c0521733b412be929acbaabfe4f89`.
+- **File:** `.env.example`.
+- Added `SUPABASE_URL` for the dedicated Vibe Coding project and a publishable-key placeholder. The real `.env` remains ignored by Git. Explicitly documented that service-role/secret keys must never ship in the Android app.
+- **Security review finding:** catalog inspection shows the `anon` role currently has broad table-level privileges on application tables (RLS still limits rows, but the grants are unnecessarily broad). The `project_members` insert/update policies permit role assignment paths that need stricter owner-vs-admin constraints. Project updates also need column-level protection so ordinary project admins cannot change `owner_id`.
+- **Remediation status:** attempted a narrowly scoped privilege/policy hardening change through both SQL execution and migration application; both operations were blocked by platform security checks. No database permissions or policies were changed in this attempt. Do not bypass this control. Obtain the required explicit approval/path, then apply and verify the hardening before enabling client writes.
+- **Build configuration note:** the app already applies the Secrets Gradle Plugin with `.env` and `.env.example`; adding placeholders does not prove that a local `.env` exists or that BuildConfig exposes the values correctly.
+- **Not verified:** Android Supabase client, credential injection, build, runtime connectivity, sign-up, RLS API tests and two-user isolation. No Firebase components were removed.
+- **Gate:** Priority 0 remains open. Screen work remains blocked.
+
 ### 2026-11-05 — Supabase foundation and Firebase inventory (in progress)
 - **Supabase project:** `vibe-coding` / `hgfgbjomwhogpswpqusk`, region `eu-west-1`, status verified `ACTIVE_HEALTHY`.
 - **Database migrations applied:** `initial_core_schema_and_rls` and `index_foreign_key_columns`.
