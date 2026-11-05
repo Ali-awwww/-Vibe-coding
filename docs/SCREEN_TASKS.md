@@ -496,6 +496,22 @@ These objectives are defined per destination. They do not require auditing or im
 - **Known remaining risks:** local sign-in state is held in memory and may not survive process death; password recovery currently changes a locally stored password without an email ownership challenge; Firebase-backed sign-up/sign-in behavior is not yet integrated into these repository methods. Do not mark Login complete until these are resolved and tested.
 - **Status:** Login remains [ ] Not audited/verified. This batch is a partial implementation, not completion.
 
+### 2026-11-05 — Supabase Auth REST foundation (partial; not yet wired)
+- Added typed Retrofit endpoints for Supabase Auth signup, password grant, refresh-token grant, password-recovery request, and sign-out:
+  - `app/src/main/java/com/example/data/remote/supabase/SupabaseAuthApi.kt`
+  - Commit: `e56295efb50a531955c7cd6bce01da2595de35e6`
+- Added Moshi DTOs for signup/login/refresh/auth responses, user metadata, stored sessions and Auth errors:
+  - `app/src/main/java/com/example/data/remote/supabase/SupabaseAuthModels.kt`
+  - Commit: `b8cb4208d4277a32401d81abdda637538f9c56be`
+- Added `SupabaseSessionStore`, encrypting serialized access/refresh tokens with the existing Android Keystore AES-GCM helper and failing closed (clearing unreadable ciphertext).
+  - `app/src/main/java/com/example/data/remote/supabase/SupabaseSessionStore.kt`
+  - Commit: `8b8511b88507049d37ab32d19e676ea64f3b08b3`
+- Set the actual Supabase **publishable** key in `.env.example`; it is a client key, not a service-role/secret key. Commit: `e98599198cff2dd45e5e1138763dc486ee0ffaa2`.
+- Excluded the device-bound encrypted Supabase session preference file from cloud backup and device transfer so ciphertext is not restored without its Android Keystore key. Commits: `fb0ecd3d15abcc6118941903f78b46be9d6d6c61`, `cd2c81ce815d8db891d2b9c7b6bebfdb626e08d2`.
+- **Important status:** this is only the REST/session-storage foundation. It is not injected into `DependencyProvider`; `AuthRepositoryImpl` still uses Firebase and Room. A follow-up attempt to add the coordinating auth client file was blocked by the platform's security checks and was not committed. No alternate route was used.
+- **Not verified:** no Gradle build, KSP/Moshi adapter generation, unit tests, network auth requests, token refresh, email confirmation, recovery deep-link, or device test. Do not treat this slice as a working login replacement.
+- **Next:** review the added DTO/API contracts, implement the coordinator and inject it into the repository with no local/Firebase fallback; account for email-confirmation signup (which may return no session) and the recovery deep-link/password-update flow before enabling those UI actions. Then run Gradle build/tests before proceeding to other repositories. Priority 0 remains open.
+
 ### 2026-11-05 — Supabase security approval and Android auth integration review
 - User explicitly approved the database privilege/RLS hardening after its security impact was explained.
 - **Approval executed:** migration `harden_public_table_grants_and_project_membership` applied and catalog-verified (see the preceding execution entry).
