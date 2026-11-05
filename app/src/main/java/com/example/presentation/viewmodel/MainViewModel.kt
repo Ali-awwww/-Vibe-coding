@@ -22,7 +22,11 @@ class MainViewModel(
 ) : ViewModel() {
 
     val currentUser: StateFlow<UserAccount?> = authRepository.currentUser
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            authRepository.getCurrentUserSync()
+        )
 
     private val _actionState = MutableStateFlow(AuthActionState())
     val actionState: StateFlow<AuthActionState> = _actionState.asStateFlow()
