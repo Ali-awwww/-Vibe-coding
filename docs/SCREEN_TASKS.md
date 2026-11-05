@@ -6,6 +6,16 @@
 >
 > Status key: [ ] Not audited · [x] Audited and verified. Do not mark a task complete from source inspection alone; verify behavior and tests.
 
+## Foundational platform directive — Supabase migration (added 2026-11-05)
+- **Priority:** foundational; blocks production authentication and cloud-data work.
+- **Decision:** create a dedicated Supabase project for Vibe Coding. Do not reuse the existing `qabasapp` project; it belongs to a separate product and contains unrelated platform data.
+- **Scope:** replace Firebase services actually used by this Android application with Supabase equivalents, rather than layering Supabase alongside Firebase. Inventory Firebase Authentication, Firestore/database, Storage, Functions, messaging, analytics and crash reporting; migrate each used capability to a suitable Supabase service or document a deliberate alternative/removal.
+- **Security:** enforce Row Level Security (RLS) on exposed tables and Storage policies; preserve authenticated-user and project-level data isolation. Never commit service-role keys or secrets. Android clients use only publishable/anon credentials protected by RLS.
+- **Android integration:** configure Supabase Kotlin client and secure auth-session persistence. Remove Firebase SDK/configuration and obsolete code only after its replacement is implemented and verified.
+- **Execution order:** create isolated project → inventory Firebase usage/data models → design schema, migrations, RLS and Storage buckets → implement required Edge Functions → integrate Android repositories/auth/session → remove obsolete Firebase dependencies/config → test authentication, authorization boundaries, CRUD, uploads/downloads and failure/offline behavior.
+- **Acceptance:** no production feature depends on Firebase; all cloud access is scoped to authenticated users and authorized projects; RLS and negative authorization tests pass; no secrets in source control; Android build and end-to-end flows are verified.
+- **Current status:** requested and recorded. New project creation is pending confirmation of the Supabase organization. Existing `qabasapp` was inspected and must remain untouched; no new project has been created.
+
 ## Navigation screen inventory
 
 | # | Route / destination | UI implementation | Parameters | Audit status |
