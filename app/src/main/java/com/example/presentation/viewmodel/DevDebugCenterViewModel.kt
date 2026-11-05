@@ -26,7 +26,12 @@ class DevDebugCenterViewModel(
     private fun loadWorkspaces() {
         viewModelScope.launch {
             authRepository.currentUser.collect { user ->
-                val userId = user?.id ?: "usr_dev_master"
+                val userId = user?.id?.takeIf { it.isNotBlank() }
+                if (userId == null) {
+                    _workspaces.value = emptyList()
+                    _state.update { it.copy(isLoading = false, selectedWorkspace = null, error = "سجّل الدخول بحساب صالح لعرض مساحات العمل.") }
+                    return@collect
+                }
                 vibeStudioRepository.getWorkspaces(userId).collect { wsList ->
                     _workspaces.value = wsList
                     val currentSelected = _state.value.selectedWorkspace
