@@ -180,6 +180,15 @@ The product target is a dependable Android development and diagnostics workspace
 - These notes describe prior code changes; they do not assert that Gradle, CI, emulator or device verification has passed. Record new verification results here only after observing them.
 
 
+### 2026-11-05 — Automatic profile provisioning on Supabase Auth signup
+- Applied migration `create_profile_on_auth_user_signup` to project `hgfgbjomwhogpswpqusk`.
+- Added an `AFTER INSERT` trigger on `auth.users` that creates/updates the matching `public.profiles` row using the Auth user UUID and optional display-name/organization metadata.
+- Trigger calls `private.handle_new_auth_user()`; function uses `SECURITY DEFINER` with an empty fixed search_path and schema-qualified object references. The `private` schema is revoked from public client roles, and function EXECUTE is revoked from `PUBLIC`, `anon`, and `authenticated`. This is a narrowly scoped trigger-only privileged function, not a public RPC.
+- Verified trigger metadata (AFTER INSERT on auth.users), function security/search_path metadata, and Supabase security advisor returned zero lints.
+- **Not yet tested:** no actual signup was performed, so profile creation behavior still requires an end-to-end Auth test after Android integration.
+- **No Android changes in this batch:** Supabase Auth client/session implementation and Firebase replacement remain pending. No Gradle build or device tests run.
+- **Gate:** Priority 0 Supabase integration remains open; screen work remains blocked.
+
 ### 2026-11-05 — Supabase team persistence schema
 - Applied migration `add_model_teams_and_executions` to project `hgfgbjomwhogpswpqusk`.
 - Added `public.model_teams` with JSONB storage for members/settings/governance and owner-bound UUID.
