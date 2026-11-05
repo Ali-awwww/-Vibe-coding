@@ -14,6 +14,8 @@ import com.example.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 
 /**
  * Supabase is the only identity authority in this repository.
@@ -29,7 +31,10 @@ class AuthRepositoryImpl(
         sessionStore.read()?.takeIf { it.expiresAtEpochSeconds > nowEpochSeconds() }?.user?.toAccount()
     )
 
-    override val currentUser: Flow<UserAccount?> = _currentUser.asStateFlow()
+    override val currentUser: Flow<UserAccount?> = flow {
+        refreshStoredSessionIfNeeded()
+        emitAll(_currentUser.asStateFlow())
+    }
 
     override fun getCurrentUserSync(): UserAccount? = _currentUser.value
 
@@ -101,6 +106,35 @@ class AuthRepositoryImpl(
                 "تسجيل الدخول عبر Google لم يُربط بعد بمزوّد OAuth في Supabase."
             )
         )
+
+    private suspend fun refreshStoredSessionIfNeeded() {
+        val stored = sessionStore.read() ?: run {
+            _currentUser.value = null
+            return
+        }
+        if (stored.expiresAtEpochSeconds > nowEpochSeconds() + 60L) {
+            _currentUser.value = stored.user.toAccount()
+            return
+        }
+
+        val refreshed = runCatching {
+            val response = api.refreshSession(
+                publishableKey = publishableKey,
+                request = SupabaseRefreshGrantRequest(stored.refreshToken)
+            )
+            requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
+                .toStoredSession()
+                ?: throw IllegalStateException("لم يُرجع Supabase جلسة مجددة صالحة.")
+        }.getOrNull()
+
+        if (refreshed == null) {
+            sessionStore.clear()
+            _currentUser.value = null
+        } else {
+            sessionStore.write(refreshed)
+            _currentUser.value = refreshed.user.toAccount()
+        }
+    }
 
     private fun SupabaseAuthResponse.toStoredSession(): SupabaseStoredSession? {
         val access = accessToken?.takeIf(String::isNotBlank) ?: return null
