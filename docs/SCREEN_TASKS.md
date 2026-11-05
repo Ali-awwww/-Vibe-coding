@@ -180,6 +180,18 @@ The product target is a dependable Android development and diagnostics workspace
 - These notes describe prior code changes; they do not assert that Gradle, CI, emulator or device verification has passed. Record new verification results here only after observing them.
 
 
+### 2026-11-05 — Firebase dependency inventory and Android SDK compatibility review
+- **Repository scan:** GitHub code search for `firebase` identified Firebase references in `AuthRepositoryImpl.kt`, `CrashRepositoryImpl.kt`, `AIModelTeamRepositoryImpl.kt`, `DependencyProvider.kt`, `FirebaseUtil.kt`, `CrashIntelligenceApp.kt`, `SdkIntegrationRepositoryImpl.kt`, `SeedData.kt`, `Models.kt`, `SetupGuideScreen.kt`, `IntegrationsScreen.kt`, `WorkspaceGitEngine.kt`, `VibeQualityTestingEngine.kt`, `ProductQualityGateEngine.kt`, test sources, and Firebase-specific resources/configuration. This is a search-derived inventory and each candidate still needs contextual review before removal.
+- **Confirmed runtime wiring:** `DependencyProvider` constructs Firebase Auth and Firestore and injects them into repositories; `CrashIntelligenceApp` calls Firebase initialization; `FirebaseUtil` contains a fake programmatic FirebaseOptions fallback; `AuthRepositoryImpl` uses Firebase Auth + Firestore profiles and still has a local Room auth branch; `CrashRepositoryImpl` and `AIModelTeamRepositoryImpl` use Firestore. `AIModelTeamRepositoryImpl` stores teams and executions under user-scoped Firestore subcollections.
+- **Identity isolation defect:** `CrashRepositoryImpl.requireUserId()` falls back to the shared literal `usr_dev_master` when Firebase identity is unavailable. This must be removed; unauthenticated cloud access must fail closed, not share a fallback account.
+- **Build configuration:** `app/build.gradle.kts` still declares Firebase BOM, Firestore, Auth and Firebase AI dependencies; `gradle/libs.versions.toml` contains their catalog entries. Firebase-specific resource `app/src/main/res/values/firebase_applet_config.xml` and `firebase-blueprint.json` also remain. Their removal is deferred until references are replaced and verified.
+- **SDK compatibility gate:** current app uses Kotlin `2.2.10` and `minSdk 24`. The current Supabase Kotlin SDK release surfaced during documentation review is `3.9.0`, whose published metadata reports Kotlin `2.4.21`; the SDK documentation also states Android minimum SDK 26 unless core-library desugaring is enabled. Do not pin 3.9.0 blindly. Select a compatible SDK/Kotlin/AGP/desugaring combination and validate it with Gradle before migrating repositories.
+- **Official guidance reviewed:** Supabase Kotlin installation and Android quickstart documentation; SDK release notes reviewed for current compatibility/security changes. Client configuration must use the publishable key only; never embed a secret/service-role key.
+- **Not changed in this batch:** no Android source/dependency changes and no Firebase services removed. This avoids introducing an unverified SDK version or partially migrating authentication.
+- **Next implementation batch:** inspect complete repository/domain model contracts and Firebase-backed methods; determine exact required tables/columns and storage/functions; choose a Kotlin/SDK compatibility set; then add Supabase client/session persistence with a compile check before changing AuthRepository.
+- **Verification:** code search and source reads only. No Gradle build, unit/instrumentation tests, real Auth flow, or emulator/device test was run in this batch.
+- **Status:** inventory and compatibility analysis in progress; Supabase migration gate remains open.
+
 ## Working rules
 
 1. Update this file as each screen is inspected and fixed.
