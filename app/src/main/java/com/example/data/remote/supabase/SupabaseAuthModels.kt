@@ -29,9 +29,10 @@ data class SupabaseRefreshGrantRequest(
 
 @JsonClass(generateAdapter = true)
 data class SupabaseVerifyOtpRequest(
-    val email: String,
-    val token: String,
-    val type: String
+    val type: String,
+    val email: String? = null,
+    val token: String? = null,
+    @Json(name = "token_hash") val tokenHash: String? = null
 )
 
 @JsonClass(generateAdapter = true)
