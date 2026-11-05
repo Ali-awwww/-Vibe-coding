@@ -74,6 +74,14 @@ Complete each slice end-to-end before marking it complete. Visual redesign and f
 
 ---
 
+## 2026-11-06 — Fix Assistant identity guard (source change; runtime unverified)
+
+- Updated `AppNavigation.kt` to pass the authenticated user's ID as nullable data instead of substituting the shared `usr_dev_master` identity.
+- Updated `FixAssistantScreen.kt` to remove its hard-coded fallback identity, disable Pull Request creation when no non-blank authenticated user ID is present, and show an explicit sign-in requirement.
+- Updated `FixAssistantViewModel.kt` to fail closed if PR creation is invoked with a blank user ID.
+- Commits: `6fab4b90c3cd99d045c3ce9a887885a5f0c5db7d`, `00f8b4e071ec0198999e46e4449253a037fed5b5`, `72670cd8cca161217ab87b5b23be52f59ed1a7ad`.
+- Verification: source edits were accepted by GitHub. No Gradle build, unit test, emulator/device run, or live GitHub PR flow was executed. This is a targeted UI/ViewModel guard, not a repository-wide removal of `usr_dev_master`; other fallback references remain open in the shared prerequisite checklist.
+
 ## Navigation screen inventory
 
 | # | Route / destination | UI implementation | Parameters | Audit status |
