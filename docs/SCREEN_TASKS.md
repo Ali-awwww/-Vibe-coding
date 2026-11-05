@@ -154,3 +154,85 @@ The product target is a dependable Android development and diagnostics workspace
 2. Record concrete defects and evidence under the relevant screen; do not label a screen "complete" because it compiles.
 3. Keep simulated/demo functionality clearly labeled and isolated from production actions.
 4. A task is complete only after code review plus the relevant automated test; runtime claims require an emulator/device run.
+
+
+## Continuous task register — cybernetic space / engineering UI
+
+This document is the living task register for screen implementation, not a one-time inventory. Update it in the same change as every screen audit, UI change, functional fix, and verification result. Keep incomplete work open; never mark a task done because a mockup exists or a composable compiles.
+
+### Approved visual direction
+
+- **Identity:** hybrid of futuristic space command center, cyberpunk, and precision engineering.
+- **Effects:** strong visual treatment, controlled for legibility, performance and accessibility.
+- **Palette:** deep-space navy/black surfaces; electric cyan and blue as primary accents; violet as secondary accent; green for verified success; amber for caution; red for errors.
+- **Visual language:** angular engineering frames, restrained holographic/glass panels, orbital/grid motifs, technical typography, luminous status indicators and purposeful motion.
+- **Product constraints:** Android-first responsive layouts; Arabic RTL and English LTR; readable code and diagnostics; reduced-motion accommodation; adequate contrast; no decorative animation that obscures controls or consumes resources needlessly.
+- **Truthfulness constraint:** visual status indicators must be bound to actual application state. Do not show fabricated metrics, live connections, active agents, successful tests or running jobs.
+
+### Global design-system tasks
+
+| ID | Task | Applies to | Status |
+|---|---|---|---|
+| UI-001 | Inspect current Compose theme, typography, shapes, spacing and color tokens before changing them. | App-wide | [ ] |
+| UI-002 | Define reusable cybernetic color, typography, spacing, shape, border and elevation tokens in the existing theme architecture. | App-wide | [ ] |
+| UI-003 | Build reusable engineering surfaces, outlined panels, status chips, metric tiles and section headers; avoid duplicating one-off styling. | App-wide | [ ] |
+| UI-004 | Establish consistent top bars, navigation, screen padding and adaptive layouts for phone sizes. | App-wide | [ ] |
+| UI-005 | Implement accessible neon focus/pressed/disabled/error states and verify contrast. | App-wide | [ ] |
+| UI-006 | Add purposeful motion and respect Android reduced-motion/system animation preferences where applicable. | App-wide | [ ] |
+| UI-007 | Verify Arabic RTL, English LTR, long labels, font scaling and small screens. | App-wide | [ ] |
+| UI-008 | Verify dark theme rendering, scrolling performance, recomposition and battery impact on a device/emulator. | App-wide | [ ] |
+| UI-009 | Ensure all visual indicators are backed by real state and remove illustrative/demo values from operational screens. | App-wide | [ ] |
+| UI-010 | Add/update screenshot or UI tests for shared components and representative screens. | App-wide | [ ] |
+
+### Screen-by-screen visual implementation backlog
+
+Status is intentionally **[ ] Not started** until the actual Compose screen and its interactions have been changed and verified.
+
+| Route / screen | Visual treatment to implement | Status |
+|---|---|---|
+| Login | Secure access console; restrained orbital background; high-contrast form and validation. | [ ] |
+| Dashboard | Space-command overview; real project metrics, diagnostics and clear primary actions. | [ ] |
+| Projects | Engineering project cards/list, ownership and selected-project context. | [ ] |
+| Applications | Application-focused view distinct in purpose from Projects, while reusing components where appropriate. | [ ] |
+| Crashes | Diagnostic radar/list, severity hierarchy and real source/time metadata. | [ ] |
+| CrashDetail | Investigation console with readable stack trace, evidence, timeline and provenance. | [ ] |
+| FixAssistant | AI repair workbench with context, evidence/inference distinction and reviewable diff. | [ ] |
+| FixHistory | Auditable repair timeline with actual persisted outcomes. | [ ] |
+| Integrations | Connection control panels with real connection and permission states. | [ ] |
+| Issues | Engineering issue tracker with clear severity, status and project context. | [ ] |
+| Analytics | Technical telemetry dashboards with sourced metrics and readable charts. | [ ] |
+| LiveTesting | Agent connection console; unavailable state must remain explicit until real transport exists. | [ ] |
+| LiveSession | Live telemetry/event console populated only by actual session events. | [ ] |
+| SetupGuide | Guided engineering setup with clear prerequisites and progress. | [ ] |
+| GitHubConnect | Repository authorization console with least-privilege explanation and status. | [ ] |
+| DebugSymbols | Artifact management and symbolication workbench with build matching evidence. | [ ] |
+| AIModels | Model/provider control center with real request status, latency/errors where measured. | [ ] |
+| VibeStudio | Main development cockpit: files, editor, agent activity, diffs, approvals and terminal states. | [ ] |
+| DevDebugCenter | Workspace diagnostics console with explicit device/build/runtime evidence. | [ ] |
+| Settings | System configuration console with grouped settings and clear destructive actions. | [ ] |
+| ModelTeams | Agent network overview distinguishing configured, available and active agents. | [ ] |
+| CreateTeam | Focused team-creation flow consistent with the agent-network design. | [ ] |
+| TeamDetail | Team command view with membership, capabilities and real activity. | [ ] |
+| TeamUsage | Usage/compute dashboard showing measured data and provenance. | [ ] |
+| TeamChat | Operational communications console; message and task states must be persisted. | [ ] |
+| TeamValidation | Validation control room with real job lifecycle and evidence-backed reports. | [ ] |
+| ProductQualityCenter | Quality observatory showing actionable, traceable findings. | [ ] |
+
+### Continuous execution log
+
+Append newest entries first. Each entry must state what changed, files/routes affected, verification performed, and remaining risks. If no code or test was run, say so explicitly.
+
+| Date | Commit / PR | Work completed | Verification | Remaining work |
+|---|---|---|---|---|
+| 2026-11-05 | — | Approved cybernetic space / cyberpunk / engineering direction with strong effects. Added global design-system and 27-route visual backlog to this task register. | Documentation update only; no screen implementation, Gradle build, UI test or device verification performed in this entry. | Implement shared Compose design tokens/components, then migrate screens incrementally without changing their real behavior. |
+
+### Mandatory update protocol
+
+1. Before editing a screen, identify its route, composable, ViewModel, state source and repository/use-case dependencies.
+2. Add or refine the screen's concrete tasks here before or alongside implementation.
+3. Preserve working business logic; visual refactors must not replace real operations with mock data or placeholder callbacks.
+4. After editing, record changed files and the exact checks actually run. Separate static review, unit tests, build, emulator and physical-device verification.
+5. Mark an individual task [x] only when its stated acceptance criteria are met. If verification is partial, leave it [ ] and record the partial evidence.
+6. Add a dated execution-log entry for every meaningful implementation batch. Keep the latest entry at the top.
+7. Reconcile this inventory with `Screen.kt` and `AppNavigation.kt` whenever routes are added, removed or renamed.
+8. This file is the source of truth for remaining screen work; update it continuously on `main` as implementation proceeds.
