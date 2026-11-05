@@ -19,3 +19,6 @@ debug.keystore
 
 # Firebase logs
 *-debug.log
+# Android signing material — never commit private keystores
+*.jks
+*.keystore
