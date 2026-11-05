@@ -574,3 +574,5 @@ These objectives are defined per destination. They do not require auditing or im
 - **Recovery UX safety:** commit `809831c5c3ca963e318c649700bca60640b7ace7` removes the misleading "new password" entry from the recovery mode and disables submission with an explicit notice until the email-verification/deep-link recovery flow is implemented. The repository continues to reject direct password replacement.
 
 - **Identity model correctness:** commit `2b5041232f2c05265b280ec2ff14fc35cfd5b0f9` maps Supabase `created_at` into the app's `UserAccount.createdAt` rather than resetting the account creation timestamp whenever the session is restored.
+
+- **Concurrency hardening:** commit `94d60baca5db989eac18c6bfa72eefccd37c71b9` serializes session refresh under a coroutine mutex so concurrent auth-state collectors cannot race refresh-token rotation.
