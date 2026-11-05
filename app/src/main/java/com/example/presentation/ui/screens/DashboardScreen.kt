@@ -3,10 +3,8 @@ package com.example.presentation.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -24,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,9 +35,7 @@ import com.example.presentation.viewmodel.DashboardViewModel
 import androidx.compose.ui.res.stringResource
 import com.example.R
 
-import com.example.ui.components.EngCard
 import com.example.ui.components.SectionHeader
-import com.example.ui.theme.EngGridLine
 import com.example.ui.theme.JetBrainsMono
 
 @OptIn(ExperimentalMaterial3Api::class)
