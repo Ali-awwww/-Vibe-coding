@@ -58,9 +58,9 @@ class CrashInvestigationOrchestrator(
             EXCEPTION TYPE: ${crashReport.exceptionType}
             MESSAGE: ${crashReport.message}
             SEVERITY: ${crashReport.severity.name}
-            APP VERSION: ${crashReport.appVersion.ifBlank { "1.0.0" }}
-            DEVICE: ${crashReport.deviceModel.ifBlank { "Generic Android Device" }}
-            OS VERSION: ${crashReport.osVersion.ifBlank { "Android 14 (API 34)" }}
+            APP VERSION: ${crashReport.appVersion.ifBlank { "غير متاح" }}
+            DEVICE: ${crashReport.deviceModel.ifBlank { "غير متاح" }}
+            OS VERSION: ${crashReport.osVersion.ifBlank { "غير متاح" }}
             TIMESTAMP: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(crashReport.timestamp))}
             STACK TRACE:
             ${crashReport.stackTrace.take(1500)}
@@ -461,7 +461,7 @@ class CrashInvestigationOrchestrator(
     }
 
     private suspend fun resolveCrashReport(prompt: String): CrashReport {
-        val crashIdMatch = Regex("""(?i)(?:crashId[:=\\s]+|crash[:=\\s]+)?([a-f0-9\\-]{32,36})""").find(prompt)
+        val crashIdMatch = Regex("""(?i)(?:crashId[:=\s]+|crash[:=\s]+)?([a-f0-9\-]{32,36})""").find(prompt)
         val crashId = crashIdMatch?.groupValues?.get(1)
 
         if (crashId != null) {
