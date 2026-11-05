@@ -16,6 +16,28 @@
 - **Acceptance:** no production feature depends on Firebase; all cloud access is scoped to authenticated users and authorized projects; RLS and negative authorization tests pass; no secrets in source control; Android build and end-to-end flows are verified.
 - **Current status (2026-11-05):** dedicated Supabase project successfully created and verified as `ACTIVE_HEALTHY`: `vibe-coding` (`hgfgbjomwhogpswpqusk`), organization `Developer Abu Mu'adh`, region `eu-west-1`, API URL `https://hgfgbjomwhogpswpqusk.supabase.co`. Initial `public` schema is empty and migration history is empty. Existing `qabasapp` remains untouched. Firebase inventory, schema design, RLS, Android integration and Firebase removal are still pending; do not treat migration as complete.
 
+## Priority 0 — complete Supabase integration before screen work (2026-11-05)
+
+> **Execution gate:** This task takes precedence over all screen audits, redesigns and screen-specific implementation. Do not start the screen-task queue until the Android app is genuinely connected to the dedicated Supabase backend and the Firebase replacement has been verified. Security fixes or urgent defects that block this migration may still be handled as prerequisites.
+
+- [ ] Complete a repository-wide inventory of every Firebase SDK, API, configuration file, generated resource, repository, ViewModel and runtime call site; classify each as migrate, remove or intentionally retain with a documented reason.
+- [ ] Confirm the Supabase schema against the actual Kotlin domain models and required product workflows; add versioned migrations for missing entities and relationships rather than assuming the initial core tables are sufficient.
+- [ ] Configure Supabase Auth (email/password, email verification, password recovery, sign-out and session refresh) and implement persistent, secure Android session storage.
+- [ ] Add a compatible Supabase Kotlin client and wire it through the app's dependency-injection architecture without exposing service-role keys or provider secrets in the APK.
+- [ ] Replace Firebase Auth in `AuthRepositoryImpl` and remove local/developer identity fallbacks, including every hard-coded `usr_dev_master` identity path.
+- [ ] Migrate each Firebase-backed data repository and workflow to Supabase (including projects, applications, crashes, issues, integrations, audit/notification/team data and any other confirmed usage); preserve existing behavior and data semantics.
+- [ ] Implement required Supabase Storage buckets/policies and Edge Functions for privileged operations; keep third-party AI credentials server-side and encrypted.
+- [ ] Validate RLS and Storage authorization with anonymous, owner, non-member and cross-user test identities; verify CRUD, pagination, realtime (if used), upload/download, token refresh, sign-out and failure/offline behavior.
+- [ ] Remove Firebase dependencies, initialization, configuration files/resources and obsolete code only after all corresponding replacement flows pass tests. Do not remove a still-used Firebase capability prematurely.
+- [ ] Run Gradle compilation, unit/instrumentation tests and emulator/device end-to-end tests; record exact commands, outputs and remaining limitations below.
+- [ ] Update this task register with file-level changes and evidence. Keep the gate open until every acceptance criterion is met.
+
+**Completion criteria:** no production Android path depends on Firebase; all required cloud flows use the dedicated Supabase project; user/project isolation is enforced and tested; sessions survive app restart securely; no privileged secrets are shipped in the client; Firebase configuration/dependencies are removed where no longer needed; build and critical end-to-end tests pass.
+
+**Current state:** Supabase project and initial protected schema exist, but Android client integration and Firebase replacement are incomplete. This is an active blocker, not a completed task. Do not begin ordinary screen audits while this gate remains open.
+
+---
+
 ## Navigation screen inventory
 
 | # | Route / destination | UI implementation | Parameters | Audit status |
