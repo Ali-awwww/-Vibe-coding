@@ -308,7 +308,7 @@ fun DashboardScreen(
                 
                 if (uiState.recentCrashes.isEmpty()) {
                     item {
-                        EngCard(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
+                        NeonPanel(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
                             Column(
                                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -416,7 +416,7 @@ fun EngineeringToolCard(
     color: Color,
     onClick: () -> Unit
 ) {
-    EngCard(
+    NeonPanel(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(
@@ -468,7 +468,7 @@ fun SquareToolCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    EngCard(
+    NeonPanel(
         modifier = modifier.clickable { onClick() }
     ) {
         Column(
@@ -489,7 +489,7 @@ fun StatCard(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
-    EngCard(
+    NeonPanel(
         modifier = modifier
     ) {
         Column {
@@ -508,7 +508,7 @@ fun CrashItem(
     crash: CrashReport,
     onClick: () -> Unit
 ) {
-    EngCard(
+    NeonPanel(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(
