@@ -496,6 +496,15 @@ These objectives are defined per destination. They do not require auditing or im
 - **Known remaining risks:** local sign-in state is held in memory and may not survive process death; password recovery currently changes a locally stored password without an email ownership challenge; Firebase-backed sign-up/sign-in behavior is not yet integrated into these repository methods. Do not mark Login complete until these are resolved and tested.
 - **Status:** Login remains [ ] Not audited/verified. This batch is a partial implementation, not completion.
 
+### 2026-11-05 — Supabase security approval and Android auth integration review
+- User explicitly approved the database privilege/RLS hardening after its security impact was explained.
+- **Approval executed:** migration `harden_public_table_grants_and_project_membership` applied and catalog-verified (see the preceding execution entry).
+- **Android integration review:** current `AuthRepositoryImpl.kt` still depends on Firebase Auth/Firestore and has a Room-backed local account fallback; `DependencyProvider.kt` constructs Firebase clients; `CrashIntelligenceApp.onCreate()` still initializes Firebase. No Supabase Auth client is wired into Android yet.
+- Existing Android stack includes Retrofit, OkHttp, Moshi, Kotlin serialization, coroutines, Android Keystore-backed `SecurityUtils.encryptSecret/decryptSecret`, and the Secrets Gradle Plugin. App currently targets minSdk 24 and Kotlin 2.2.10. These existing dependencies may support a REST-based Supabase integration without adding an SDK whose compatibility has not been proven.
+- **Implementation constraint:** do not route authenticated traffic back to local Room or Firebase if Supabase configuration/auth fails. Fail closed, persist/refresh the Supabase session securely, and make email verification/recovery semantics explicit. Google sign-in needs a Supabase-compatible ID-token flow and must not silently continue through Firebase.
+- **Next implementation slice:** implement the Supabase Auth REST contract/session persistence and inject it through `DependencyProvider`; test token parsing, secure persistence, refresh, sign-out and failure behavior before switching the Login flow. Only then migrate profile/project data and remove Firebase incrementally.
+- **Not verified:** no Android code changed in this review; no Gradle build, tests, Supabase sign-up/login, or device run. Priority 0 remains open.
+
 ### 2026-11-05 — Supabase project membership and table privilege hardening
 - **Database migration:** `harden_public_table_grants_and_project_membership` applied successfully to `hgfgbjomwhogpswpqusk`.
 - Revoked all direct table privileges from `anon` across the `public` schema. Authenticated clients retain only SELECT/INSERT/UPDATE/DELETE table privileges, subject to RLS; elevated table privileges such as TRUNCATE, REFERENCES and TRIGGER are not granted.
