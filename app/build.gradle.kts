@@ -48,7 +48,8 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      // Release builds remain unsigned unless signing credentials are supplied through environment variables.\n      if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
+      // Release builds remain unsigned unless signing credentials are supplied through environment variables.
+      if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
     }
     debug {
       // Use Android Gradle Plugin's standard debug signing configuration.
