@@ -42,34 +42,6 @@ class AuthRepositoryImpl(
 
     private val _localCurrentUser = MutableStateFlow<UserAccount?>(null)
 
-    init {
-        // Automatically ensure default engineering developer account exists in local Room
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                crashDao?.let { dao ->
-                    val existing = dao.getUserByEmail("dev@crashintelligence.local")
-                    if (existing == null) {
-                        val salt = SecurityUtils.generateSalt()
-                        val hash = SecurityUtils.hashPassword("DevPass123!", salt)
-                        val devAccount = UserAccount(
-                            id = "usr_dev_master",
-                            email = "dev@crashintelligence.local",
-                            passwordHash = hash,
-                            salt = salt,
-                            displayName = "Engineering Master",
-                            organization = "Crash Intelligence Core",
-                            createdAt = System.currentTimeMillis() - 30L * 86400000L,
-                            lastLoginAt = System.currentTimeMillis()
-                        )
-                        dao.insertUser(devAccount)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w("Auth", "Failed to initialize default developer account", e)
-            }
-        }
-    }
-
     override val currentUser: Flow<UserAccount?> = callbackFlow {
         val currentAuth = auth
         if (currentAuth == null) {
@@ -165,14 +137,7 @@ class AuthRepositoryImpl(
             _localCurrentUser.value = newUser
             return Result.success(newUser)
         }
-        val newUser = UserAccount(
-            id = UUID.randomUUID().toString(),
-            email = email,
-            displayName = displayName,
-            organization = organization
-        )
-        _localCurrentUser.value = newUser
-        return Result.success(newUser)
+        return Result.failure(IllegalStateException("تخزين الحسابات المحلية غير مهيأ."))
     }
 
     override suspend fun signIn(email: String, password: String): Result<UserAccount> {
@@ -188,37 +153,11 @@ class AuthRepositoryImpl(
                 } else {
                     return Result.failure(IllegalArgumentException("كلمة المرور غير صحيحة"))
                 }
-            } else if (email == "dev@crashintelligence.local" && password == "DevPass123!") {
-                val salt = SecurityUtils.generateSalt()
-                val hash = SecurityUtils.hashPassword("DevPass123!", salt)
-                val devUser = UserAccount(
-                    id = "usr_dev_master",
-                    email = "dev@crashintelligence.local",
-                    passwordHash = hash,
-                    salt = salt,
-                    displayName = "Engineering Master",
-                    organization = "Crash Intelligence Core",
-                    createdAt = System.currentTimeMillis(),
-                    lastLoginAt = System.currentTimeMillis()
-                )
-                dao.insertUser(devUser)
-                _localCurrentUser.value = devUser
-                return Result.success(devUser)
             }
             return Result.failure(IllegalArgumentException("المستخدم غير موجود"))
         }
 
-        if (email == "dev@crashintelligence.local" && password == "DevPass123!") {
-            val devUser = UserAccount(
-                id = "usr_dev_master",
-                email = "dev@crashintelligence.local",
-                displayName = "Engineering Master",
-                organization = "Crash Intelligence Core"
-            )
-            _localCurrentUser.value = devUser
-            return Result.success(devUser)
-        }
-        return Result.failure(IllegalArgumentException("بيانات الاعتماد غير صحيحة"))
+        return Result.failure(IllegalStateException("المصادقة المحلية غير مهيأة؛ تعذر التحقق من بيانات الاعتماد."))
     }
 
     override suspend fun signOut() {
@@ -238,7 +177,7 @@ class AuthRepositoryImpl(
             }
             return Result.failure(IllegalArgumentException("البريد الإلكتروني غير مسجل"))
         }
-        return Result.success(Unit)
+        return Result.failure(IllegalStateException("خدمة استعادة كلمة المرور غير مهيأة."))
     }
 
     override suspend fun signInWithGoogle(idToken: String): Result<Unit> = runCatching {
