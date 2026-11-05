@@ -93,6 +93,14 @@ Complete each slice end-to-end before marking it complete. Visual redesign and f
 - Verification: all edited source files were re-fetched from `main`; the targeted fallback strings were checked. No Gradle build, automated test, emulator/device run, or backend authorization test was executed.
 - Remaining: `SeedData.kt` still contains a developer-owned sample project and member fixtures. Treat this as demo/seed data requiring an explicit production-seeding review; do not silently assign those records to a real user. The repository-wide identity audit remains open, including all remaining user/workspace/project fallback patterns.
 
+## 2026-11-06 — Signing-key exposure containment (working tree only; history remediation outstanding)
+
+- Removed the two committed Android signing-keystore files from the current `main` tree.
+- Added `*.jks` and `*.keystore` ignore rules to `.gitignore`.
+- Commits: `7d29cd685dcc635131da77ee469b8bed16a1e65d`, `01e1c14957d73012c96616b422c4bd3e9e5d90a8`, `3a56c42054f0b989aa3bcec23a8a5ef750a8fd71`.
+- Critical limitation: these commits remove the files from the latest tree only; prior Git history may still contain the private key material. Treat both signing keys as potentially exposed: rotate/revoke affected signing credentials where possible, audit release access, and plan a coordinated Git-history rewrite plus force-push only with repository-owner approval because it rewrites shared history and disrupts existing clones.
+- No claim is made that the historical blobs are purged or that key rotation has occurred.
+
 ## Navigation screen inventory
 
 | # | Route / destination | UI implementation | Parameters | Audit status |
