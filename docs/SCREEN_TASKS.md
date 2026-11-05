@@ -16,25 +16,61 @@
 - **Acceptance:** no production feature depends on Firebase; all cloud access is scoped to authenticated users and authorized projects; RLS and negative authorization tests pass; no secrets in source control; Android build and end-to-end flows are verified.
 - **Current status (2026-11-05):** dedicated Supabase project successfully created and verified as `ACTIVE_HEALTHY`: `vibe-coding` (`hgfgbjomwhogpswpqusk`), organization `Developer Abu Mu'adh`, region `eu-west-1`, API URL `https://hgfgbjomwhogpswpqusk.supabase.co`. Initial `public` schema is empty and migration history is empty. Existing `qabasapp` remains untouched. Firebase inventory, schema design, RLS, Android integration and Firebase removal are still pending; do not treat migration as complete.
 
-## Priority 0 — complete Supabase integration before screen work (2026-11-05)
+## Priority 0 — Supabase migration by feature slice (2026-11-05; execution model updated 2026-11-06)
 
-> **Execution gate:** This task takes precedence over all screen audits, redesigns and screen-specific implementation. Do not start the screen-task queue until the Android app is genuinely connected to the dedicated Supabase backend and the Firebase replacement has been verified. Security fixes or urgent defects that block this migration may still be handled as prerequisites.
+> **Execution gate:** Supabase platform foundations (secure Auth/session handling, compatible Android API wiring, schema/RLS conventions) are prerequisites. After those foundations, migrate cloud functionality incrementally by feature slice, in dependency order. A slice includes its screen(s), ViewModel, repository/use cases, domain/DTO mapping, database objects and RLS policies, and tests. Do not claim a screen's cloud integration is complete until its entire slice is implemented and verified. This gate does not prohibit independent reliability, architecture, UI-component or local-only work.
 
-- [ ] Complete a repository-wide inventory of every Firebase SDK, API, configuration file, generated resource, repository, ViewModel and runtime call site; classify each as migrate, remove or intentionally retain with a documented reason.
-- [ ] Confirm the Supabase schema against the actual Kotlin domain models and required product workflows; add versioned migrations for missing entities and relationships rather than assuming the initial core tables are sufficient.
-- [ ] Configure Supabase Auth (email/password, email verification, password recovery, sign-out and session refresh) and implement persistent, secure Android session storage.
-- [ ] Add a compatible Supabase Kotlin client and wire it through the app's dependency-injection architecture without exposing service-role keys or provider secrets in the APK.
-- [ ] Replace Firebase Auth in `AuthRepositoryImpl` and remove local/developer identity fallbacks, including every hard-coded `usr_dev_master` identity path.
-- [ ] Migrate each Firebase-backed data repository and workflow to Supabase (including projects, applications, crashes, issues, integrations, audit/notification/team data and any other confirmed usage); preserve existing behavior and data semantics.
-- [ ] Implement required Supabase Storage buckets/policies and Edge Functions for privileged operations; keep third-party AI credentials server-side and encrypted.
-- [ ] Validate RLS and Storage authorization with anonymous, owner, non-member and cross-user test identities; verify CRUD, pagination, realtime (if used), upload/download, token refresh, sign-out and failure/offline behavior.
-- [ ] Remove Firebase dependencies, initialization, configuration files/resources and obsolete code only after all corresponding replacement flows pass tests. Do not remove a still-used Firebase capability prematurely.
-- [ ] Run Gradle compilation, unit/instrumentation tests and emulator/device end-to-end tests; record exact commands, outputs and remaining limitations below.
-- [ ] Update this task register with file-level changes and evidence. Keep the gate open until every acceptance criterion is met.
+### Shared prerequisites — required before cloud feature slices
 
-**Completion criteria:** no production Android path depends on Firebase; all required cloud flows use the dedicated Supabase project; user/project isolation is enforced and tested; sessions survive app restart securely; no privileged secrets are shipped in the client; Firebase configuration/dependencies are removed where no longer needed; build and critical end-to-end tests pass.
+- [ ] Complete the Firebase reference/configuration inventory and classify each use as migrate, remove or intentionally retain with a documented reason.
+- [ ] Confirm the shared Supabase schema, identity model and ownership conventions against Kotlin domain models; add versioned migrations for missing entities and relationships.
+- [ ] Complete the Supabase Auth lifecycle: signup, email verification, sign-in, verified password recovery, sign-out and session refresh; persist sessions securely on Android.
+- [ ] Wire a Kotlin-compatible Supabase access layer through dependency injection without shipping service-role keys or provider secrets.
+- [ ] Establish reusable RLS policies/helpers and automated authorization test identities for anonymous, owner, member, non-member and cross-user cases.
+- [ ] Remove shared fallback identities (including every `usr_dev_master` path) from shared authentication/identity infrastructure; unauthenticated cloud operations must fail closed.
 
-**Current state:** Supabase project and initial protected schema exist, but Android client integration and Firebase replacement are incomplete. This is an active blocker, not a completed task. Do not begin ordinary screen audits while this gate remains open.
+### Ordered cloud feature slices
+
+Complete each slice end-to-end before marking its cloud integration complete. The screen audit for that slice may proceed once its backend and authorization behavior are verified.
+
+1. **Identity and account — `Login`, profile/session flows**
+   - [ ] Finish Supabase Auth repository contract and verified recovery/deep-link flow.
+   - [ ] Verify session restoration, refresh-token rotation, sign-out and account switching.
+   - [ ] Add tests for invalid credentials, expired/rejected refresh tokens, transient failures and email-confirmation-required signup.
+2. **Projects and applications — `Projects`, `Applications`, `Dashboard` project context**
+   - [ ] Migrate project/application repositories and mappings.
+   - [ ] Enforce owner/member access and project-level RLS; verify CRUD and cross-project isolation.
+   - [ ] Remove local/developer identity fallbacks from these data paths; test empty, offline and authorization failures.
+3. **Crash diagnostics — `Crashes`, `CrashDetail`, `FixAssistant`, `FixHistory`, `DebugSymbols`, `DevDebugCenter`**
+   - [ ] Migrate crash records and related diagnostic metadata, preserving source provenance and project/application relationships.
+   - [ ] Implement required artifact storage/policies and any privileged symbolication operation only where required.
+   - [ ] Verify upload/download, lookup, project isolation, partial records and failure handling; no fabricated reports or success states.
+4. **Issues and integrations — `Issues`, `Integrations`, `SetupGuide`, `GitHubConnect`**
+   - [ ] Migrate persisted issue and integration state; distinguish local setup instructions from remotely verified connection state.
+   - [ ] Apply per-project authorization and least-privilege credential handling.
+   - [ ] Verify create/read/update/disconnect and provider failure behavior.
+5. **Teams and collaboration — `ModelTeams`, `CreateTeam`, `TeamDetail`, `TeamUsage`, `TeamChat`, `TeamValidation`**
+   - [ ] Migrate team configuration, membership, execution, messages, assignments and usage records that are confirmed as persisted product data.
+   - [ ] Add ownership/member RLS and audit-sensitive mutation policies.
+   - [ ] Remove Firestore in-memory-success fallbacks; propagate remote write failures accurately.
+   - [ ] Verify team isolation, membership changes, execution ownership and persisted history.
+6. **Audit, notifications and analytics — `Dashboard`, `Analytics`, notification flows**
+   - [ ] Migrate confirmed audit/notification event storage and define metric provenance.
+   - [ ] Verify user/project scoping, pagination/date boundaries and no demo metrics presented as production data.
+7. **Remaining cloud-backed capabilities**
+   - [ ] Reconcile the completed repository inventory against all remaining Firebase references and decide migrate/remove/retain for each.
+   - [ ] Implement any confirmed Storage buckets or Edge Functions not already covered by a feature slice, with explicit policies and tests.
+
+### Completion and retirement criteria
+
+- [ ] Every confirmed Firebase-backed production workflow has a completed, tested Supabase feature slice or a documented intentional alternative/removal.
+- [ ] RLS/Storage negative authorization tests pass for anonymous, owner, non-member and cross-user cases.
+- [ ] Gradle compilation, relevant unit/instrumentation tests and emulator/device end-to-end tests pass; record exact commands and outputs.
+- [ ] Remove Firebase dependencies, initialization, configuration files/resources and obsolete code only after all corresponding feature slices pass. Do not remove a still-used Firebase capability prematurely.
+- [ ] Re-run a repository-wide Firebase scan and confirm no unintended production dependency remains.
+- [ ] Update this register with file-level changes, commits, test evidence and remaining limitations.
+
+**Current state:** Supabase project, protected initial schema and partial Auth source wiring exist. Multiple Firebase-backed repositories and DI/runtime references remain. Feature-slice migration has not been completed; all checkboxes above remain open. No Gradle build or Android end-to-end verification is claimed.
 
 ---
 
