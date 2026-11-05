@@ -63,14 +63,20 @@ class TeamChatViewModel(
     private var executionJob: Job? = null
     private var timerJob: Job? = null
 
-    private fun getUserId(): String = authRepository.getCurrentUserSync()?.id ?: "usr_dev_master"
+    private fun getUserId(): String? = authRepository.getCurrentUserSync()?.id?.takeIf { it.isNotBlank() }
 
     init {
         loadInitialData()
     }
 
     private fun loadInitialData() {
-        val userId = getUserId()
+        val userId = getUserId() ?: run {
+            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            return
+        } ?: run {
+            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح للوصول إلى محادثات الفريق.") }
+            return
+        }
 
         viewModelScope.launch {
             // Load teams
@@ -222,7 +228,10 @@ class TeamChatViewModel(
             )
         }
 
-        val userId = getUserId()
+        val userId = getUserId() ?: run {
+            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            return
+        }
         val attached = _uiState.value.attachedFiles
         val projectId = _uiState.value.selectedProject?.id
 
@@ -263,7 +272,10 @@ class TeamChatViewModel(
     fun resumeTeam() {
         val exec = _uiState.value.currentExecution ?: return
         val team = _uiState.value.selectedTeam ?: return
-        val userId = getUserId()
+        val userId = getUserId() ?: run {
+            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            return
+        }
 
         _uiState.update { it.copy(isPaused = false, isExecuting = true, statusMessage = "جارٍ استكمال مهام الفريق") }
         startTimer()
@@ -304,7 +316,10 @@ class TeamChatViewModel(
     fun retryFailedTasks() {
         val exec = _uiState.value.currentExecution ?: return
         val team = _uiState.value.selectedTeam ?: return
-        val userId = getUserId()
+        val userId = getUserId() ?: run {
+            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            return
+        }
 
         _uiState.update { it.copy(isExecuting = true, isPaused = false, statusMessage = "جارٍ إعادة تشغيل المهام غير المكتملة") }
         startTimer()
@@ -328,7 +343,10 @@ class TeamChatViewModel(
     fun assignDirectTask(memberId: String, taskPrompt: String) {
         val exec = _uiState.value.currentExecution
         val team = _uiState.value.selectedTeam ?: return
-        val userId = getUserId()
+        val userId = getUserId() ?: run {
+            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            return
+        }
         val executionId = exec?.id ?: java.util.UUID.randomUUID().toString()
 
         _uiState.update { it.copy(showAssignDialog = false, isExecuting = true, statusMessage = "جارٍ إسناد المهمة للعضو") }
@@ -343,7 +361,10 @@ class TeamChatViewModel(
     fun sendInstruction(instruction: TeamInstruction) {
         val exec = _uiState.value.currentExecution ?: return
         val team = _uiState.value.selectedTeam ?: return
-        val userId = getUserId()
+        val userId = getUserId() ?: run {
+            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            return
+        }
 
         _uiState.update { it.copy(showInstructionDialog = false, isExecuting = true, statusMessage = "جارٍ إرسال التعليمات ومعالجتها") }
 
