@@ -1070,7 +1070,7 @@ class CrashRepositoryImpl(
             }
         """.trimIndent()
 
-        val userId = crashReport.userId.ifBlank { "usr_dev_master" }
+        val userId = crashReport.userId.ifBlank { requireUserId() }
         val defaultModel = aiModelRepository.getDefaultModel(userId) ?: throw Exception("No AI model configured for this user")
         val responseText = aiModelRepository.generateResponse(
             userId = userId,
@@ -1290,7 +1290,7 @@ class CrashRepositoryImpl(
                 }
             """.trimIndent()
             
-            val userId = crash.userId.ifBlank { "usr_dev_master" }
+            val userId = crash.userId.ifBlank { requireUserId() }
             val defaultModel = aiModelRepository.getDefaultModel(userId) ?: throw Exception("No AI model")
             
             val response = aiModelRepository.generateResponse(
