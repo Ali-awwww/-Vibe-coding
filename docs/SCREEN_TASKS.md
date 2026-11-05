@@ -413,6 +413,14 @@ These objectives are defined per destination. They do not require auditing or im
 - Suggested dependency path: Login/session identity → Projects/Applications context → Crashes → CrashDetail → DebugSymbols → FixAssistant → FixHistory. This is a proposed sequence, not a completion claim.
 
 
+### 2026-11-05 — Login authentication hardening
+- **Commits:** `76fec0da7954c4c4d983aac6d5e3d468d794886d` (Firebase/local auth routing and blank-hash rejection); `8f4f5b0a33705a12ffae35a53bfa4ea27dc545f2` (Firebase profile synchronization made non-blocking after account creation); `10da0df7ab808c0a01cdff8a81696e1e93c5be98` (accurate password-reset confirmation).
+- **Files:** `AuthRepositoryImpl.kt`, `MainViewModel.kt`.
+- **Implemented:** when Firebase Auth is configured, email/password sign-up and sign-in now use Firebase Auth instead of silently authenticating against the local Room account table; profile synchronization is best-effort and does not turn a successfully created Firebase identity into a reported registration failure. Local sign-in now rejects accounts with missing password hashes/salts instead of accepting any password. Firebase-backed recovery sends the provider's email reset link; local-account recovery is explicitly unsupported until email ownership can be verified. A Firebase signed-out state no longer falls back to a stale in-memory local identity.
+- **Static review:** fetched the updated files from `main` and inspected the changed auth branches. No Gradle build, tests or runtime exercise were available in this pass.
+- **Remaining blockers:** local sessions are still memory-only and are not restored after process death; local password hashing remains SHA-256 rather than a password-specific KDF; Firebase configuration, email/password provider enablement, Firestore rules and end-to-end flows have not been verified. The sign-up and sign-in paths still need automated tests, and Login remains [ ] Not audited/verified.
+- **Status:** partial security/flow correction only; not a completion claim.
+
 ### 2026-11-05 — Login screen implementation batch
 - **Commit:** `61457a52390321e1c4146651547257d01780c1ce` (Login UI); `40dd91a7c8532dcffbfbe709f3e7f8a5ad98b780` (local auth fallback removal).
 - **Files:** `LoginScreen.kt`, `AuthRepositoryImpl.kt`.
