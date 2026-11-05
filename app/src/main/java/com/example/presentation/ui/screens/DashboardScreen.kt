@@ -1,6 +1,12 @@
 package com.example.presentation.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -48,8 +54,14 @@ fun DashboardScreen(
     var showNotificationsSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Scaffold(
+        containerColor = Color(0xFF070B18),
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF090F20),
+                    titleContentColor = Color(0xFFEAF4FF),
+                    actionIconContentColor = Color(0xFF8DEBFF)
+                ),
                 title = { 
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Icons.Default.DeveloperMode, null, tint = MaterialTheme.colorScheme.primary)
@@ -82,7 +94,11 @@ fun DashboardScreen(
         },
 
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = Color(0xFF0B1224),
+                contentColor = Color(0xFFB8C8E8),
+                tonalElevation = 0.dp
+            ) {
                 NavigationBarItem(
                     selected = true,
                     onClick = { },
@@ -121,18 +137,20 @@ fun DashboardScreen(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF070B18))) {
+                CosmicDashboardBackdrop(modifier = Modifier.fillMaxSize())
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(top = 10.dp, bottom = 24.dp)
+                ) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
                         uiState.currentUser?.let { user ->
-                            EngCard(modifier = Modifier.fillMaxWidth()) {
+                            NeonPanel(modifier = Modifier.fillMaxWidth()) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -308,6 +326,7 @@ fun DashboardScreen(
                         })
                     }
                 }
+                }
             }
         }
 
@@ -320,6 +339,72 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CosmicDashboardBackdrop(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color(0xFF101B39), Color(0xFF080E1E), Color(0xFF050914))
+            )
+        )
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0x553D55C8), Color(0x003D55C8)),
+                center = Offset(size.width * 0.82f, size.height * 0.12f),
+                radius = size.minDimension * 0.62f
+            ),
+            radius = size.minDimension * 0.62f,
+            center = Offset(size.width * 0.82f, size.height * 0.12f)
+        )
+        val grid = Color(0x183D83B8)
+        val step = 28.dp.toPx()
+        var x = 0f
+        while (x < size.width) {
+            drawLine(grid, Offset(x, 0f), Offset(x, size.height), strokeWidth = 0.7.dp.toPx())
+            x += step
+        }
+        var y = 0f
+        while (y < size.height) {
+            drawLine(grid, Offset(0f, y), Offset(size.width, y), strokeWidth = 0.7.dp.toPx())
+            y += step
+        }
+        val stars = listOf(
+            Offset(size.width * .12f, size.height * .08f),
+            Offset(size.width * .72f, size.height * .22f),
+            Offset(size.width * .32f, size.height * .38f),
+            Offset(size.width * .91f, size.height * .51f),
+            Offset(size.width * .18f, size.height * .72f),
+            Offset(size.width * .61f, size.height * .84f)
+        )
+        stars.forEach { drawCircle(Color(0x998DEBFF), radius = 1.4.dp.toPx(), center = it) }
+    }
+}
+
+@Composable
+private fun NeonPanel(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = modifier
+            .border(1.dp, Color(0x6656CFE8), RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xD9101B31)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(Color(0x331B3D68), Color(0x11101B31), Color(0x22152A49))
+                    )
+                )
+                .padding(16.dp),
+            content = content
+        )
     }
 }
 
