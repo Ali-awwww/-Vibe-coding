@@ -436,22 +436,22 @@ class CrashInvestigationOrchestrator(
                     crashId = crashReport.id,
                     summary = "تقرير تحقيق AI Crash Investigation Team: ${crashReport.exceptionType}",
                     rootCause = step5Output.take(500),
-                    certainty = DiagnosisCertainty.HIGHLY_LIKELY,
+                    certainty = DiagnosisCertainty.UNKNOWN,
                     technicalEvidence = step2Output.take(400),
                     whyItHappened = step1Output.take(400),
                     solution = step8Output.take(600),
                     suggestedCode = extractDiffOrCode(step8Output),
-                    confidence = 0.92f
+                    confidence = 0.0f
                 )
                 crashDao?.insertAIDiagnosis(diagnosis)
 
                 val fixSuggestion = FixSuggestion(
                     id = UUID.randomUUID().toString(),
                     crashId = crashReport.id,
-                    originalCode = "// Original code at crash point",
+                    originalCode = "",
                     suggestedCode = extractDiffOrCode(step8Output),
                     explanation = step8Output.take(500),
-                    filePath = "CrashInvestigation/${crashReport.exceptionType.substringAfterLast(".")}.kt",
+                    filePath = "",
                     status = FixStatus.PROPOSED,
                     testResults = step9Output.take(500)
                 )
