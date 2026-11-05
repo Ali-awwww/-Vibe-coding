@@ -67,6 +67,10 @@ class FixAssistantViewModel(
     }
 
     fun applyFixAndCreatePr(fixId: String, userId: String) {
+        if (userId.isBlank()) {
+            _uiState.update { it.copy(error = "Authentication is required before creating a Pull Request.") }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isCreatingPr = true, error = null) }
             val result = repository.applyFixAndCreatePR(fixId, userId)
