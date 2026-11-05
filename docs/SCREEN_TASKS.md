@@ -621,3 +621,13 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - When a path is blocked by a platform security control, stop that operation and report the limitation; do not attempt to bypass it.
 
 **Current operating decision:** continue Supabase migration while making measurable progress on independent reliability, architecture, diagnostic integrity and test foundations. The screen-audit gate remains unchanged.
+
+
+## 2026-11-06 — Android dashboard visual refresh (source implementation)
+
+- **Target:** `app/src/main/java/com/example/presentation/ui/screens/DashboardScreen.kt` on the Android Jetpack Compose app.
+- **Visual direction:** dark cosmic background, restrained cyan/blue glow, technical grid and star points, translucent deep-blue panels with rounded borders, and a dark navigation surface. The implementation uses native Compose drawing and Material 3 components; it does not embed a static mockup or web UI.
+- **Existing behavior preserved in source:** dashboard data remains bound to `DashboardViewModel`; project/issue/crash counts, recent crash list, notification sheet and read/clear actions, sign-out action, and existing navigation destinations remain wired to their existing callbacks/routes.
+- **Implementation commits:** `c88526baad5a163df964a1f080abede7cb7224d0` (cosmic scaffold/backdrop/panel introduction), `61b1b6ec21b93c0b2ed5901c8aa01003c6c0dcab` (consistent panel styling).
+- **Verification status:** source was re-fetched after edits and the resulting content SHA is `74a084137eb146b42293f72f415314ba81c745c1`. No Gradle build, unit tests, screenshot capture, emulator run, or physical Android device validation was executed. Do not mark the dashboard audited or visually verified until those checks are performed.
+- **Scope boundary:** this is a focused home-dashboard styling pass, not the gated 27-route screen audit. Supabase migration and its acceptance gate remain unchanged.
