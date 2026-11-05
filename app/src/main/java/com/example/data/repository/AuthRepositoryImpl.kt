@@ -120,11 +120,15 @@ class AuthRepositoryImpl(
             return runCatching {
                 val result = firebaseAuth.createUserWithEmailAndPassword(email.trim(), password).await()
                 val firebaseUser = result.user ?: throw IllegalStateException("تعذر إنشاء حساب المصادقة.")
-                firebaseUser.updateProfile(
-                    com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                        .setDisplayName(displayName.trim())
-                        .build()
-                ).await()
+                runCatching {
+                    firebaseUser.updateProfile(
+                        com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                            .setDisplayName(displayName.trim())
+                            .build()
+                    ).await()
+                }.onFailure { error ->
+                    Log.w("Auth", "Account created, but display-name update failed", error)
+                }
                 val account = UserAccount(
                     id = firebaseUser.uid,
                     email = firebaseUser.email ?: email.trim(),
@@ -133,18 +137,22 @@ class AuthRepositoryImpl(
                     createdAt = System.currentTimeMillis(),
                     lastLoginAt = System.currentTimeMillis()
                 )
-                db?.collection("users")?.document(firebaseUser.uid)
-                    ?.set(
-                        mapOf(
-                            "id" to account.id,
-                            "email" to account.email,
-                            "displayName" to account.displayName,
-                            "organization" to account.organization,
-                            "createdAt" to account.createdAt,
-                            "lastLoginAt" to account.lastLoginAt
-                        ),
-                        SetOptions.merge()
-                    )?.await()
+                runCatching {
+                    db?.collection("users")?.document(firebaseUser.uid)
+                        ?.set(
+                            mapOf(
+                                "id" to account.id,
+                                "email" to account.email,
+                                "displayName" to account.displayName,
+                                "organization" to account.organization,
+                                "createdAt" to account.createdAt,
+                                "lastLoginAt" to account.lastLoginAt
+                            ),
+                            SetOptions.merge()
+                        )?.await()
+                }.onFailure { error ->
+                    Log.w("Auth", "Account created, but profile synchronization failed", error)
+                }
                 account
             }
         }
