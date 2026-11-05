@@ -401,7 +401,7 @@ fun AddAIProviderDialog(
                 
                 Text("نوع المزود:", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AIProviderType.values().filter { it != AIProviderType.CUSTOM }.forEach { t ->
+                    AIProviderType.values().filter { it == AIProviderType.GOOGLE_GEMINI || it == AIProviderType.OPEN_ROUTER }.forEach { t ->
                         FilterChip(selected = type == t, onClick = { type = t }, label = { Text(t.name) })
                     }
                 }
@@ -414,7 +414,7 @@ fun AddAIProviderDialog(
 
                 Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
                     Text(
-                        "سيتم تشفير مفتاح API محلياً قبل حفظه. لا يتم إرسال المفاتيح إلا في طلبات التحليل الفعلية.",
+                        "سيُحفظ مفتاح API مشفّرًا بمفتاح محمي بواسطة Android Keystore، ويُرسل إلى مزود الخدمة عند تنفيذ الطلبات فقط.",
                         modifier = Modifier.padding(8.dp),
                         style = MaterialTheme.typography.labelSmall
                     )
