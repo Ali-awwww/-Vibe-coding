@@ -86,8 +86,8 @@ class AuthRepositoryImpl(
                     ))
                 }
             } else {
-                // If not signed in to Firebase, check if local user is active
-                trySend(_localCurrentUser.value)
+                // Firebase is the active auth authority; never fall back to a stale local identity.
+                trySend(null)
             }
         }
         currentAuth.addAuthStateListener(listener)
@@ -115,9 +115,43 @@ class AuthRepositoryImpl(
         displayName: String,
         organization: String
     ): Result<UserAccount> {
+        val firebaseAuth = auth
+        if (firebaseAuth != null) {
+            return runCatching {
+                val result = firebaseAuth.createUserWithEmailAndPassword(email.trim(), password).await()
+                val firebaseUser = result.user ?: throw IllegalStateException("تعذر إنشاء حساب المصادقة.")
+                firebaseUser.updateProfile(
+                    com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                        .setDisplayName(displayName.trim())
+                        .build()
+                ).await()
+                val account = UserAccount(
+                    id = firebaseUser.uid,
+                    email = firebaseUser.email ?: email.trim(),
+                    displayName = firebaseUser.displayName ?: displayName.trim(),
+                    organization = organization.trim(),
+                    createdAt = System.currentTimeMillis(),
+                    lastLoginAt = System.currentTimeMillis()
+                )
+                db?.collection("users")?.document(firebaseUser.uid)
+                    ?.set(
+                        mapOf(
+                            "id" to account.id,
+                            "email" to account.email,
+                            "displayName" to account.displayName,
+                            "organization" to account.organization,
+                            "createdAt" to account.createdAt,
+                            "lastLoginAt" to account.lastLoginAt
+                        ),
+                        SetOptions.merge()
+                    )?.await()
+                account
+            }
+        }
+
         val dao = crashDao
         if (dao != null) {
-            val existing = dao.getUserByEmail(email)
+            val existing = dao.getUserByEmail(email.trim())
             if (existing != null) {
                 return Result.failure(IllegalArgumentException("البريد الإلكتروني مسجل مسبقاً"))
             }
@@ -125,7 +159,7 @@ class AuthRepositoryImpl(
             val hash = SecurityUtils.hashPassword(password, salt)
             val newUser = UserAccount(
                 id = UUID.randomUUID().toString(),
-                email = email,
+                email = email.trim(),
                 passwordHash = hash,
                 salt = salt,
                 displayName = displayName.ifBlank { email.substringBefore("@") },
@@ -141,11 +175,43 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun signIn(email: String, password: String): Result<UserAccount> {
+        val firebaseAuth = auth
+        if (firebaseAuth != null) {
+            return runCatching {
+                val result = firebaseAuth.signInWithEmailAndPassword(email.trim(), password).await()
+                val firebaseUser = result.user ?: throw IllegalStateException("تعذر استعادة حساب المصادقة.")
+                val account = UserAccount(
+                    id = firebaseUser.uid,
+                    email = firebaseUser.email ?: email.trim(),
+                    displayName = firebaseUser.displayName ?: "",
+                    createdAt = System.currentTimeMillis(),
+                    lastLoginAt = System.currentTimeMillis()
+                )
+                runCatching {
+                    db?.collection("users")?.document(firebaseUser.uid)
+                        ?.set(
+                            mapOf(
+                                "id" to account.id,
+                                "email" to account.email,
+                                "displayName" to account.displayName,
+                                "lastLoginAt" to account.lastLoginAt
+                            ),
+                            SetOptions.merge()
+                        )?.await()
+                }.onFailure { error ->
+                    Log.w("Auth", "Signed in, but profile synchronization failed", error)
+                }
+                account
+            }
+        }
+
         val dao = crashDao
         if (dao != null) {
-            val user = dao.getUserByEmail(email)
+            val user = dao.getUserByEmail(email.trim())
             if (user != null) {
-                if (user.passwordHash.isBlank() || SecurityUtils.verifyPassword(password, user.salt, user.passwordHash)) {
+                if (user.passwordHash.isNotBlank() && user.salt.isNotBlank() &&
+                    SecurityUtils.verifyPassword(password, user.salt, user.passwordHash)
+                ) {
                     dao.updateLastLogin(user.id, System.currentTimeMillis())
                     val updated = user.copy(lastLoginAt = System.currentTimeMillis())
                     _localCurrentUser.value = updated
@@ -166,18 +232,19 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> {
-        val dao = crashDao
-        if (dao != null) {
-            val user = dao.getUserByEmail(email)
-            if (user != null) {
-                val salt = SecurityUtils.generateSalt()
-                val hash = SecurityUtils.hashPassword(newPassword, salt)
-                dao.updateUserPassword(email, hash, salt)
-                return Result.success(Unit)
+        val firebaseAuth = auth
+        if (firebaseAuth != null) {
+            return runCatching {
+                firebaseAuth.sendPasswordResetEmail(email.trim()).await()
+                Unit
             }
-            return Result.failure(IllegalArgumentException("البريد الإلكتروني غير مسجل"))
         }
-        return Result.failure(IllegalStateException("خدمة استعادة كلمة المرور غير مهيأة."))
+
+        return Result.failure(
+            UnsupportedOperationException(
+                "استعادة كلمة المرور للحسابات المحلية غير متاحة؛ لا يمكن تغييرها دون التحقق من ملكية البريد الإلكتروني."
+            )
+        )
     }
 
     override suspend fun signInWithGoogle(idToken: String): Result<Unit> = runCatching {
