@@ -1,7 +1,9 @@
 package com.example.presentation.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -15,22 +17,28 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.R
 import com.example.presentation.viewmodel.MainViewModel
+
+private val SpaceBackground = Color(0xFF050914)
+private val SpacePanel = Color(0xE6101B2B)
+private val CyberCyan = Color(0xFF28D7F2)
+private val CyberViolet = Color(0xFF9B6BFF)
+private val MutedText = Color(0xFF9CB1C8)
 
 enum class AuthMode {
     SIGN_IN, SIGN_UP, RECOVER_PASSWORD
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     viewModel: MainViewModel,
@@ -38,261 +46,307 @@ fun LoginScreen(
 ) {
     val actionState by viewModel.actionState.collectAsState()
     var mode by remember { mutableStateOf(AuthMode.SIGN_IN) }
-
-    var email by remember { mutableStateOf("dev@crashintelligence.local") }
-    var password by remember { mutableStateOf("DevPass123!") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var organization by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var validationError by remember { mutableStateOf<String?>(null) }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    val emailValid = remember(email) {
+        android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
+    }
+    val passwordsMatch = password == confirmPassword
+    val canSubmit = !actionState.isLoading &&
+        emailValid &&
+        password.isNotBlank() &&
+        (mode == AuthMode.SIGN_IN ||
+            (password.length >= 8 && passwordsMatch &&
+                (mode != AuthMode.SIGN_UP || displayName.isNotBlank())))
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF09162A), SpaceBackground, Color(0xFF080D1A))
+                )
+            )
     ) {
+        SpaceGridBackground(Modifier.fillMaxSize())
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(horizontal = 22.dp, vertical = 30.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(18.dp))
 
-            // Logo & Title
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = CircleShape,
-                modifier = Modifier.size(80.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.Security,
-                        contentDescription = null,
-                        modifier = Modifier.size(44.dp),
-                        tint = MaterialTheme.colorScheme.primary
+            Box(
+                modifier = Modifier
+                    .size(94.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(Color(0x6630DDF5), Color(0x229B6BFF), Color.Transparent)
+                        )
                     )
-                }
+                    .border(1.dp, CyberCyan.copy(alpha = 0.75f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = "شعار الأمان",
+                    tint = CyberCyan,
+                    modifier = Modifier.size(46.dp)
+                )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
+            Spacer(Modifier.height(18.dp))
             Text(
-                text = stringResource(R.string.app_name),
+                text = "VIBE CODING",
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+                fontWeight = FontWeight.Black,
+                color = Color(0xFFEAF8FF)
             )
-
             Text(
-                text = "بوابة المطورين الآمنة لمراقبة الانهيارات وتتبع الاستقرار",
+                text = "ENGINEERING ACCESS GATE",
+                style = MaterialTheme.typography.labelSmall,
+                color = CyberCyan,
+                letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "بوابة آمنة لإدارة مشاريعك وتحليل أعطالها",
                 style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                color = MutedText,
+                textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(28.dp))
 
-            // Card Form Container
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, CyberCyan.copy(alpha = 0.42f), RoundedCornerShape(22.dp)),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = SpacePanel),
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Mode Title
-                    Text(
-                        text = when (mode) {
-                            AuthMode.SIGN_IN -> "تسجيل دخول المطور"
-                            AuthMode.SIGN_UP -> "إنشاء حساب مطور جديد"
-                            AuthMode.RECOVER_PASSWORD -> "استعادة كلمة المرور"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    // Error Message Banner
-                    AnimatedVisibility(visible = actionState.errorMessage != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = when (mode) {
+                                    AuthMode.SIGN_IN -> "تسجيل دخول المطور"
+                                    AuthMode.SIGN_UP -> "إنشاء حساب جديد"
+                                    AuthMode.RECOVER_PASSWORD -> "استعادة الوصول"
+                                },
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEAF8FF)
+                            )
+                            Text(
+                                text = "IDENTITY VERIFICATION",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = CyberCyan.copy(alpha = 0.85f)
+                            )
+                        }
                         Surface(
-                            color = MaterialTheme.colorScheme.errorContainer,
+                            color = Color(0x2230DDF5),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                "SECURE",
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                color = CyberCyan,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = validationError != null || actionState.errorMessage != null) {
+                        val message = validationError ?: actionState.errorMessage.orEmpty()
+                        Surface(
+                            color = Color(0x33FF4565),
                             shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5875)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.padding(12.dp),
+                                Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error)
-                                Text(
-                                    actionState.errorMessage ?: "",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
+                                Icon(Icons.Default.ErrorOutline, null, tint = Color(0xFFFF7189))
+                                Text(message, color = Color(0xFFFFC1CC), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
 
-                    // Success Message Banner
                     AnimatedVisibility(visible = actionState.successMessage != null) {
                         Surface(
-                            color = Color(0xFFE8F5E9),
+                            color = Color(0x2236E6A0),
                             shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF36E6A0)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.padding(12.dp),
+                                Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32))
+                                Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF36E6A0))
                                 Text(
-                                    actionState.successMessage ?: "",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF1B5E20)
+                                    actionState.successMessage.orEmpty(),
+                                    color = Color(0xFFB8F8D9),
+                                    style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
                     }
 
-                    // Fields for SIGN_UP
                     if (mode == AuthMode.SIGN_UP) {
-                        OutlinedTextField(
+                        CyberTextField(
                             value = displayName,
-                            onValueChange = { displayName = it },
-                            label = { Text("الاسم الكامل / اسم المطور") },
-                            leadingIcon = { Icon(Icons.Default.Person, null) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            onValueChange = { displayName = it; validationError = null },
+                            label = "اسم المطور",
+                            icon = Icons.Default.Person
                         )
-
-                        OutlinedTextField(
+                        CyberTextField(
                             value = organization,
-                            onValueChange = { organization = it },
-                            label = { Text("المنظمة / اسم الفريق") },
-                            leadingIcon = { Icon(Icons.Default.Business, null) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            onValueChange = { organization = it; validationError = null },
+                            label = "الفريق أو المؤسسة (اختياري)",
+                            icon = Icons.Default.Business
                         )
                     }
 
-                    // Email Field
-                    OutlinedTextField(
+                    CyberTextField(
                         value = email,
                         onValueChange = {
                             email = it
+                            validationError = null
                             viewModel.clearMessages()
                         },
-                        label = { Text("البريد الإلكتروني المهني") },
-                        leadingIcon = { Icon(Icons.Default.Email, null) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "البريد الإلكتروني",
+                        icon = Icons.Default.Email,
+                        keyboardType = KeyboardType.Email
                     )
 
-                    // Password Field
                     OutlinedTextField(
                         value = password,
                         onValueChange = {
                             password = it
+                            validationError = null
                             viewModel.clearMessages()
                         },
-                        label = {
-                            Text(
-                                if (mode == AuthMode.RECOVER_PASSWORD) "كلمة المرور الجديدة"
-                                else "كلمة المرور"
-                            )
-                        },
-                        leadingIcon = { Icon(Icons.Default.Lock, null) },
+                        label = { Text(if (mode == AuthMode.RECOVER_PASSWORD) "كلمة المرور الجديدة" else "كلمة المرور") },
+                        leadingIcon = { Icon(Icons.Default.Lock, null, tint = CyberCyan) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(
                                     if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    null
+                                    contentDescription = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور",
+                                    tint = MutedText
                                 )
                             }
                         },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(13.dp),
+                        colors = cyberFieldColors()
                     )
 
-                    // Confirm Password Field (For Sign Up or Reset)
-                    if (mode == AuthMode.SIGN_UP || mode == AuthMode.RECOVER_PASSWORD) {
+                    if (mode != AuthMode.SIGN_IN) {
                         OutlinedTextField(
                             value = confirmPassword,
-                            onValueChange = { confirmPassword = it },
+                            onValueChange = { confirmPassword = it; validationError = null },
                             label = { Text("تأكيد كلمة المرور") },
-                            leadingIcon = { Icon(Icons.Default.LockReset, null) },
+                            leadingIcon = { Icon(Icons.Default.LockReset, null, tint = CyberCyan) },
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(13.dp),
+                            colors = cyberFieldColors()
+                        )
+                        Text(
+                            text = "يجب ألا تقل كلمة المرور عن 8 أحرف وأن تتطابق حقول التأكيد.",
+                            color = MutedText,
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
 
-                    // Action Button
                     Button(
                         onClick = {
-                            when (mode) {
-                                AuthMode.SIGN_IN -> {
-                                    viewModel.signIn(email, password) { success ->
+                            validationError = when {
+                                !emailValid -> "أدخل بريدًا إلكترونيًا صحيحًا."
+                                password.isBlank() -> "أدخل كلمة المرور."
+                                mode != AuthMode.SIGN_IN && password.length < 8 -> "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل."
+                                mode == AuthMode.SIGN_UP && displayName.isBlank() -> "أدخل اسم المطور."
+                                mode != AuthMode.SIGN_IN && !passwordsMatch -> "كلمتا المرور غير متطابقتين."
+                                else -> null
+                            }
+                            if (validationError == null) {
+                                when (mode) {
+                                    AuthMode.SIGN_IN -> viewModel.signIn(email.trim(), password) { success ->
                                         if (success) onAuthSuccess()
                                     }
-                                }
-                                AuthMode.SIGN_UP -> {
-                                    if (password != confirmPassword) {
-                                        // passwords don't match
-                                        return@Button
-                                    }
-                                    viewModel.signUp(email, password, displayName, organization) { success ->
-                                        if (success) onAuthSuccess()
-                                    }
-                                }
-                                AuthMode.RECOVER_PASSWORD -> {
-                                    if (password != confirmPassword) {
-                                        return@Button
-                                    }
-                                    viewModel.resetPassword(email, password) { success ->
+                                    AuthMode.SIGN_UP -> viewModel.signUp(
+                                        email.trim(), password, displayName.trim(), organization.trim()
+                                    ) { success -> if (success) onAuthSuccess() }
+                                    AuthMode.RECOVER_PASSWORD -> viewModel.resetPassword(email.trim(), password) { success ->
                                         if (success) {
                                             mode = AuthMode.SIGN_IN
+                                            password = ""
+                                            confirmPassword = ""
                                         }
                                     }
                                 }
                             }
                         },
-                        enabled = !actionState.isLoading && email.isNotBlank() && password.isNotBlank(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        enabled = canSubmit,
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(13.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF087FAD),
+                            contentColor = Color.White,
+                            disabledContainerColor = Color(0xFF244052),
+                            disabledContentColor = MutedText
+                        )
                     ) {
                         if (actionState.isLoading) {
                             CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
                             )
                         } else {
                             Text(
-                                text = when (mode) {
-                                    AuthMode.SIGN_IN -> "تسجيل الدخول"
-                                    AuthMode.SIGN_UP -> "إنشاء الحساب وبدء الاستخدام"
+                                when (mode) {
+                                    AuthMode.SIGN_IN -> "دخول إلى مساحة العمل"
+                                    AuthMode.SIGN_UP -> "إنشاء الحساب"
                                     AuthMode.RECOVER_PASSWORD -> "تحديث كلمة المرور"
                                 },
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
-                    // Secondary switches
                     if (mode == AuthMode.SIGN_IN) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -301,56 +355,111 @@ fun LoginScreen(
                         ) {
                             TextButton(onClick = {
                                 mode = AuthMode.RECOVER_PASSWORD
+                                confirmPassword = ""
+                                validationError = null
                                 viewModel.clearMessages()
-                            }) {
-                                Text("نسيت كلمة المرور؟", style = MaterialTheme.typography.bodySmall)
-                            }
+                            }) { Text("نسيت كلمة المرور؟", color = CyberCyan) }
 
                             TextButton(onClick = {
                                 mode = AuthMode.SIGN_UP
+                                confirmPassword = ""
+                                validationError = null
                                 viewModel.clearMessages()
-                            }) {
-                                Text("إنشاء حساب مطور", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                            }
+                            }) { Text("إنشاء حساب", color = CyberCyan, fontWeight = FontWeight.Bold) }
                         }
                     } else {
                         TextButton(
                             onClick = {
                                 mode = AuthMode.SIGN_IN
+                                confirmPassword = ""
+                                validationError = null
                                 viewModel.clearMessages()
                             },
                             modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Text("العودة إلى تسجيل الدخول", fontWeight = FontWeight.Bold)
-                        }
+                        ) { Text("العودة لتسجيل الدخول", color = CyberCyan) }
                     }
                 }
             }
 
-            // Demo Account Quick Access Actions
+            Spacer(Modifier.height(18.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                OutlinedButton(
-                    onClick = {
-                        email = "dev@crashintelligence.local"
-                        password = "DevPass123!"
-                        mode = AuthMode.SIGN_IN
-                        viewModel.signIn("dev@crashintelligence.local", "DevPass123!") { success ->
-                            if (success) onAuthSuccess()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.FlashOn, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("الدخول السريع كمهندس نظام (Demo)", fontWeight = FontWeight.Bold)
-                }
+                Box(Modifier.size(7.dp).clip(CircleShape).background(CyberCyan))
+                Text("بوابة المصادقة • اتصال آمن", color = MutedText, style = MaterialTheme.typography.labelSmall)
             }
-
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
         }
+    }
+}
+
+@Composable
+private fun CyberTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    keyboardType: KeyboardType = KeyboardType.Text
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        leadingIcon = { Icon(icon, null, tint = CyberCyan) },
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(13.dp),
+        colors = cyberFieldColors()
+    )
+}
+
+@Composable
+private fun cyberFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = Color(0xFFEAF8FF),
+    unfocusedTextColor = Color(0xFFEAF8FF),
+    focusedContainerColor = Color(0xFF0A1422),
+    unfocusedContainerColor = Color(0xCC0A1422),
+    focusedBorderColor = CyberCyan,
+    unfocusedBorderColor = Color(0xFF38536B),
+    focusedLabelColor = CyberCyan,
+    unfocusedLabelColor = MutedText,
+    cursorColor = CyberCyan
+)
+
+@Composable
+private fun SpaceGridBackground(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val spacing = 34.dp.toPx()
+        val lineColor = CyberCyan.copy(alpha = 0.075f)
+        var x = 0f
+        while (x <= size.width) {
+            drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
+            x += spacing
+        }
+        var y = 0f
+        while (y <= size.height) {
+            drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+            y += spacing
+        }
+        val center = Offset(size.width * 0.5f, size.height * 0.23f)
+        listOf(70.dp, 112.dp, 154.dp).forEachIndexed { index, radius ->
+            drawCircle(
+                color = if (index % 2 == 0) CyberCyan.copy(alpha = 0.12f) else CyberViolet.copy(alpha = 0.12f),
+                radius = radius.toPx(),
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
+            )
+        }
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(CyberCyan.copy(alpha = 0.12f), Color.Transparent),
+                center = center,
+                radius = 250.dp.toPx()
+            ),
+            radius = 250.dp.toPx(),
+            center = center
+        )
     }
 }
