@@ -43,9 +43,12 @@ class CrashRepositoryImpl(
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
 
     private fun requireUserId(): String = try {
-        auth?.currentUser?.uid ?: "usr_dev_master"
-    } catch (_: Exception) {
-        "usr_dev_master"
+        auth?.currentUser?.uid?.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Authentication is required for cloud crash data operations.")
+    } catch (error: IllegalStateException) {
+        throw error
+    } catch (error: Exception) {
+        throw IllegalStateException("Unable to verify the authenticated user.", error)
     }
 
     // Project Operations
