@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Supabase is the only identity authority in this repository.
@@ -177,9 +180,20 @@ class AuthRepositoryImpl(
             email = email.orEmpty(),
             displayName = metadata["display_name"].orEmpty(),
             organization = metadata["organization"].orEmpty(),
-            createdAt = nowEpochSeconds() * 1000L,
+            createdAt = parseCreatedAt(createdAt),
             lastLoginAt = nowEpochSeconds() * 1000L
         )
+    }
+
+    private fun parseCreatedAt(value: String?): Long {
+        if (value.isNullOrBlank()) return System.currentTimeMillis()
+        val normalized = value.substringBefore('.').substringBefore('Z') + "Z"
+        return runCatching {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+                isLenient = false
+            }.parse(normalized)?.time
+        }.getOrNull() ?: System.currentTimeMillis()
     }
 
     private fun nowEpochSeconds(): Long = System.currentTimeMillis() / 1000L
