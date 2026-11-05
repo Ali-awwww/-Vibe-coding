@@ -29,6 +29,9 @@ class LiveTestingViewModel(
     private val _events = MutableStateFlow<List<TestEvent>>(emptyList())
     val events = _events.asStateFlow()
 
+    private val _operationError = MutableStateFlow<String?>(null)
+    val operationError = _operationError.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
@@ -76,22 +79,26 @@ class LiveTestingViewModel(
 
     fun startSession(application: Application, version: String, buildId: String) {
         viewModelScope.launch {
+            _operationError.value = null
             val session = TestSession(
                 id = UUID.randomUUID().toString(),
                 projectId = application.projectId,
                 applicationId = application.id,
                 buildId = buildId,
                 version = version,
-                deviceId = "simulated_device_id",
-                deviceName = "Android Emulator (API 33)",
-                os = "Android 13",
+                deviceId = "",
+                deviceName = "غير متصل",
+                os = "",
                 status = TestSessionStatus.PREPARING
             )
-            _activeSession.value = session
-            repository.startTestSession(session)
-            
-            observeSession(session.id)
-            observeEvents(session.id)
+            val result = repository.startTestSession(session)
+            result.onSuccess {
+                _activeSession.value = session
+                observeSession(session.id)
+                observeEvents(session.id)
+            }.onFailure { error ->
+                _operationError.value = error.message ?: "تعذر بدء جلسة الاختبار."
+            }
         }
     }
 
@@ -120,7 +127,10 @@ class LiveTestingViewModel(
 
     fun connectAgent(applicationId: String) {
         viewModelScope.launch {
-            repository.connectToAgent(applicationId)
+            _operationError.value = null
+            repository.connectToAgent(applicationId).onFailure { error ->
+                _operationError.value = error.message ?: "تعذر الاتصال بالعميل."
+            }
         }
     }
 
