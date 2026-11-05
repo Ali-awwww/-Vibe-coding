@@ -53,10 +53,14 @@ class AIModelRepositoryImpl(
     override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = runCatching {
         val provider = aiProviderDao.getProviderById(userId, providerId) ?: throw Exception("Provider not found or not owned by user")
         val apiKey = provider.apiKey?.let { SecurityUtils.decryptSecret(it) }
+            ?.takeIf { it.isNotBlank() } ?: throw Exception("API key is missing")
+
+        // Verify credentials with a real inference request before marking the provider connected.
+        testConnection(userId, providerId).getOrThrow()
 
         val models = when (provider.type) {
             AIProviderType.OPEN_ROUTER -> {
-                val response = openRouterApi.getModels()
+                val response = openRouterApi.getModels("Bearer $apiKey")
                 val fetchedModels = response.data.map { data ->
                     AIModel(
                         id = "${provider.id}:${data.id}",
@@ -86,20 +90,7 @@ class AIModelRepositoryImpl(
                 
                 fetchedModels + virtualFreeModel
             }
-            AIProviderType.HUGGING_FACE -> {
-                val response = huggingFaceApi.getModels()
-                response.map { data ->
-                    AIModel(
-                        id = "${provider.id}:${data.modelId}",
-                        providerId = provider.id,
-                        apiId = data.modelId,
-                        name = data.modelId.substringAfter("/"),
-                        isFree = true,
-                        capabilities = listOf(AICapability.REASONING),
-                        category = AIModelCategory.FREE
-                    )
-                }
-            }
+            AIProviderType.HUGGING_FACE -> throw UnsupportedOperationException("Hugging Face inference is not configured yet.")
             AIProviderType.GOOGLE_GEMINI -> {
                 listOf(
                     AIModel(
@@ -127,6 +118,8 @@ class AIModelRepositoryImpl(
             else -> emptyList()
         }
 
+        if (models.isEmpty()) throw Exception("Provider returned no supported models")
+        aiProviderDao.deleteModelsByProvider(providerId)
         aiProviderDao.insertModels(models)
         aiProviderDao.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, System.currentTimeMillis())
     }
@@ -152,15 +145,22 @@ class AIModelRepositoryImpl(
                 model.generateContent("test")
             }
             AIProviderType.OPEN_ROUTER -> {
-                openRouterApi.generateCompletion(
+                val listedModels = openRouterApi.getModels("Bearer $apiKey").data
+                val testModel = listedModels.firstOrNull { it.pricing.prompt == "0" && it.pricing.completion == "0" }
+                    ?: listedModels.firstOrNull()
+                    ?: throw Exception("OpenRouter returned no models")
+                val response = openRouterApi.generateCompletion(
                     "Bearer $apiKey",
                     OpenRouterChatRequest(
-                        model = "google/gemini-flash-1.5",
-                        messages = listOf(ChatMessage("user", "hi"))
+                        model = testModel.id,
+                        messages = listOf(ChatMessage("user", "ping"))
                     )
                 )
+                if (response.choices.firstOrNull()?.message?.content.isNullOrBlank()) {
+                    throw Exception("Provider returned an empty test response")
+                }
             }
-            else -> throw UnsupportedOperationException("Testing for this provider not implemented")
+            else -> throw UnsupportedOperationException("Connection test is not implemented for ${provider.type}")
         }
     }
 
@@ -289,7 +289,8 @@ class AIModelRepositoryImpl(
                         systemInstruction = systemInstruction?.let { com.google.ai.client.generativeai.type.content { text(it) } }
                     )
                     val response = generativeModel.generateContent(prompt)
-                    val text = response.text ?: ""
+                    val text = response.text?.takeIf { it.isNotBlank() }
+                        ?: throw Exception("Gemini returned an empty response")
                     
                     logUsage(AIUsageLog(
                         id = UUID.randomUUID().toString(),
@@ -315,7 +316,9 @@ class AIModelRepositoryImpl(
                             )
                         )
                     )
-                    val text = response.choices.firstOrNull()?.message?.content ?: ""
+                    val text = response.choices.firstOrNull()?.message?.content
+                        ?.takeIf { it.isNotBlank() }
+                        ?: throw Exception("OpenRouter returned an empty response")
                     
                     logUsage(AIUsageLog(
                         id = UUID.randomUUID().toString(),

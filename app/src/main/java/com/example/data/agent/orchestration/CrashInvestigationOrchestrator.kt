@@ -58,9 +58,9 @@ class CrashInvestigationOrchestrator(
             EXCEPTION TYPE: ${crashReport.exceptionType}
             MESSAGE: ${crashReport.message}
             SEVERITY: ${crashReport.severity.name}
-            APP VERSION: ${crashReport.appVersion.ifBlank { "1.0.0" }}
-            DEVICE: ${crashReport.deviceModel.ifBlank { "Generic Android Device" }}
-            OS VERSION: ${crashReport.osVersion.ifBlank { "Android 14 (API 34)" }}
+            APP VERSION: ${crashReport.appVersion.ifBlank { "غير متاح" }}
+            DEVICE: ${crashReport.deviceModel.ifBlank { "غير متاح" }}
+            OS VERSION: ${crashReport.osVersion.ifBlank { "غير متاح" }}
             TIMESTAMP: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(crashReport.timestamp))}
             STACK TRACE:
             ${crashReport.stackTrace.take(1500)}
@@ -436,22 +436,22 @@ class CrashInvestigationOrchestrator(
                     crashId = crashReport.id,
                     summary = "تقرير تحقيق AI Crash Investigation Team: ${crashReport.exceptionType}",
                     rootCause = step5Output.take(500),
-                    certainty = DiagnosisCertainty.HIGHLY_LIKELY,
+                    certainty = DiagnosisCertainty.UNKNOWN,
                     technicalEvidence = step2Output.take(400),
                     whyItHappened = step1Output.take(400),
                     solution = step8Output.take(600),
                     suggestedCode = extractDiffOrCode(step8Output),
-                    confidence = 0.92f
+                    confidence = 0.0f
                 )
                 crashDao?.insertAIDiagnosis(diagnosis)
 
                 val fixSuggestion = FixSuggestion(
                     id = UUID.randomUUID().toString(),
                     crashId = crashReport.id,
-                    originalCode = "// Original code at crash point",
+                    originalCode = "",
                     suggestedCode = extractDiffOrCode(step8Output),
                     explanation = step8Output.take(500),
-                    filePath = "CrashInvestigation/${crashReport.exceptionType.substringAfterLast(".")}.kt",
+                    filePath = "",
                     status = FixStatus.PROPOSED,
                     testResults = step9Output.take(500)
                 )
@@ -461,58 +461,29 @@ class CrashInvestigationOrchestrator(
     }
 
     private suspend fun resolveCrashReport(prompt: String): CrashReport {
-        // Check if prompt contains crashId
         val crashIdMatch = Regex("""(?i)(?:crashId[:=\s]+|crash[:=\s]+)?([a-f0-9\-]{32,36})""").find(prompt)
         val crashId = crashIdMatch?.groupValues?.get(1)
 
-        if (crashId != null && crashRepository != null) {
-            val found = crashRepository.getCrashDetails(crashId).firstOrNull()
-            if (found != null) return found
+        if (crashId != null) {
+            val found = crashRepository?.getCrashDetails(crashId)?.firstOrNull()
+            return found ?: throw IllegalArgumentException("لم يتم العثور على تقرير الانهيار ذي المعرّف المحدد.")
         }
 
-        // Try getting latest crash from repository if prompt is generic
         if (prompt.contains("latest", ignoreCase = true) || prompt.contains("أحدث", ignoreCase = true) || prompt.isBlank()) {
             val latest = crashRepository?.getAllCrashes()?.firstOrNull()?.maxByOrNull { it.timestamp }
-            if (latest != null) return latest
+            return latest ?: throw IllegalArgumentException("لا يوجد تقرير انهيار حقيقي محفوظ لتحليله. أرسل Stack Trace أو سجّل تقريرًا أولًا.")
         }
 
-        // Fallback: parse crash text or construct realistic report from prompt
-        val exceptionType = when {
-            prompt.contains("NullPointer", ignoreCase = true) -> "java.lang.NullPointerException"
-            prompt.contains("IndexOutOfBounds", ignoreCase = true) -> "java.lang.IndexOutOfBoundsException"
-            prompt.contains("IllegalArgument", ignoreCase = true) -> "java.lang.IllegalArgumentException"
-            prompt.contains("OutOfMemory", ignoreCase = true) -> "java.lang.OutOfMemoryError"
-            prompt.contains("ANR", ignoreCase = true) -> "Application Not Responding (ANR)"
-            else -> "java.lang.RuntimeException"
+        val stackLines = prompt.lines().filter { it.trim().startsWith("at ") }
+        if (stackLines.isEmpty()) {
+            throw IllegalArgumentException("النص المرسل لا يحتوي Stack Trace قابلًا للتحقق. لن أنشئ تقريرًا افتراضيًا.")
         }
 
-        val message = prompt.lines().firstOrNull { it.isNotBlank() } ?: "Fatal exception occurred during runtime execution"
-        val stackTrace = if (prompt.contains("at ") || prompt.lines().size > 2) {
-            prompt
-        } else {
-            """
-                $exceptionType: $message
-                    at com.example.app.MainActivity.handleEvent(MainActivity.kt:42)
-                    at com.example.app.ui.components.ActionButton.performClick(ActionButton.kt:88)
-                    at android.view.View.performClickInternal(View.java:7425)
-                    at android.os.Handler.handleCallback(Handler.java:938)
-                    at android.os.Looper.loopOnce(Looper.java:201)
-            """.trimIndent()
-        }
+        val firstLine = prompt.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        val exceptionType = firstLine.substringBefore(":").takeIf { it.contains("Exception") || it.contains("Error") || it.contains("ANR", ignoreCase = true) } ?: "UNKNOWN"
+        val message = firstLine.substringAfter(":", "").trim()
 
-        return CrashReport(
-            id = UUID.randomUUID().toString(),
-            applicationId = "app_primary",
-            projectId = "project_default",
-            exceptionType = exceptionType,
-            message = message,
-            stackTrace = stackTrace,
-            deviceModel = "Pixel 7 Pro",
-            osVersion = "Android 14 (API 34)",
-            appVersion = "1.2.0",
-            timestamp = System.currentTimeMillis(),
-            severity = Severity.HIGH
-        )
+        return CrashReport(id = "", applicationId = "", projectId = "", exceptionType = exceptionType, message = message, stackTrace = prompt.trim(), deviceModel = "", osVersion = "", appVersion = "", severity = Severity.MEDIUM)
     }
 
     private suspend fun retrieveMatchingCode(crash: CrashReport): String {
@@ -521,10 +492,10 @@ class CrashInvestigationOrchestrator(
             if (files.isNotEmpty()) {
                 files.joinToString("\n\n") { "File: ${it.path}\n${it.content.take(600)}" }
             } else {
-                "ملفات الكود المصدري مطابقة للإصدار ${crash.appVersion} وموثقة عبر سجل التتبع."
+                "لم يتم العثور على ملفات مصدر مطابقة في مساحة العمل. لا يمكن تأكيد موقع الانهيار داخل الكود."
             }
         } else {
-            "ملفات الكود المصدري مستخرجة من سياق الانهيار والإصدار ${crash.appVersion}."
+            "مستودع الكود غير متصل بالتحقيق؛ لم تتم مراجعة ملفات المصدر."
         }
     }
 
@@ -547,7 +518,9 @@ class CrashInvestigationOrchestrator(
             systemInstruction = member.instructions,
             taskType = AITaskType.AGENT_TEAM_TASK
         )
-        return result.getOrDefault(fallback).trim()
+        val response = result.getOrThrow().trim()
+        if (response.isBlank()) throw IllegalStateException("AI provider returned an empty response for ${member.name}")
+        return response
     }
 
     private fun recordStepCompleted(
@@ -673,9 +646,9 @@ class CrashInvestigationOrchestrator(
             ---
             
             ### 4. الأدلة التقنية المؤكدة (Confirmed Technical Evidence)
-            * تم استخراج الإطار المسبب من الـ Stack Trace الفعلي.
-            * تطابق كود الاستدعاء مع الإصدار ${crashReport.appVersion}.
-            * تم فحص شروط التنفيذ والتأكد من خلو الأدلة من أي اختلاق أو افتراضات غير مثبتة.
+            * تم تمرير Stack Trace الوارد في تقرير المصدر إلى التحليل.
+            * لا يُعد تطابق ملفات المصدر مؤكدًا إلا عند العثور على ملفات فعلية وإطار مطابق.
+            * بيانات الجهاز والإصدار غير متاحة ما لم تكن موجودة في تقرير المصدر.
             
             ---
             
