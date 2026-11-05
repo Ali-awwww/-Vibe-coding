@@ -72,7 +72,7 @@ class MainViewModel(
             _actionState.value = AuthActionState(isLoading = true)
             val result = authRepository.resetPassword(email, newPass)
             if (result.isSuccess) {
-                _actionState.value = AuthActionState(isLoading = false, successMessage = "تم تحديث كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول.")
+                _actionState.value = AuthActionState(isLoading = false, successMessage = "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.")
                 onComplete(true)
             } else {
                 _actionState.value = AuthActionState(
