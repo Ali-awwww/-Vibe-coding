@@ -143,5 +143,78 @@ class ResilienceAndNegativePathTest {
         assertTrue(result.isFailure)
         assertNotNull(result.exceptionOrNull())
     }
-}
 
+    @Test
+    fun `successful sign in immediately publishes current user to active collectors`() = runTest(testDispatcher) {
+        val successfulAuthApi = object : SupabaseAuthApi {
+            override suspend fun signUp(
+                publishableKey: String,
+                redirectTo: String?,
+                request: SupabaseSignUpRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+            override suspend fun signInWithPassword(
+                publishableKey: String,
+                grantType: String,
+                request: SupabasePasswordGrantRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = retrofit2.Response.success(
+                SupabaseAuthResponse(
+                    accessToken = "access-token",
+                    refreshToken = "refresh-token",
+                    expiresIn = 3600L,
+                    user = SupabaseAuthUser(
+                        id = "user-1",
+                        email = "user@example.com",
+                        createdAt = "2024-01-01T00:00:00Z",
+                        userMetadata = mapOf("display_name" to "Test User", "organization" to "Test Org")
+                    )
+                )
+            )
+
+            override suspend fun refreshSession(
+                publishableKey: String,
+                grantType: String,
+                request: SupabaseRefreshGrantRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+            override suspend fun verifyEmailOtp(
+                publishableKey: String,
+                request: SupabaseVerifyOtpRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+            override suspend fun requestPasswordRecovery(
+                publishableKey: String,
+                redirectTo: String?,
+                request: SupabaseRecoveryRequest
+            ): retrofit2.Response<Unit> = throw IOException("unused")
+
+            override suspend fun updatePassword(
+                publishableKey: String,
+                bearerToken: String,
+                request: SupabaseUpdateUserRequest
+            ): retrofit2.Response<SupabaseAuthUser> = throw IOException("unused")
+
+            override suspend fun signOut(
+                publishableKey: String,
+                bearerToken: String
+            ): retrofit2.Response<Unit> = throw IOException("unused")
+        }
+        val repository = com.example.data.repository.AuthRepositoryImpl(
+            api = successfulAuthApi,
+            publishableKey = "test-publishable-key",
+            sessionStore = SupabaseSessionStore(context)
+        )
+        val observedUsers = mutableListOf<com.example.domain.model.UserAccount?>()
+        val collector = backgroundScope.launch { repository.currentUser.collect { observedUsers += it } }
+        runCurrent()
+        assertNull(repository.getCurrentUserSync())
+
+        val result = repository.signIn("user@example.com", "correct-password")
+        assertTrue(result.isSuccess)
+        runCurrent()
+
+        assertEquals("user-1", repository.getCurrentUserSync()?.id)
+        assertTrue(observedUsers.any { it?.id == "user-1" })
+        collector.cancel()
+    }
+}
