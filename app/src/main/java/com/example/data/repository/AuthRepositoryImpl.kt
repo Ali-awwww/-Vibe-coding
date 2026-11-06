@@ -10,6 +10,7 @@ import com.example.data.remote.supabase.SupabaseStoredSession
 import com.example.data.remote.supabase.SupabaseUserMetadata
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
+import com.example.domain.repository.EmailConfirmationRequiredException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,8 +64,8 @@ class AuthRepositoryImpl(
         )
         val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
         val session = body.toStoredSession()
-            ?: throw IllegalStateException(
-                "تم إرسال طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول."
+            ?: throw EmailConfirmationRequiredException(
+                "تم قبول طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول."
             )
         sessionStore.write(session)
         session.user.toAccount().also { _currentUser.value = it }
