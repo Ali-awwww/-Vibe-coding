@@ -59,7 +59,7 @@ class ResilienceAndNegativePathTest {
     @Test
     fun `test AI Repository handles Rate Limit 429 gracefully`() = runTest(testDispatcher) {
         val fakeApi = object : OpenRouterApi {
-            override suspend fun getModels() = throw Exception("HTTP 429: Too Many Requests")
+            override suspend fun getModels(token: String): com.example.data.remote.OpenRouterModelsResponse = throw Exception("HTTP 429: Too Many Requests")
             override suspend fun generateCompletion(token: String, request: OpenRouterChatRequest): OpenRouterChatResponse {
                 throw Exception("HTTP 429: Rate Limit Exceeded")
             }
