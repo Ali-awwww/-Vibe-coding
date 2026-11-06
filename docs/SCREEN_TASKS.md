@@ -6,6 +6,18 @@
 >
 > Status key: [ ] Not audited · [x] Audited and verified. Do not mark a task complete from source inspection alone; verify behavior and tests.
 
+## Mandatory design-system and screen-design gate (2026-11-06)
+
+> **Non-negotiable:** no screen may be marked complete, closed, or handed off until its visual design and UX have been materially reviewed and improved in the same feature slice as its functionality. Backend wiring, bug fixes, or passing unit tests alone do not count as screen completion.
+
+- Every screen task must record: (1) observed visual/UX problems, (2) concrete visual changes implemented, (3) interaction and responsive/accessibility decisions, and (4) visual verification evidence (emulator/device screenshot or an explicit, documented blocker).
+- If visual verification is unavailable, record the limitation and keep the screen open. Never claim visual completion based only on source inspection.
+- Apply the shared Vibe Engineering design language consistently: cosmic depth + cyber/technical accents + engineering precision. Avoid arbitrary per-screen styling and generic uncustomized Material defaults.
+- Reuse centralized color, typography, spacing, shape, elevation, motion and component tokens. Any new token must be added to the shared theme rather than hard-coded independently in a screen.
+- Validate both Arabic RTL and English LTR, small screens, keyboard/IME behavior, accessibility semantics, and loading/empty/success/error/offline states as applicable.
+- Required screen workflow: inspect → record design issues → implement visual/UX refinement → wire real interactions/data → test → inspect rendered UI → document evidence. Do not advance to the next screen while the current screen's design gate remains open.
+- **Login is explicitly not design-complete.** Its existing dark grid/cyan foundation is not a substitute for a substantive visual refresh and rendered visual review.
+
 ## Foundational platform directive — Supabase migration (added 2026-11-05)
 - **Priority:** foundational; blocks production authentication and cloud-data work.
 - **Decision:** create a dedicated Supabase project for Vibe Coding. Do not reuse the existing `qabasapp` project; it belongs to a separate product and contains unrelated platform data.
