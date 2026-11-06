@@ -1,6 +1,5 @@
 package com.example.ui.theme
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
@@ -9,7 +8,7 @@ import androidx.compose.ui.unit.dp
  */
 object VibeDesignTokens {
     object Color {
-        val SpaceBackground = androidx.compose.ui.graphics.Color(0xFF050914)
+        val SpaceBackground = Color(0xFF050914)
         val SpacePanel = androidx.compose.ui.graphics.Color(0xE6101B2B)
         val SpacePanelRaised = androidx.compose.ui.graphics.Color(0xF0142235)
         val Cyan = androidx.compose.ui.graphics.Color(0xFF28D7F2)
