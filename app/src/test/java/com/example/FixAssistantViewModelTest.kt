@@ -1,6 +1,5 @@
 package com.example
 
-import androidx.lifecycle.ViewModel
 import com.example.domain.model.CrashReport
 import com.example.domain.repository.CrashRepository
 import com.example.presentation.viewmodel.FixAssistantViewModel
