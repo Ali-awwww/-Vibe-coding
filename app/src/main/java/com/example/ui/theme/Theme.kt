@@ -11,18 +11,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = EngDarkPrimary,
-    onPrimary = EngDarkBackground,
-    primaryContainer = EngDarkTertiary,
-    onPrimaryContainer = EngLightBackground,
-    secondary = EngDarkSecondary,
-    onSecondary = EngDarkBackground,
-    background = EngDarkBackground,
-    onBackground = EngLightBackground,
-    surface = EngDarkSurface,
-    onSurface = EngLightBackground,
-    error = EngDarkError,
-    onError = EngLightBackground
+    primary = VibeDesignTokens.Color.Cyan,
+    onPrimary = VibeDesignTokens.Color.SpaceBackground,
+    primaryContainer = VibeDesignTokens.Color.Violet,
+    onPrimaryContainer = VibeDesignTokens.Color.TextPrimary,
+    secondary = VibeDesignTokens.Color.Violet,
+    onSecondary = VibeDesignTokens.Color.SpaceBackground,
+    tertiary = VibeDesignTokens.Color.Success,
+    onTertiary = VibeDesignTokens.Color.SpaceBackground,
+    background = VibeDesignTokens.Color.SpaceBackground,
+    onBackground = VibeDesignTokens.Color.TextPrimary,
+    surface = VibeDesignTokens.Color.SpacePanel,
+    onSurface = VibeDesignTokens.Color.TextPrimary,
+    surfaceVariant = VibeDesignTokens.Color.SpacePanelRaised,
+    onSurfaceVariant = VibeDesignTokens.Color.TextMuted,
+    error = VibeDesignTokens.Color.Error,
+    onError = VibeDesignTokens.Color.TextPrimary
 )
 
 private val LightColorScheme = lightColorScheme(
