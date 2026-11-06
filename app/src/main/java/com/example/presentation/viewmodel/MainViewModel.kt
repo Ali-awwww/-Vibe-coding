@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
+import com.example.domain.repository.EmailConfirmationRequiredException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -62,10 +63,20 @@ class MainViewModel(
                 _actionState.value = AuthActionState(isLoading = false, successMessage = "تم إنشاء الحساب بنجاح")
                 onComplete(true)
             } else {
-                _actionState.value = AuthActionState(
-                    isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.message ?: "فشل إنشاء الحساب"
-                )
+                val failure = result.exceptionOrNull()
+                if (failure is EmailConfirmationRequiredException) {
+                    // Supabase accepted signup but did not issue a session; stay on auth screen.
+                    _actionState.value = AuthActionState(
+                        isLoading = false,
+                        successMessage = failure.message
+                            ?: "تم قبول طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده."
+                    )
+                } else {
+                    _actionState.value = AuthActionState(
+                        isLoading = false,
+                        errorMessage = failure?.message ?: "فشل إنشاء الحساب"
+                    )
+                }
                 onComplete(false)
             }
         }
