@@ -699,10 +699,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ## 2026-11-06 — Index missing team execution project foreign key (Supabase migration applied)
 
 - **Finding:** Supabase Performance Advisor reported `public.team_executions.project_id` foreign key without a covering index. Catalog inspection confirmed the table had indexes on `id`, `(team_id, started_at_ms DESC)`, and `(user_id, started_at_ms DESC)`, but not `project_id`.
-- **Change:** added `supabase/migrations/20261106010000_index_team_executions_project_id.sql` with `CREATE INDEX IF NOT EXISTS team_executions_project_id_idx ON public.team_executions (project_id);`.
-- **Commits:** migration file `0a2f6d80560335390aeb0eeb76fb6640b661efbb`; this documentation update records the applied change.
+- **Change:** added `supabase/migrations/20261105224519_index_team_executions_project_id.sql` with `CREATE INDEX IF NOT EXISTS team_executions_project_id_idx ON public.team_executions (project_id);`.
+- **Commits:** initial migration source `0a2f6d80560335390aeb0eeb76fb6640b661efbb`; aligned filename to the Supabase-applied version in commit `8a119e94f0755e20f2786644fa89956d395a09f3`, then removed the mismatched duplicate path in commit `282693f561918ea4a90587052cebfbc117cf9fec`.
 - **Backend verification:** Supabase `apply_migration` returned success; a subsequent `pg_indexes` query confirmed the index definition. The Performance Advisor no longer reports the `unindexed_foreign_keys` finding for this FK. It now reports 14 INFO-level unused indexes, including the new index; treat those as workload-dependent notices in this pre-traffic environment and do not remove the index solely on that basis.
-- **Limitations:** no query-plan/real workload benchmark, Android build, test suite, or device validation was executed. The index change does not complete the Supabase cloud feature gate.
+- **Limitations:** no query-plan/real workload benchmark, Android build, test suite, or device validation was executed. The source filename now matches the version recorded by Supabase (`20261105224519`); no additional database migration was applied during the rename. The index change does not complete the Supabase cloud feature gate.
 
 
 ## 2026-11-06 — Publish Supabase auth state immediately after sign-in/sign-up (source + test added; execution unverified)
