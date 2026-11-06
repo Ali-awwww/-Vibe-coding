@@ -11,6 +11,7 @@ import com.example.data.remote.supabase.SupabaseUserMetadata
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,7 +50,7 @@ class AuthRepositoryImpl(
         password: String,
         displayName: String,
         organization: String
-    ): Result<UserAccount> = runCatching {
+    ): Result<UserAccount> = authResult {
         require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
         val response = api.signUp(
             publishableKey = publishableKey,
@@ -71,7 +72,7 @@ class AuthRepositoryImpl(
         session.user.toAccount().also { _currentUser.value = it }
     }
 
-    override suspend fun signIn(email: String, password: String): Result<UserAccount> = runCatching {
+    override suspend fun signIn(email: String, password: String): Result<UserAccount> = authResult {
         require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
         val response = api.signInWithPassword(
             publishableKey = publishableKey,
@@ -88,11 +89,15 @@ class AuthRepositoryImpl(
         val session = sessionStore.read()
         try {
             if (session != null && publishableKey.isNotBlank()) {
-                runCatching {
+                try {
                     api.signOut(
                         publishableKey = publishableKey,
                         bearerToken = "Bearer ${session.accessToken}"
                     )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Remote revocation is best-effort; local credentials are always cleared below.
                 }
             }
         } finally {
@@ -142,6 +147,8 @@ class AuthRepositoryImpl(
                 ?: throw IllegalStateException("لم يُرجع Supabase جلسة مجددة صالحة.")
             sessionStore.write(refreshed)
             _currentUser.value = refreshed.user.toAccount()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: java.io.IOException) {
             // Preserve the encrypted refresh token during transient connectivity failures.
             _currentUser.value = null
@@ -149,6 +156,16 @@ class AuthRepositoryImpl(
             _currentUser.value = null
         }
     }
+
+    private suspend fun <T> authResult(block: suspend () -> T): Result<T> =
+        try {
+            Result.success(block())
+        } catch (cancelled: CancellationException) {
+            // Cancellation is control flow, not an authentication failure.
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
 
     private fun SupabaseAuthResponse.toStoredSession(): SupabaseStoredSession? {
         val access = accessToken?.takeIf(String::isNotBlank) ?: return null
