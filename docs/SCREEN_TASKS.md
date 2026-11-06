@@ -113,6 +113,16 @@ Complete each slice end-to-end before marking it complete. Visual redesign and f
 - Critical limitation: these commits remove the files from the latest tree only; prior Git history may still contain the private key material. Treat both signing keys as potentially exposed: rotate/revoke affected signing credentials where possible, audit release access, and plan a coordinated Git-history rewrite plus force-push only with repository-owner approval because it rewrites shared history and disrupts existing clones.
 - No claim is made that the historical blobs are purged or that key rotation has occurred.
 
+## 2026-11-06 — Shared Vibe design tokens and Login visual refinement (source changes; rendered UI unverified)
+
+- Added `app/src/main/java/com/example/ui/theme/VibeDesignTokens.kt` as a shared token foundation for cosmic surfaces, cyan/violet accents, text/status colors, spacing and shape values.
+- Updated `LoginScreen.kt` to consume shared color tokens, add a compact authentication-system status rail with a cyan/violet gradient edge, strengthen the access-card gradient framing, and apply IME padding so the scrollable form can respond to the on-screen keyboard.
+- Existing sign-in/sign-up callbacks, validation, confirmation-required messaging and disabled recovery behavior were preserved; no authentication capability was simulated or newly enabled.
+- Design review finding: Login previously had a dark grid and cyan/violet accents, but relied on a comparatively generic outlined card/form hierarchy. This change is a targeted visual improvement, not a complete screen redesign or visual sign-off.
+- Commits: tokens `e656a0961f0760966de276cf68765ee2aeb85d00`; Login `644ead6751f95956de072ceabf5391d96002aeb7`.
+- Verification: source files were written through GitHub and will be re-fetched for content verification. No Gradle build, unit test execution, screenshot, emulator or device visual review is claimed. Login remains unchecked in the screen inventory and must not be considered complete.
+- Remaining design-system work: unify the existing `Eng*` theme palette with the new tokens, define reusable component/state patterns and document spacing/type/motion/accessibility rules. Correct the semantic mismatch where `EngCyan` is currently assigned a green hex value only after auditing its usages.
+
 ## Navigation screen inventory
 
 | # | Route / destination | UI implementation | Parameters | Audit status |
