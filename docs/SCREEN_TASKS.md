@@ -801,3 +801,13 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 - **Latest CI recheck (commit `e4755180e822e2091b7b6b540418913699858e3f`):** workflows `42289688006` (unit tests/build), `42289688184` (APK), and `42289688432` (lint) again terminated before any job steps were recorded. Earlier attempts were re-run via GitHub Actions and showed the same pre-runner failure. Job logs are unavailable because no runner produced log output. This confirms the Actions execution blocker persists independently of the Kotlin source commits; it does not identify the underlying GitHub runner-service cause.
 - **Latest source spot-check:** re-fetched the token file, Material theme, Login screen and all three test files from `main`. Confirmed the background token uses a fully qualified Compose Color constructor, dark Material roles use shared Vibe tokens, Login uses shared panel/control tokens while retaining real sign-in and disabled recovery, and each fake implements the token-bearing OpenRouter signature. These are source checks only, not compilation.
+
+## 2026-11-06 — Shared Engineering Compose components aligned with Vibe tokens (source change; verification pending)
+
+- **Scope:** `app/src/main/java/com/example/ui/components/EngineeringComponents.kt`; shared reusable components only. This is not a screen audit or screen-completion claim.
+- **Findings:** `EngCard`, `EngButton`, `TerminalPanel` and `SectionHeader` still used the legacy 8/4 dp geometry and hard-coded legacy GitHub-style colors, creating visual drift from the shared Vibe token palette.
+- **Changes:** `EngCard` now uses the shared cosmic panel/grid tokens, panel radius and spacing; `EngButton` uses the shared cyan/control-radius tokens and explicit disabled colors; `TerminalPanel` uses the shared background/panel/text/success tokens and constrains long logs to a 240 dp vertically scrollable LTR region; `SectionHeader` uses shared grid/cyan accents and spacing.
+- **Commit:** `efc3c42c751acf170f637b6e508d60856bae110e`.
+- **Source verification:** re-fetched the edited component file after commit; exact content matched the intended update (blob SHA `4a2196fa3031a95511a2f530c40ba278c89cce67`).
+- **Compatibility intent:** public composable names, parameters, and callback signatures were preserved. The log viewport is now bounded and scrollable; no fake log entries or new backend behavior were introduced.
+- **Not verified:** no Gradle compilation, unit/UI tests, lint, screenshot, emulator or physical-device run was executed. Runtime layout impact across consuming screens remains unreviewed; this shared-component change must be checked in a rendered build before those screens can be audited.
