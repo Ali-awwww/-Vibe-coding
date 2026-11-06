@@ -67,7 +67,7 @@ class AuthRepositoryImpl(
                 "تم إرسال طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول."
             )
         sessionStore.write(session)
-        session.user.toAccount()
+        session.user.toAccount().also { _currentUser.value = it }
     }
 
     override suspend fun signIn(email: String, password: String): Result<UserAccount> = runCatching {
@@ -80,7 +80,7 @@ class AuthRepositoryImpl(
         val session = body.toStoredSession()
             ?: throw IllegalStateException("لم يُرجع Supabase جلسة مصادقة صالحة.")
         sessionStore.write(session)
-        session.user.toAccount()
+        session.user.toAccount().also { _currentUser.value = it }
     }
 
     override suspend fun signOut() {
