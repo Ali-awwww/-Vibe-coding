@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.*
 import com.example.domain.repository.CrashRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -28,58 +30,147 @@ class FixAssistantViewModel(
     private val _uiState = MutableStateFlow(FixAssistantUiState())
     val uiState: StateFlow<FixAssistantUiState> = _uiState.asStateFlow()
 
+    private var crashLoadJob: Job? = null
+    private var suggestionsJob: Job? = null
+    private var verificationsJob: Job? = null
+
     fun loadCrashAndDiagnosis(crashId: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            
-            repository.getCrashDetails(crashId).first()?.let { crash ->
+        crashLoadJob?.cancel()
+        suggestionsJob?.cancel()
+        verificationsJob?.cancel()
+
+        crashLoadJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    crash = null,
+                    diagnosis = null,
+                    suggestions = emptyList(),
+                    verifications = emptyList(),
+                    isLoading = true,
+                    isGenerating = false,
+                    isCreatingPr = false,
+                    isVerifying = false,
+                    verificationResult = null,
+                    error = null,
+                    prUrl = null
+                )
+            }
+
+            if (crashId.isBlank()) {
+                _uiState.update {
+                    it.copy(isLoading = false, error = "معرّف الانهيار غير صالح.")
+                }
+                return@launch
+            }
+
+            try {
+                val crash = repository.getCrashDetails(crashId).firstOrNull()
+                if (crash == null) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = "لم يتم العثور على سجل الانهيار. تحقق من المعرّف ثم أعد المحاولة."
+                        )
+                    }
+                    return@launch
+                }
+
+                _uiState.update { it.copy(crash = crash) }
                 val diagnosis = repository.getAIDiagnosis(crash)
-                _uiState.update { it.copy(crash = crash, diagnosis = diagnosis) }
-                
-                launch {
-                    repository.getFixSuggestions(crashId).collect { suggestions ->
-                        _uiState.update { it.copy(suggestions = suggestions) }
+                _uiState.update {
+                    it.copy(diagnosis = diagnosis, isLoading = false, error = null)
+                }
+
+                suggestionsJob = viewModelScope.launch {
+                    try {
+                        repository.getFixSuggestions(crashId).collect { suggestions ->
+                            _uiState.update { it.copy(suggestions = suggestions) }
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        _uiState.update {
+                            it.copy(error = error.message ?: "تعذر تحميل اقتراحات الإصلاح.")
+                        }
                     }
                 }
 
-                launch {
-                    repository.getVerificationsByCrash(crashId).collect { verifications ->
-                        _uiState.update { it.copy(verifications = verifications, isLoading = false) }
+                verificationsJob = viewModelScope.launch {
+                    try {
+                        repository.getVerificationsByCrash(crashId).collect { verifications ->
+                            _uiState.update { it.copy(verifications = verifications) }
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        _uiState.update {
+                            it.copy(error = error.message ?: "تعذر تحميل سجلات التحقق.")
+                        }
                     }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = error.message ?: "تعذر تحميل بيانات الانهيار. أعد المحاولة."
+                    )
                 }
             }
         }
     }
-    
+
     fun setDiagnosis(diagnosis: AIDiagnosis) {
         _uiState.update { it.copy(diagnosis = diagnosis) }
     }
 
     fun generateFix() {
-        val crash = _uiState.value.crash ?: return
-        val diagnosis = _uiState.value.diagnosis ?: return
-        
+        val state = _uiState.value
+        val crash = state.crash
+        val diagnosis = state.diagnosis
+        if (crash == null || diagnosis == null) {
+            _uiState.update {
+                it.copy(error = "لا يمكن إنشاء اقتراح قبل تحميل بيانات الانهيار وتشخيصه.")
+            }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isGenerating = true, error = null) }
-            val result = repository.generateFixSuggestion(crash, diagnosis)
-            _uiState.update { it.copy(isGenerating = false, error = result.exceptionOrNull()?.message) }
+            val result = executeRepositoryResult {
+                repository.generateFixSuggestion(crash, diagnosis)
+            }
+            _uiState.update { current ->
+                val suggestion = result.getOrNull()
+                current.copy(
+                    isGenerating = false,
+                    suggestions = if (suggestion == null) current.suggestions
+                        else (current.suggestions + suggestion).distinctBy { it.id },
+                    error = result.exceptionOrNull()?.message
+                )
+            }
         }
     }
 
     fun applyFixAndCreatePr(fixId: String, userId: String) {
         if (userId.isBlank()) {
-            _uiState.update { it.copy(error = "Authentication is required before creating a Pull Request.") }
+            _uiState.update {
+                it.copy(error = "يلزم تسجيل الدخول بحساب صالح قبل إنشاء Pull Request.")
+            }
             return
         }
         viewModelScope.launch {
             _uiState.update { it.copy(isCreatingPr = true, error = null) }
-            val result = repository.applyFixAndCreatePR(fixId, userId)
-            _uiState.update { 
+            val result = executeRepositoryResult {
+                repository.applyFixAndCreatePR(fixId, userId)
+            }
+            _uiState.update {
                 it.copy(
-                    isCreatingPr = false, 
-                    prUrl = result.getOrNull(), 
-                    error = result.exceptionOrNull()?.message 
-                ) 
+                    isCreatingPr = false,
+                    prUrl = result.getOrNull(),
+                    error = result.exceptionOrNull()?.message
+                )
             }
         }
     }
@@ -90,26 +181,44 @@ class FixAssistantViewModel(
         scenarioName: String,
         simulatedOutcome: VerificationStatus? = null
     ) {
-        val crash = _uiState.value.crash ?: return
+        val crash = _uiState.value.crash
+        if (crash == null) {
+            _uiState.update {
+                it.copy(error = "لا يمكن التحقق من الإصلاح قبل تحميل سجل الانهيار.")
+            }
+            return
+        }
         val activeFix = _uiState.value.suggestions.firstOrNull()
-        
+
         viewModelScope.launch {
             _uiState.update { it.copy(isVerifying = true, error = null) }
-            val result = repository.verifyFix(
-                crashId = crash.id,
-                fixSuggestionId = activeFix?.id,
-                newVersion = newVersion,
-                buildId = buildId,
-                scenarioName = scenarioName,
-                simulatedOutcome = simulatedOutcome
-            )
-            _uiState.update { 
+            val result = executeRepositoryResult {
+                repository.verifyFix(
+                    crashId = crash.id,
+                    fixSuggestionId = activeFix?.id,
+                    newVersion = newVersion,
+                    buildId = buildId,
+                    scenarioName = scenarioName,
+                    simulatedOutcome = simulatedOutcome
+                )
+            }
+            _uiState.update {
                 it.copy(
                     isVerifying = false,
                     verificationResult = result.getOrNull(),
                     error = result.exceptionOrNull()?.message
-                ) 
+                )
             }
         }
+    }
+
+    private suspend fun <T> executeRepositoryResult(
+        block: suspend () -> Result<T>
+    ): Result<T> = try {
+        block()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        Result.failure(error)
     }
 }
