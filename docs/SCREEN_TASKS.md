@@ -729,3 +729,15 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Source verification:** re-fetched all three changed source files from `main`; confirmed the typed exception is imported and used by repository and ViewModel, and the email-confirmation case sets `successMessage` without invoking authenticated navigation.
 - **Not verified:** no Gradle compilation, unit/Robolectric test execution, real Supabase signup, confirmation-email round trip, emulator or device validation was run. No new automated regression test has yet been added for this ViewModel branch.
 - **Remaining Login work:** verified Supabase recovery deep-link lifecycle, signup/email-confirm behavior with real provider configuration, session restore/account-switch/sign-out validation, UI/UX and accessibility review, tests and device validation. Keep inventory status [ ].
+
+
+### Login follow-up — validation reachability and signup regression coverage (2026-11-06)
+
+- **UI defect:** the primary sign-in/sign-up button was disabled until every field was already valid, while the inline validation messages were only produced by tapping that same button. Invalid forms therefore had no reachable submit action and could not show their intended field-level guidance.
+- **UI change:** the primary action is now enabled whenever the form is not loading and the screen is not in the intentionally-disabled recovery mode. Tapping it runs the existing email/password/name/confirmation validation and surfaces the corresponding inline error. Recovery remains disabled with its explicit explanation until the verified callback flow is implemented.
+- **Regression test added:** `ResilienceAndNegativePathTest` now stubs a successful Supabase signup response containing a user but no access/refresh tokens, then asserts the repository returns `EmailConfirmationRequiredException`, does not publish an authenticated user, and does not persist a session.
+- **Commits:** Login validation reachability `384922f5a531bea98d7dd7d2f9e81b6f65c0abb8`; signup confirmation regression test `a28cc9aae3080996c316ad89a127c98c1b6a7ac8`.
+- **Source verification:** both files were re-fetched from `main`; the test method and updated submit-enable condition are present.
+- **Verification limits:** the new test has not been executed; no Gradle compile, UI test, emulator, device, live Supabase signup, email delivery or confirmation callback was run.
+- **Agent instructions:** repository tree inspection found no root or nested `AGENTS.md` / `agents.md` instruction file. Agent implementation source exists under `app/src/main/java/com/example/data/agent/`; it is application code, not a contributor instruction document.
+- **Login status:** still [ ] Not audited/verified. The source changes above are partial slices; full recovery/deep-link flow, real provider configuration, broader auth lifecycle tests, accessibility/visual validation and device verification remain open.
