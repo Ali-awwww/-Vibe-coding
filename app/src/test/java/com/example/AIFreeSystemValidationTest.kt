@@ -146,7 +146,7 @@ class AIFreeSystemValidationTest {
         var responseContent = ""
         var shouldFailForModel: String? = null
 
-        override suspend fun getModels(): OpenRouterModelsResponse = OpenRouterModelsResponse(models)
+        override suspend fun getModels(token: String): OpenRouterModelsResponse = OpenRouterModelsResponse(models)
 
         override suspend fun generateCompletion(token: String, request: OpenRouterChatRequest): OpenRouterChatResponse {
             if (request.model == shouldFailForModel) throw Exception("Simulated Failure")
