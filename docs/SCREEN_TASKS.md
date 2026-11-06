@@ -713,3 +713,19 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Commits:** implementation `83f999b2e3b19a6a38173d60c5a1327b9e198088`; test `c0d6b5678d2a41b8c1a14fb4fd45672eae84ca44`; coroutine imports `ed2004ce4f0b05fe29215a94077ccf733ec52c0c`.
 - **Source verification:** re-fetched `AuthRepositoryImpl.kt` and `ResilienceAndNegativePathTest.kt` from `main`; confirmed state assignments in both successful auth flows and the active-collector regression test.
 - **Not verified:** no Gradle compile, Robolectric/unit test execution, live Supabase authentication, or device run was performed. The test depends on the Android secure-session storage implementation under Robolectric; execution will reveal whether the test environment supports the keystore-backed encryption path. The auth state fix does not address unfinished recovery/deep-link flows or the remaining Firebase-backed repositories.
+
+
+
+## 2026-11-06 — Login screen: email-confirmation signup state (source change; verification pending)
+
+- **Screen started:** route #1, `Login` (`LoginScreen.kt`). This is a focused functional slice within the screen task, not a claim that the full Identity/Auth gate or screen audit is complete.
+- **Finding:** Supabase can accept an email-confirmation-required signup without returning a session. The repository previously represented that expected outcome as a generic `IllegalStateException`; `MainViewModel` then exposed it as a red error state, incorrectly conflating “check your inbox” with a rejected signup.
+- **Changes:**
+  - Added domain-level `EmailConfirmationRequiredException` to explicitly represent the accepted signup / no-session outcome.
+  - `AuthRepositoryImpl.signUp()` now throws that typed outcome when a successful Supabase response has no valid session, with wording that says the request was accepted and email verification is required.
+  - `MainViewModel.signUp()` recognizes the typed outcome and publishes it as a success/information message while returning `false` to the UI callback; the app therefore stays on Login and does not navigate into an authenticated workspace without a session.
+  - Other signup failures remain surfaced as errors; signup with a returned valid session preserves its existing immediate-auth behavior.
+- **Commits:** domain outcome `b4711e3ce7c807c2dbbfb524f1da78624d72a256`; repository classification `45f669da2def71dcee966820ed25c3999700c89a`; ViewModel presentation `6778b08dd1156965a93318e6fe9e3ea4cb630168`.
+- **Source verification:** re-fetched all three changed source files from `main`; confirmed the typed exception is imported and used by repository and ViewModel, and the email-confirmation case sets `successMessage` without invoking authenticated navigation.
+- **Not verified:** no Gradle compilation, unit/Robolectric test execution, real Supabase signup, confirmation-email round trip, emulator or device validation was run. No new automated regression test has yet been added for this ViewModel branch.
+- **Remaining Login work:** verified Supabase recovery deep-link lifecycle, signup/email-confirm behavior with real provider configuration, session restore/account-switch/sign-out validation, UI/UX and accessibility review, tests and device validation. Keep inventory status [ ].
