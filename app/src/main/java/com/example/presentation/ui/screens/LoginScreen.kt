@@ -110,7 +110,7 @@ fun LoginScreen(
                 text = "VIBE CODING",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
-                color = Color(0xFFEAF8FF)
+                color = VibeDesignTokens.Color.TextPrimary
             )
             Text(
                 text = "ENGINEERING ACCESS GATE",
@@ -160,9 +160,9 @@ fun LoginScreen(
                     .border(
                         1.dp,
                         Brush.linearGradient(listOf(CyberCyan.copy(alpha = 0.65f), CyberViolet.copy(alpha = 0.48f), CyberCyan.copy(alpha = 0.18f))),
-                        RoundedCornerShape(22.dp)
+                        RoundedCornerShape(VibeDesignTokens.Shape.Panel)
                     ),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
                 colors = CardDefaults.cardColors(containerColor = SpacePanel),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
@@ -183,7 +183,7 @@ fun LoginScreen(
                                 },
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFEAF8FF)
+                                color = VibeDesignTokens.Color.TextPrimary
                             )
                             Text(
                                 text = "IDENTITY VERIFICATION",
@@ -211,7 +211,7 @@ fun LoginScreen(
                         Surface(
                             color = Color(0x33FF4565),
                             shape = RoundedCornerShape(10.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF5875)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, VibeDesignTokens.Color.Error),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -229,7 +229,7 @@ fun LoginScreen(
                         Surface(
                             color = Color(0x2236E6A0),
                             shape = RoundedCornerShape(10.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF36E6A0)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, VibeDesignTokens.Color.Success),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -237,7 +237,7 @@ fun LoginScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF36E6A0))
+                                Icon(Icons.Default.CheckCircle, null, tint = VibeDesignTokens.Color.Success)
                                 Text(
                                     actionState.successMessage.orEmpty(),
                                     color = Color(0xFFB8F8D9),
@@ -303,7 +303,7 @@ fun LoginScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(13.dp),
+                            shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
                             colors = cyberFieldColors()
                         )
                     }
@@ -318,7 +318,7 @@ fun LoginScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(13.dp),
+                            shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
                             colors = cyberFieldColors()
                         )
                         Text(
@@ -358,9 +358,9 @@ fun LoginScreen(
                         },
                         enabled = canSubmit,
                         modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(13.dp),
+                        shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF087FAD),
+                            containerColor = VibeDesignTokens.Color.Cyan,
                             contentColor = Color.White,
                             disabledContainerColor = Color(0xFF244052),
                             disabledContentColor = MutedText
@@ -447,22 +447,22 @@ private fun CyberTextField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(13.dp),
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
         colors = cyberFieldColors()
     )
 }
 
 @Composable
 private fun cyberFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = Color(0xFFEAF8FF),
-    unfocusedTextColor = Color(0xFFEAF8FF),
-    focusedContainerColor = Color(0xFF0A1422),
-    unfocusedContainerColor = Color(0xCC0A1422),
-    focusedBorderColor = CyberCyan,
+    focusedTextColor = VibeDesignTokens.Color.TextPrimary,
+    unfocusedTextColor = VibeDesignTokens.Color.TextPrimary,
+    focusedContainerColor = VibeDesignTokens.Color.SpaceBackground,
+    unfocusedContainerColor = VibeDesignTokens.Color.SpaceBackground,
+    focusedBorderColor = VibeDesignTokens.Color.Cyan,
     unfocusedBorderColor = Color(0xFF38536B),
     focusedLabelColor = CyberCyan,
     unfocusedLabelColor = MutedText,
-    cursorColor = CyberCyan
+    cursorColor = VibeDesignTokens.Color.Cyan
 )
 
 @Composable
