@@ -219,4 +219,77 @@ class ResilienceAndNegativePathTest {
         assertTrue(observedUsers.any { it?.id == "user-1" })
         collector.cancel()
     }
+
+    @Test
+    fun `signup requiring email confirmation is not treated as an authenticated session`() = runTest(testDispatcher) {
+        val confirmationRequiredApi = object : SupabaseAuthApi {
+            override suspend fun signUp(
+                publishableKey: String,
+                redirectTo: String?,
+                request: SupabaseSignUpRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = retrofit2.Response.success(
+                SupabaseAuthResponse(
+                    user = SupabaseAuthUser(
+                        id = "pending-user",
+                        email = request.email,
+                        createdAt = "2026-11-06T00:00:00Z"
+                    )
+                )
+            )
+
+            override suspend fun signInWithPassword(
+                publishableKey: String,
+                grantType: String,
+                request: SupabasePasswordGrantRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+            override suspend fun refreshSession(
+                publishableKey: String,
+                grantType: String,
+                request: SupabaseRefreshGrantRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+            override suspend fun verifyEmailOtp(
+                publishableKey: String,
+                request: SupabaseVerifyOtpRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+            override suspend fun requestPasswordRecovery(
+                publishableKey: String,
+                redirectTo: String?,
+                request: SupabaseRecoveryRequest
+            ): retrofit2.Response<Unit> = throw IOException("unused")
+
+            override suspend fun updatePassword(
+                publishableKey: String,
+                bearerToken: String,
+                request: SupabaseUpdateUserRequest
+            ): retrofit2.Response<SupabaseAuthUser> = throw IOException("unused")
+
+            override suspend fun signOut(
+                publishableKey: String,
+                bearerToken: String
+            ): retrofit2.Response<Unit> = throw IOException("unused")
+        }
+        val sessionStore = SupabaseSessionStore(context)
+        val repository = com.example.data.repository.AuthRepositoryImpl(
+            api = confirmationRequiredApi,
+            publishableKey = "test-publishable-key",
+            sessionStore = sessionStore
+        )
+
+        val result = repository.signUp(
+            email = "pending@example.com",
+            password = "valid-password",
+            displayName = "Pending User",
+            organization = ""
+        )
+
+        assertTrue(result.isFailure)
+        assertTrue(
+            result.exceptionOrNull() is com.example.domain.repository.EmailConfirmationRequiredException
+        )
+        assertNull(repository.getCurrentUserSync())
+        assertNull(sessionStore.read())
+    }
 }
