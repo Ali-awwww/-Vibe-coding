@@ -703,3 +703,13 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Commits:** migration file `0a2f6d80560335390aeb0eeb76fb6640b661efbb`; this documentation update records the applied change.
 - **Backend verification:** Supabase `apply_migration` returned success; a subsequent `pg_indexes` query confirmed the index definition. The Performance Advisor no longer reports the `unindexed_foreign_keys` finding for this FK. It now reports 14 INFO-level unused indexes, including the new index; treat those as workload-dependent notices in this pre-traffic environment and do not remove the index solely on that basis.
 - **Limitations:** no query-plan/real workload benchmark, Android build, test suite, or device validation was executed. The index change does not complete the Supabase cloud feature gate.
+
+
+## 2026-11-06 — Publish Supabase auth state immediately after sign-in/sign-up (source + test added; execution unverified)
+
+- **Defect identified:** `AuthRepositoryImpl.signIn()` and `signUp()` persisted the valid Supabase session and returned a `UserAccount`, but did not update the repository's `_currentUser` `MutableStateFlow`. Existing collectors (including a long-lived app auth observer) could therefore remain on the unauthenticated/null state after a successful login until a new collection triggered session restoration.
+- **Fix:** after encrypted session persistence succeeds, both methods now immediately set `_currentUser.value` to the authenticated account. The state is published only after session persistence succeeds, so a local secure-storage failure does not create an apparent signed-in state.
+- **Regression test:** added a Robolectric coroutine test with a successful Supabase sign-in stub. It keeps an auth-state collector active through sign-in and asserts both synchronous current-user state and emitted user identity. The test fixture does not call the live Supabase API.
+- **Commits:** implementation `83f999b2e3b19a6a38173d60c5a1327b9e198088`; test `c0d6b5678d2a41b8c1a14fb4fd45672eae84ca44`; coroutine imports `ed2004ce4f0b05fe29215a94077ccf733ec52c0c`.
+- **Source verification:** re-fetched `AuthRepositoryImpl.kt` and `ResilienceAndNegativePathTest.kt` from `main`; confirmed state assignments in both successful auth flows and the active-collector regression test.
+- **Not verified:** no Gradle compile, Robolectric/unit test execution, live Supabase authentication, or device run was performed. The test depends on the Android secure-session storage implementation under Robolectric; execution will reveal whether the test environment supports the keystore-backed encryption path. The auth state fix does not address unfinished recovery/deep-link flows or the remaining Firebase-backed repositories.
