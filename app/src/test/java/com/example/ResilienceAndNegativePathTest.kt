@@ -12,6 +12,7 @@ import com.example.data.repository.AIModelRepositoryImpl
 import com.example.domain.model.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -292,4 +293,70 @@ class ResilienceAndNegativePathTest {
         assertNull(repository.getCurrentUserSync())
         assertNull(sessionStore.read())
     }
+    @Test
+    fun `sign in propagates coroutine cancellation instead of returning an auth failure`() = runTest(testDispatcher) {
+        val cancellation = CancellationException("request cancelled")
+        val api = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
+            override suspend fun signInWithPassword(
+                publishableKey: String,
+                grantType: String,
+                request: SupabasePasswordGrantRequest
+            ): retrofit2.Response<SupabaseAuthResponse> = throw cancellation
+        }
+        val repository = com.example.data.repository.AuthRepositoryImpl(
+            api = api,
+            publishableKey = "test-publishable-key",
+            sessionStore = SupabaseSessionStore(context)
+        )
+
+        try {
+            repository.signIn("user@example.com", "password")
+            fail("Expected coroutine cancellation to propagate")
+        } catch (actual: CancellationException) {
+            assertSame(cancellation, actual)
+        }
+    }
+
+    private fun unusedSupabaseAuthApi(): SupabaseAuthApi = object : SupabaseAuthApi {
+        override suspend fun signUp(
+            publishableKey: String,
+            redirectTo: String?,
+            request: SupabaseSignUpRequest
+        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+        override suspend fun signInWithPassword(
+            publishableKey: String,
+            grantType: String,
+            request: SupabasePasswordGrantRequest
+        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+        override suspend fun refreshSession(
+            publishableKey: String,
+            grantType: String,
+            request: SupabaseRefreshGrantRequest
+        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+        override suspend fun verifyEmailOtp(
+            publishableKey: String,
+            request: SupabaseVerifyOtpRequest
+        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+        override suspend fun requestPasswordRecovery(
+            publishableKey: String,
+            redirectTo: String?,
+            request: SupabaseRecoveryRequest
+        ): retrofit2.Response<Unit> = throw IOException("unused")
+
+        override suspend fun updatePassword(
+            publishableKey: String,
+            bearerToken: String,
+            request: SupabaseUpdateUserRequest
+        ): retrofit2.Response<SupabaseAuthUser> = throw IOException("unused")
+
+        override suspend fun signOut(
+            publishableKey: String,
+            bearerToken: String
+        ): retrofit2.Response<Unit> = throw IOException("unused")
+    }
+
 }
