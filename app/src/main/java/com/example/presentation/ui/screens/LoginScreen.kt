@@ -28,12 +28,13 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.presentation.viewmodel.MainViewModel
+import com.example.ui.theme.VibeDesignTokens
 
-private val SpaceBackground = Color(0xFF050914)
-private val SpacePanel = Color(0xE6101B2B)
-private val CyberCyan = Color(0xFF28D7F2)
-private val CyberViolet = Color(0xFF9B6BFF)
-private val MutedText = Color(0xFF9CB1C8)
+private val SpaceBackground = VibeDesignTokens.Color.SpaceBackground
+private val SpacePanel = VibeDesignTokens.Color.SpacePanel
+private val CyberCyan = VibeDesignTokens.Color.Cyan
+private val CyberViolet = VibeDesignTokens.Color.Violet
+private val MutedText = VibeDesignTokens.Color.TextMuted
 
 enum class AuthMode {
     SIGN_IN, SIGN_UP, RECOVER_PASSWORD
@@ -77,6 +78,7 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(horizontal = 22.dp, vertical = 30.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -126,10 +128,40 @@ fun LoginScreen(
 
             Spacer(Modifier.height(28.dp))
 
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(0x99101B2B),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    Brush.horizontalGradient(
+                        listOf(CyberCyan.copy(alpha = 0.72f), CyberViolet.copy(alpha = 0.58f), CyberCyan.copy(alpha = 0.28f))
+                    )
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(VibeDesignTokens.Color.Success))
+                        Text("AUTH SYSTEM ONLINE", color = CyberCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                    Text("IDENTITY / 01", color = MutedText, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, CyberCyan.copy(alpha = 0.42f), RoundedCornerShape(22.dp)),
+                    .border(
+                        1.dp,
+                        Brush.linearGradient(listOf(CyberCyan.copy(alpha = 0.65f), CyberViolet.copy(alpha = 0.48f), CyberCyan.copy(alpha = 0.18f))),
+                        RoundedCornerShape(22.dp)
+                    ),
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = SpacePanel),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
