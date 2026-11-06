@@ -741,3 +741,14 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Verification limits:** the new test has not been executed; no Gradle compile, UI test, emulator, device, live Supabase signup, email delivery or confirmation callback was run.
 - **Agent instructions:** repository tree inspection found no root or nested `AGENTS.md` / `agents.md` instruction file. Agent implementation source exists under `app/src/main/java/com/example/data/agent/`; it is application code, not a contributor instruction document.
 - **Login status:** still [ ] Not audited/verified. The source changes above are partial slices; full recovery/deep-link flow, real provider configuration, broader auth lifecycle tests, accessibility/visual validation and device verification remain open.
+
+
+
+## 2026-11-06 — CI compiler failure: validation sandbox identity nullability (fix pushed; CI rerun pending)
+
+- **CI evidence:** the three workflow runs for commit `25304589c62dcc1e975d51fb0ca11a99c5ea73b1` completed with failure: Android CI/CD run `42286441735`, Code Quality run `42286441768`, and APK run `42286441786`.
+- **Root cause from job logs:** all three paths reached Kotlin compilation and failed in `TeamValidationViewModel.kt` because nullable `String?` user IDs were passed to validation-engine methods requiring non-null `String` at the single-test, Vibe sandbox and Crash sandbox call sites (reported around lines 99, 123 and 133). The lint workflow also stopped at the same compile task; it did not establish an independent lint defect. KSP additionally emitted an AWT EventQueue NPE during processing, but the explicit Kotlin type errors were the compilation failure reported by Gradle.
+- **Fix:** `runSingleTest()`, `runVibeSandbox()` and `runCrashSandbox()` now all call `requireAuthenticatedUserId()` and return before launching work if no authenticated identity is available. This both resolves the nullable argument mismatch and preserves fail-closed behavior; the sandbox/test operations no longer pass a null identity into the engine.
+- **Commit:** `dd9dd07730dc8869fc9113a39cc12be77aff5f64`.
+- **Verification boundary:** source update succeeded. The three workflows were not yet rerun against this fix at the time of this note. No claim of compilation, tests, lint or APK success is made. The previous CI failures remain historical evidence until a new run completes.
+- **Login remains in progress:** the above compile blocker was in a separate validation ViewModel and does not complete the Login screen. Continue the Login lifecycle, test and UX work only after the shared compile gate is rechecked.
