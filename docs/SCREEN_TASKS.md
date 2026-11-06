@@ -774,3 +774,15 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Commit:** `dd9dd07730dc8869fc9113a39cc12be77aff5f64`.
 - **Verification boundary:** source update succeeded. The three workflows were not yet rerun against this fix at the time of this note. No claim of compilation, tests, lint or APK success is made. The previous CI failures remain historical evidence until a new run completes.
 - **Login remains in progress:** the above compile blocker was in a separate validation ViewModel and does not complete the Login screen. Continue the Login lifecycle, test and UX work only after the shared compile gate is rechecked.
+
+
+## 2026-11-06 — Design-system specification and OpenRouter test fake alignment (source/docs; CI rerun unresolved)
+
+- **Design documentation:** added `docs/DESIGN_SYSTEM.md` to record the Vibe Engineering visual direction, current shared color/shape/spacing tokens, existing typography, accessibility/layout rules, and the explicit migration boundary between the new Login-local tokens and the older Material 3 Engineering palette.
+- **Important non-completion note:** `Theme.kt` still uses the legacy `EngDark*` / `EngLight*` palette. `EngCyan` is green (`#39D353)); no global palette migration or semantic color change was made because its usage audit is not yet conclusive. The new document describes the current state and target rules; it does not claim app-wide adoption.
+- **Token source cleanup:** removed the unused Compose Color import and used the existing import for token constructors in `VibeDesignTokens.kt`.
+- **CI finding:** the failed unit-test workflow for docs commit `d1b2c7b1becf371569e759b01b43cd8ff470f8cc` reached Kotlin test compilation and reported three outdated `OpenRouterApi` fakes. The interface now requires `getModels(token: String): OpenRouterModelsResponse`, while those test doubles still implemented a no-argument method.
+- **Test source fixes:** updated the fake implementations in `AIFreeSystemValidationTest.kt`, `AIModelTeamsEndToEndValidationTest.kt` and `ResilienceAndNegativePathTest.kt` to match the current API contract. Commits: `87965a1713f03c82f41a8b0acee296c4d5763b57`, `063c6eefece40a7e2453b4d81471ea81b41d37bc`, `7c56573fe46828ccaade58243763d8aef5617ae1`.
+- **Additional commits:** token cleanup `fe208dcb1f323095725dd5660719031cdd942dcb`; design-system specification `e8035985efa86df9b0f9c3cdcd76dab6058d4451`.
+- **Verification status:** the first workflow run clearly identified the test fake signature mismatch. New workflow runs were triggered by the three test commits and also reported failure; the workflow-job log endpoint returned a missing log blob (404), so their failure cause is not yet established. Do not treat the signature edits as verified until a successful test/build run or inspectable logs confirm them.
+- **Not verified:** no successful Gradle unit-test run, full APK build, lint completion, emulator/device run or rendered screenshot review has been established by this batch. Login remains open and visually unverified. App-wide Material theme migration remains pending.
