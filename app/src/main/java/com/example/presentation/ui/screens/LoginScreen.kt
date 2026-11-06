@@ -58,13 +58,9 @@ fun LoginScreen(
         android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
     }
     val passwordsMatch = password == confirmPassword
-    val canSubmit = !actionState.isLoading &&
-        mode != AuthMode.RECOVER_PASSWORD &&
-        emailValid &&
-        password.isNotBlank() &&
-        (mode == AuthMode.SIGN_IN ||
-            (password.length >= 8 && passwordsMatch &&
-                (mode != AuthMode.SIGN_UP || displayName.isNotBlank())))
+    // Keep the primary action tappable so the form can explain validation failures.
+    // Recovery stays disabled until its verified deep-link flow is implemented.
+    val canSubmit = !actionState.isLoading && mode != AuthMode.RECOVER_PASSWORD
 
     Box(
         modifier = Modifier
