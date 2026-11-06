@@ -58,7 +58,7 @@ class AIModelTeamsEndToEndValidationTest {
         aiProviderDao = database.aiProviderDao()
 
         val fakeOpenRouter = object : OpenRouterApi {
-            override suspend fun getModels(): OpenRouterModelsResponse = OpenRouterModelsResponse(emptyList())
+            override suspend fun getModels(token: String): OpenRouterModelsResponse = OpenRouterModelsResponse(emptyList())
             override suspend fun generateCompletion(token: String, request: OpenRouterChatRequest): OpenRouterChatResponse {
                 return OpenRouterChatResponse(
                     id = "gen_1",
