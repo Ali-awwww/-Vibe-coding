@@ -94,7 +94,7 @@ class TeamValidationViewModel(
     }
 
     fun runSingleTest(testId: Int) {
-        val userId = getUserId()
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             validationEngine.runSingleTest(userId, testId).collect { resultItem ->
                 _uiState.update { current ->
@@ -118,7 +118,7 @@ class TeamValidationViewModel(
 
     fun runVibeSandbox() {
         if (_uiState.value.vibeProgress.isRunning) return
-        val userId = getUserId()
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             validationEngine.runVibeCodingSandbox(userId).collect { progress ->
                 _uiState.update { it.copy(vibeProgress = progress) }
@@ -128,7 +128,7 @@ class TeamValidationViewModel(
 
     fun runCrashSandbox() {
         if (_uiState.value.crashProgress.isRunning) return
-        val userId = getUserId()
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             validationEngine.runCrashInvestigationSandbox(userId).collect { progress ->
                 _uiState.update { it.copy(crashProgress = progress) }
