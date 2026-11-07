@@ -203,4 +203,18 @@
     <string name="empty_team_activity">No active collaboration in progress. Submit a task to begin.</string>
     <string name="team_validation_title">AI Teams Validation Center</string>
     <string name="team_validation_desc">End-to-End validation of multi-agent collaboration, BYOK isolation, and sandboxes</string>
+    <string name="verification_unavailable_title">Automated verification is unavailable</string>
+    <string name="verification_unavailable_desc">No real test runner is connected to this app yet. No sandbox session or verification result is created. Existing sample or legacy records are not proof that a fix passed.</string>
+    <string name="verification_unavailable_action">Verification unavailable</string>
+    <string name="status_legacy_unverified">Legacy record — unverified</string>
+    <string name="test_results_not_run">Compilation, static analysis, and unit tests have not been executed for this suggestion.</string>
+    <string name="test_results_unreadable">The attached test result data could not be parsed.</string>
+    <string name="fix_assistant_retry_generation">Regenerate suggestion</string>
+    <string name="fix_assistant_generate_more">Generate another suggestion</string>
+    <string name="fix_assistant_missing_crash_title">Crash report not found</string>
+    <string name="fix_assistant_missing_crash_desc">Check the crash report identifier or return to the crash list.</string>
+    <string name="fix_assistant_load_error_title">Could not load crash report</string>
+    <string name="fix_assistant_generation_error_title">Could not generate a fix suggestion</string>
+    <string name="fix_assistant_no_fix_title">No fix suggestions yet</string>
+    <string name="fix_assistant_no_fix_desc">Request a suggestion after the diagnosis and linked source are available.</string>
 </resources>
