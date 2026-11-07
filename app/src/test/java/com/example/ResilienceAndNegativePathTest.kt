@@ -317,6 +317,89 @@ class ResilienceAndNegativePathTest {
         }
     }
 
+    @Test
+    fun `sign out clears local identity before remote revocation and propagates cancellation`() = runTest(testDispatcher) {
+        val sessionStore = SupabaseSessionStore(context)
+        seedSession(sessionStore)
+        val cancellation = CancellationException("logout cancelled")
+        lateinit var repository: com.example.data.repository.AuthRepositoryImpl
+        var remoteSawClearedLocalState = false
+
+        val api = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
+            override suspend fun signOut(
+                publishableKey: String,
+                bearerToken: String
+            ): retrofit2.Response<Unit> {
+                remoteSawClearedLocalState =
+                    sessionStore.read() == null && repository.getCurrentUserSync() == null
+                throw cancellation
+            }
+        }
+        repository = com.example.data.repository.AuthRepositoryImpl(
+            api = api,
+            publishableKey = "test-publishable-key",
+            sessionStore = sessionStore
+        )
+        assertEquals("logout-user", repository.getCurrentUserSync()?.id)
+
+        try {
+            repository.signOut()
+            fail("Expected remote revocation cancellation to propagate")
+        } catch (actual: CancellationException) {
+            assertSame(cancellation, actual)
+        }
+
+        assertTrue("Local state must be cleared before the remote request", remoteSawClearedLocalState)
+        assertNull(sessionStore.read())
+        assertNull(repository.getCurrentUserSync())
+    }
+
+    @Test
+    fun `sign out keeps local logout complete when remote revocation fails`() = runTest(testDispatcher) {
+        val sessionStore = SupabaseSessionStore(context)
+        seedSession(sessionStore)
+        lateinit var repository: com.example.data.repository.AuthRepositoryImpl
+        var remoteSawClearedLocalState = false
+
+        val api = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
+            override suspend fun signOut(
+                publishableKey: String,
+                bearerToken: String
+            ): retrofit2.Response<Unit> {
+                remoteSawClearedLocalState =
+                    sessionStore.read() == null && repository.getCurrentUserSync() == null
+                throw IOException("remote logout unavailable")
+            }
+        }
+        repository = com.example.data.repository.AuthRepositoryImpl(
+            api = api,
+            publishableKey = "test-publishable-key",
+            sessionStore = sessionStore
+        )
+
+        repository.signOut()
+
+        assertTrue("Local state must be cleared before the remote request", remoteSawClearedLocalState)
+        assertNull(sessionStore.read())
+        assertNull(repository.getCurrentUserSync())
+    }
+
+    private fun seedSession(sessionStore: SupabaseSessionStore) {
+        sessionStore.clear()
+        sessionStore.write(
+            SupabaseStoredSession(
+                accessToken = "access-token",
+                refreshToken = "refresh-token",
+                expiresAtEpochSeconds = System.currentTimeMillis() / 1000L + 3600L,
+                user = SupabaseAuthUser(
+                    id = "logout-user",
+                    email = "logout-user@example.com",
+                    createdAt = "2024-01-01T00:00:00Z"
+                )
+            )
+        )
+    }
+
     private fun unusedSupabaseAuthApi(): SupabaseAuthApi = object : SupabaseAuthApi {
         override suspend fun signUp(
             publishableKey: String,
