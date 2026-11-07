@@ -167,7 +167,7 @@ fun StatusFilterRow(
                 label = { Text(getVerificationStatusLabel(status), fontSize = 12.sp) },
                 leadingIcon = {
                     Surface(
-                        color = getVerificationStatusColor(status),
+                        color = getVerificationStatusColor(),
                         shape = MaterialTheme.shapes.extraSmall,
                         modifier = Modifier.size(8.dp)
                     ) {}
@@ -197,7 +197,7 @@ fun VerificationCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                VerificationStatusBadge(record.status)
+                VerificationStatusBadge()
                 Text(
                     formattedDate,
                     style = MaterialTheme.typography.labelSmall,
@@ -393,7 +393,7 @@ private fun VerificationMetadataColumn(label: String, value: String, modifier: M
 }
 
 @Composable
-fun VerificationStatusBadge(status: VerificationStatus) {
+fun VerificationStatusBadge() {
     val color = VibeDesignTokens.Color.TextMuted
     val label = stringResource(R.string.status_legacy_unverified)
 
@@ -416,7 +416,7 @@ fun VerificationStatusBadge(status: VerificationStatus) {
 
 
 
-fun getVerificationStatusColor(status: VerificationStatus): Color =
+fun getVerificationStatusColor(): Color =
     VibeDesignTokens.Color.TextMuted
 
 
