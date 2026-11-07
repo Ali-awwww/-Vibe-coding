@@ -19,6 +19,9 @@ data class FixAssistantUiState(
     val isCreatingPr: Boolean = false,
     val isVerifying: Boolean = false,
     val verificationResult: CrashVerificationRecord? = null,
+    val loadError: String? = null,
+    val suggestionsLoadError: String? = null,
+    val verificationsLoadError: String? = null,
     val error: String? = null,
     val prUrl: String? = null
 )
@@ -51,6 +54,9 @@ class FixAssistantViewModel(
                     isCreatingPr = false,
                     isVerifying = false,
                     verificationResult = null,
+                    loadError = null,
+                    suggestionsLoadError = null,
+                    verificationsLoadError = null,
                     error = null,
                     prUrl = null
                 )
@@ -58,7 +64,7 @@ class FixAssistantViewModel(
 
             if (crashId.isBlank()) {
                 _uiState.update {
-                    it.copy(isLoading = false, error = "معرّف الانهيار غير صالح.")
+                    it.copy(isLoading = false, loadError = "معرّف الانهيار غير صالح.")
                 }
                 return@launch
             }
@@ -69,7 +75,7 @@ class FixAssistantViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            error = "لم يتم العثور على سجل الانهيار. تحقق من المعرّف ثم أعد المحاولة."
+                            loadError = "لم يتم العثور على سجل الانهيار. تحقق من المعرّف ثم أعد المحاولة."
                         )
                     }
                     return@launch
@@ -78,19 +84,24 @@ class FixAssistantViewModel(
                 _uiState.update { it.copy(crash = crash) }
                 val diagnosis = repository.getAIDiagnosis(crash)
                 _uiState.update {
-                    it.copy(diagnosis = diagnosis, isLoading = false, error = null)
+                    it.copy(diagnosis = diagnosis, isLoading = false, loadError = null)
                 }
 
                 suggestionsJob = viewModelScope.launch {
                     try {
                         repository.getFixSuggestions(crashId).collect { suggestions ->
-                            _uiState.update { it.copy(suggestions = suggestions) }
+                            _uiState.update {
+                                it.copy(suggestions = suggestions, suggestionsLoadError = null)
+                            }
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
                         _uiState.update {
-                            it.copy(error = error.message ?: "تعذر تحميل اقتراحات الإصلاح.")
+                            it.copy(
+                                suggestionsLoadError = error.message
+                                    ?: "تعذر تحميل اقتراحات الإصلاح."
+                            )
                         }
                     }
                 }
@@ -98,13 +109,18 @@ class FixAssistantViewModel(
                 verificationsJob = viewModelScope.launch {
                     try {
                         repository.getVerificationsByCrash(crashId).collect { verifications ->
-                            _uiState.update { it.copy(verifications = verifications) }
+                            _uiState.update {
+                                it.copy(verifications = verifications, verificationsLoadError = null)
+                            }
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
                         _uiState.update {
-                            it.copy(error = error.message ?: "تعذر تحميل سجلات التحقق.")
+                            it.copy(
+                                verificationsLoadError = error.message
+                                    ?: "تعذر تحميل سجلات التحقق."
+                            )
                         }
                     }
                 }
@@ -114,15 +130,15 @@ class FixAssistantViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = error.message ?: "تعذر تحميل بيانات الانهيار. أعد المحاولة."
+                        loadError = error.message ?: "تعذر تحميل بيانات الانهيار. أعد المحاولة."
                     )
                 }
             }
         }
     }
 
-    fun setDiagnosis(diagnosis: AIDiagnosis) {
-        _uiState.update { it.copy(diagnosis = diagnosis) }
+        fun setDiagnosis(diagnosis: AIDiagnosis) {
+        _uiState.update { it.copy(diagnosis = diagnosis, loadError = null, error = null) }
     }
 
     fun generateFix() {
@@ -147,6 +163,7 @@ class FixAssistantViewModel(
                     isGenerating = false,
                     suggestions = if (suggestion == null) current.suggestions
                         else (current.suggestions + suggestion).distinctBy { it.id },
+                    suggestionsLoadError = if (suggestion != null) null else current.suggestionsLoadError,
                     error = result.exceptionOrNull()?.message
                 )
             }
