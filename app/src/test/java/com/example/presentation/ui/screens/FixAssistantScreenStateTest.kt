@@ -129,6 +129,7 @@ class FixAssistantScreenStateTest {
             FixAssistantContentState.GenerationError("model request failed"),
             deriveFixAssistantContentState(
                 FixAssistantUiState(
+                    isLoading = false,
                     crash = CrashReport(id = "crash-1"),
                     diagnosis = AIDiagnosis(crashId = "crash-1"),
                     error = "model request failed"
@@ -143,6 +144,7 @@ class FixAssistantScreenStateTest {
             FixAssistantContentState.ReadyWithFixes(1),
             deriveFixAssistantContentState(
                 FixAssistantUiState(
+                    isLoading = false,
                     crash = CrashReport(id = "crash-1"),
                     diagnosis = AIDiagnosis(crashId = "crash-1"),
                     suggestions = listOf(FixSuggestion(id = "fix-1")),
