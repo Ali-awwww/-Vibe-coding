@@ -26,7 +26,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
-import okhttp3.ResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -50,7 +49,7 @@ class AuthRepositorySignOutRaceTest {
 
     @Before
     fun setUp() {
-        context = ApplicationProvider.getApplicationContext()
+        context = ApplicationProvider.getApplicationContext<Context>()
         Dispatchers.setMain(testDispatcher)
     }
 
