@@ -213,7 +213,7 @@
     <string name="fix_assistant_generate_more">Generate another suggestion</string>
     <string name="fix_assistant_missing_crash_title">Crash report not found</string>
     <string name="fix_assistant_missing_crash_desc">Check the crash report identifier or return to the crash list.</string>
-    <string name="fix_assistant_load_error_title">Could not load crash report</string>
+    <string name="fix_assistant_load_error_title">Could not load fix assistant data</string>
     <string name="fix_assistant_generation_error_title">Could not generate a fix suggestion</string>
     <string name="fix_assistant_no_fix_title">No fix suggestions yet</string>
     <string name="fix_assistant_no_fix_desc">Request a suggestion after the diagnosis and linked source are available.</string>
