@@ -1,6 +1,9 @@
 package com.example
 
+import com.example.domain.model.AIDiagnosis
 import com.example.domain.model.CrashReport
+import com.example.domain.model.CrashVerificationRecord
+import com.example.domain.model.FixSuggestion
 import com.example.domain.repository.CrashRepository
 import com.example.presentation.viewmodel.FixAssistantViewModel
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +50,7 @@ class FixAssistantViewModelTest {
 
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.crash)
-        assertTrue(viewModel.uiState.value.error.orEmpty().contains("لم يتم العثور"))
+        assertTrue(viewModel.uiState.value.loadError.orEmpty().contains("لم يتم العثور"))
     }
 
     @Test
@@ -59,7 +62,7 @@ class FixAssistantViewModelTest {
 
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.crash)
-        assertTrue(viewModel.uiState.value.error.orEmpty().isNotBlank())
+        assertTrue(viewModel.uiState.value.loadError.orEmpty().isNotBlank())
     }
 
     @Test
@@ -73,16 +76,79 @@ class FixAssistantViewModelTest {
 
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.crash)
-        assertTrue(viewModel.uiState.value.error.orEmpty().contains("offline lookup"))
+        assertTrue(viewModel.uiState.value.loadError.orEmpty().contains("offline lookup"))
     }
 
-    private fun repositoryReturning(crashFlow: Flow<CrashReport?>): CrashRepository =
+    @Test
+    fun `diagnosis failure is reported as a load error instead of a generation action`() = runTest(mainDispatcher) {
+        val viewModel = FixAssistantViewModel(
+            repositoryReturning(
+                crashFlow = flowOf(CrashReport(id = "crash-123")),
+                diagnosisError = IOException("diagnosis offline")
+            )
+        )
+
+        viewModel.loadCrashAndDiagnosis("crash-123")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.crash != null)
+        assertTrue(viewModel.uiState.value.loadError.orEmpty().contains("diagnosis offline"))
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `suggestions stream failure is kept separate from generation errors`() = runTest(mainDispatcher) {
+        val viewModel = FixAssistantViewModel(
+            repositoryReturning(
+                crashFlow = flowOf(CrashReport(id = "crash-123")),
+                suggestionsFlow = flow { throw IOException("suggestions offline") }
+            )
+        )
+
+        viewModel.loadCrashAndDiagnosis("crash-123")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.suggestionsLoadError.orEmpty().contains("suggestions offline"))
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `verification history stream failure does not poison fix generation state`() = runTest(mainDispatcher) {
+        val viewModel = FixAssistantViewModel(
+            repositoryReturning(
+                crashFlow = flowOf(CrashReport(id = "crash-123")),
+                verificationsFlow = flow { throw IOException("history offline") }
+            )
+        )
+
+        viewModel.loadCrashAndDiagnosis("crash-123")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.verificationsLoadError.orEmpty().contains("history offline"))
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    private fun repositoryReturning(
+        crashFlow: Flow<CrashReport?>,
+        diagnosisError: Throwable? = null,
+        suggestionsFlow: Flow<List<FixSuggestion>> = emptyFlow(),
+        verificationsFlow: Flow<List<CrashVerificationRecord>> = emptyFlow()
+    ): CrashRepository =
         Proxy.newProxyInstance(
             CrashRepository::class.java.classLoader,
             arrayOf(CrashRepository::class.java)
         ) { proxy, method, args ->
             when (method.name) {
                 "getCrashDetails" -> crashFlow
+                "getAIDiagnosis" -> {
+                    diagnosisError?.let { throw it }
+                    AIDiagnosis(crashId = (args?.firstOrNull() as CrashReport).id)
+                }
+                "getFixSuggestions" -> suggestionsFlow
+                "getVerificationsByCrash" -> verificationsFlow
                 "toString" -> "FixAssistantCrashRepositoryTestDouble"
                 "hashCode" -> System.identityHashCode(proxy)
                 "equals" -> proxy === args?.firstOrNull()
