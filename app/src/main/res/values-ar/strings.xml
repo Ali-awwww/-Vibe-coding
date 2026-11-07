@@ -203,4 +203,18 @@
     <string name="empty_team_activity">لا يوجد نشاط قيد التنفيذ حاليًا. أرسل مهمة للبدء في تشغيل الفريق.</string>
     <string name="team_validation_title">مركز التحقق من فرق الذكاء الاصطناعي</string>
     <string name="team_validation_desc">فحص شامل لتعاون النماذج، عزل المفاتيح، والبيئات المعزولة</string>
+    <string name="verification_unavailable_title">التحقق الآلي غير متاح حاليًا</string>
+    <string name="verification_unavailable_desc">لا يوجد مشغل اختبار حقيقي مرتبط بالتطبيق حتى الآن. لن تُنشأ جلسة Sandbox أو نتيجة تحقق. السجلات التجريبية أو القديمة لا تثبت نجاح الإصلاح.</string>
+    <string name="verification_unavailable_action">التحقق غير متاح</string>
+    <string name="status_legacy_unverified">سجل سابق غير موثق</string>
+    <string name="test_results_not_run">لم يتم تشغيل Compilation أو Static Analysis أو Unit Tests لهذا المقترح.</string>
+    <string name="test_results_unreadable">تعذر تحليل بيانات نتائج الاختبار المرفقة.</string>
+    <string name="fix_assistant_retry_generation">إعادة توليد المقترح</string>
+    <string name="fix_assistant_generate_more">توليد اقتراح إضافي</string>
+    <string name="fix_assistant_missing_crash_title">لم يتم العثور على تقرير الانهيار</string>
+    <string name="fix_assistant_missing_crash_desc">تحقق من معرف التقرير أو ارجع إلى قائمة الأعطال.</string>
+    <string name="fix_assistant_load_error_title">تعذر تحميل تقرير الانهيار</string>
+    <string name="fix_assistant_generation_error_title">تعذر توليد مقترح الإصلاح</string>
+    <string name="fix_assistant_no_fix_title">لا توجد مقترحات إصلاح بعد</string>
+    <string name="fix_assistant_no_fix_desc">اطلب مقترحًا بعد توفر التشخيص والمصدر المرتبط به.</string>
 </resources>
