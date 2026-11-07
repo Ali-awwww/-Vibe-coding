@@ -60,15 +60,16 @@ internal sealed interface FixAssistantContentState {
 internal fun deriveFixAssistantContentState(uiState: FixAssistantUiState): FixAssistantContentState {
     if (uiState.isLoading) return FixAssistantContentState.Loading
 
+    uiState.loadError?.let { return FixAssistantContentState.LoadError(it) }
+
     val crash = uiState.crash
-    if (crash == null) {
-        return uiState.error?.let { FixAssistantContentState.LoadError(it) }
-            ?: FixAssistantContentState.MissingCrash
-    }
+    if (crash == null) return FixAssistantContentState.MissingCrash
 
     if (uiState.suggestions.isNotEmpty()) {
         return FixAssistantContentState.ReadyWithFixes(uiState.suggestions.size)
     }
+
+    uiState.suggestionsLoadError?.let { return FixAssistantContentState.LoadError(it) }
 
     if (uiState.error != null) {
         return FixAssistantContentState.GenerationError(uiState.error)
@@ -248,6 +249,15 @@ private fun FixAssistantContent(
 
         VerificationUnavailableBanner()
 
+        uiState.verificationsLoadError?.let { message ->
+            FixAssistantNoticePanel(
+                title = "تعذر تحميل سجل التحقق",
+                description = message,
+                icon = Icons.Default.ErrorOutline,
+                accent = VibeDesignTokens.Color.Error
+            )
+        }
+
         latestVerification?.let { record ->
             SectionHeader("سجل تحقق سابق")
             VerificationCard(record = record, onReVerify = null)
@@ -278,6 +288,15 @@ private fun FixAssistantContent(
             )
 
             is FixAssistantContentState.ReadyWithFixes -> {
+                uiState.suggestionsLoadError?.let { message ->
+                    FixAssistantNoticePanel(
+                        title = "تعذر تحديث قائمة المقترحات",
+                        description = message,
+                        icon = Icons.Default.ErrorOutline,
+                        accent = VibeDesignTokens.Color.Error
+                    )
+                }
+
                 uiState.error?.let { message ->
                     FixAssistantNoticePanel(
                         title = "تعذر إكمال العملية",
