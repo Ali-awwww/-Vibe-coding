@@ -217,4 +217,5 @@
     <string name="fix_assistant_generation_error_title">Could not generate a fix suggestion</string>
     <string name="fix_assistant_no_fix_title">No fix suggestions yet</string>
     <string name="fix_assistant_no_fix_desc">Request a suggestion after the diagnosis and linked source are available.</string>
+    <string name="verification_history_untrusted_details">Legacy test scope, metrics, and new stack traces are not independently verified. Only the original crash trace is retained as source context.</string>
 </resources>
