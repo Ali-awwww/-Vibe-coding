@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,10 +19,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -40,6 +47,49 @@ enum class AuthMode {
     SIGN_IN, SIGN_UP, RECOVER_PASSWORD
 }
 
+internal enum class AuthFormField {
+    EMAIL, PASSWORD, DISPLAY_NAME, CONFIRM_PASSWORD, FORM
+}
+
+internal data class AuthFormValidationError(
+    val field: AuthFormField,
+    val message: String
+)
+
+internal fun validateAuthForm(
+    mode: AuthMode,
+    email: String,
+    password: String,
+    displayName: String,
+    confirmPassword: String
+): AuthFormValidationError? {
+    if (mode == AuthMode.RECOVER_PASSWORD) {
+        return AuthFormValidationError(
+            AuthFormField.FORM,
+            "استعادة كلمة المرور غير مفعّلة حتى اكتمال التحقق من رابط البريد."
+        )
+    }
+    if (mode == AuthMode.SIGN_UP && displayName.isBlank()) {
+        return AuthFormValidationError(AuthFormField.DISPLAY_NAME, "أدخل اسم المطور.")
+    }
+    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+        return AuthFormValidationError(AuthFormField.EMAIL, "أدخل بريدًا إلكترونيًا صحيحًا.")
+    }
+    if (password.isBlank()) {
+        return AuthFormValidationError(AuthFormField.PASSWORD, "أدخل كلمة المرور.")
+    }
+    if (mode == AuthMode.SIGN_UP && password.length < 8) {
+        return AuthFormValidationError(
+            AuthFormField.PASSWORD,
+            "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل."
+        )
+    }
+    if (mode == AuthMode.SIGN_UP && password != confirmPassword) {
+        return AuthFormValidationError(AuthFormField.CONFIRM_PASSWORD, "كلمتا المرور غير متطابقتين.")
+    }
+    return null
+}
+
 @Composable
 fun LoginScreen(
     viewModel: MainViewModel,
@@ -53,15 +103,52 @@ fun LoginScreen(
     var displayName by remember { mutableStateOf("") }
     var organization by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var validationError by remember { mutableStateOf<String?>(null) }
+    var validationError by remember { mutableStateOf<AuthFormValidationError?>(null) }
 
-    val emailValid = remember(email) {
-        android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
-    }
-    val passwordsMatch = password == confirmPassword
+    val focusManager = LocalFocusManager.current
+    val displayNameFocusRequester = remember { FocusRequester() }
+    val organizationFocusRequester = remember { FocusRequester() }
+    val emailFocusRequester = remember { FocusRequester() }
+    val passwordFocusRequester = remember { FocusRequester() }
+    val confirmPasswordFocusRequester = remember { FocusRequester() }
+
     // Keep the primary action tappable so the form can explain validation failures.
     // Recovery stays disabled until its verified deep-link flow is implemented.
     val canSubmit = !actionState.isLoading && mode != AuthMode.RECOVER_PASSWORD
+
+    val emailError = validationError?.takeIf { it.field == AuthFormField.EMAIL }?.message
+    val passwordError = validationError?.takeIf { it.field == AuthFormField.PASSWORD }?.message
+    val displayNameError = validationError?.takeIf { it.field == AuthFormField.DISPLAY_NAME }?.message
+    val confirmPasswordError = validationError?.takeIf { it.field == AuthFormField.CONFIRM_PASSWORD }?.message
+
+    val submit: () -> Unit = {
+        if (!actionState.isLoading) {
+            val error = validateAuthForm(mode, email, password, displayName, confirmPassword)
+            validationError = error
+            if (error == null) {
+                focusManager.clearFocus()
+                when (mode) {
+                    AuthMode.SIGN_IN -> viewModel.signIn(email.trim(), password) { success ->
+                        if (success) onAuthSuccess()
+                    }
+                    AuthMode.SIGN_UP -> viewModel.signUp(
+                        email.trim(), password, displayName.trim(), organization.trim()
+                    ) { success ->
+                        if (success) onAuthSuccess()
+                    }
+                    AuthMode.RECOVER_PASSWORD -> Unit
+                }
+            } else {
+                when (error.field) {
+                    AuthFormField.EMAIL -> emailFocusRequester.requestFocus()
+                    AuthFormField.PASSWORD -> passwordFocusRequester.requestFocus()
+                    AuthFormField.DISPLAY_NAME -> displayNameFocusRequester.requestFocus()
+                    AuthFormField.CONFIRM_PASSWORD -> confirmPasswordFocusRequester.requestFocus()
+                    AuthFormField.FORM -> focusManager.clearFocus()
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -207,7 +294,7 @@ fun LoginScreen(
                     }
 
                     AnimatedVisibility(visible = validationError != null || actionState.errorMessage != null) {
-                        val message = validationError ?: actionState.errorMessage.orEmpty()
+                        val message = validationError?.message ?: actionState.errorMessage.orEmpty()
                         Surface(
                             color = Color(0x33FF4565),
                             shape = RoundedCornerShape(10.dp),
@@ -250,15 +337,33 @@ fun LoginScreen(
                     if (mode == AuthMode.SIGN_UP) {
                         CyberTextField(
                             value = displayName,
-                            onValueChange = { displayName = it; validationError = null },
+                            onValueChange = {
+                                displayName = it
+                                validationError = null
+                                viewModel.clearMessages()
+                            },
                             label = "اسم المطور",
-                            icon = Icons.Default.Person
+                            icon = Icons.Default.Person,
+                            focusRequester = displayNameFocusRequester,
+                            imeAction = ImeAction.Next,
+                            onNext = { organizationFocusRequester.requestFocus() },
+                            enabled = !actionState.isLoading,
+                            isError = displayNameError != null,
+                            errorMessage = displayNameError
                         )
                         CyberTextField(
                             value = organization,
-                            onValueChange = { organization = it; validationError = null },
+                            onValueChange = {
+                                organization = it
+                                validationError = null
+                                viewModel.clearMessages()
+                            },
                             label = "الفريق أو المؤسسة (اختياري)",
-                            icon = Icons.Default.Business
+                            icon = Icons.Default.Business,
+                            focusRequester = organizationFocusRequester,
+                            imeAction = ImeAction.Next,
+                            onNext = { emailFocusRequester.requestFocus() },
+                            enabled = !actionState.isLoading
                         )
                     }
 
@@ -271,7 +376,14 @@ fun LoginScreen(
                         },
                         label = "البريد الإلكتروني",
                         icon = Icons.Default.Email,
-                        keyboardType = KeyboardType.Email
+                        focusRequester = emailFocusRequester,
+                        keyboardType = KeyboardType.Email,
+                        imeAction = if (mode == AuthMode.RECOVER_PASSWORD) ImeAction.Done else ImeAction.Next,
+                        onNext = { passwordFocusRequester.requestFocus() },
+                        onDone = { focusManager.clearFocus() },
+                        enabled = !actionState.isLoading,
+                        isError = emailError != null,
+                        errorMessage = emailError
                     )
 
                     if (mode == AuthMode.RECOVER_PASSWORD) {
@@ -288,10 +400,16 @@ fun LoginScreen(
                                 validationError = null
                                 viewModel.clearMessages()
                             },
+                            enabled = !actionState.isLoading,
+                            isError = passwordError != null,
+                            supportingText = passwordError?.let { message -> { Text(message) } },
                             label = { Text("كلمة المرور") },
                             leadingIcon = { Icon(Icons.Default.Lock, null, tint = CyberCyan) },
                             trailingIcon = {
-                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                IconButton(
+                                    onClick = { passwordVisible = !passwordVisible },
+                                    enabled = !actionState.isLoading
+                                ) {
                                     Icon(
                                         if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                         contentDescription = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور",
@@ -300,9 +418,18 @@ fun LoginScreen(
                                 }
                             },
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = if (mode == AuthMode.SIGN_UP) ImeAction.Next else ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { confirmPasswordFocusRequester.requestFocus() },
+                                onDone = { submit() }
+                            ),
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth()
+                                .focusRequester(passwordFocusRequester)
+                                .semantics { passwordError?.let { error(it) } },
                             shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
                             colors = cyberFieldColors()
                         )
@@ -311,13 +438,26 @@ fun LoginScreen(
                     if (mode == AuthMode.SIGN_UP) {
                         OutlinedTextField(
                             value = confirmPassword,
-                            onValueChange = { confirmPassword = it; validationError = null },
+                            onValueChange = {
+                                confirmPassword = it
+                                validationError = null
+                                viewModel.clearMessages()
+                            },
+                            enabled = !actionState.isLoading,
+                            isError = confirmPasswordError != null,
+                            supportingText = confirmPasswordError?.let { message -> { Text(message) } },
                             label = { Text("تأكيد كلمة المرور") },
                             leadingIcon = { Icon(Icons.Default.LockReset, null, tint = CyberCyan) },
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { submit() }),
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth()
+                                .focusRequester(confirmPasswordFocusRequester)
+                                .semantics { confirmPasswordError?.let { error(it) } },
                             shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
                             colors = cyberFieldColors()
                         )
@@ -329,33 +469,7 @@ fun LoginScreen(
                     }
 
                     Button(
-                        onClick = {
-                            validationError = when {
-                                !emailValid -> "أدخل بريدًا إلكترونيًا صحيحًا."
-                                password.isBlank() -> "أدخل كلمة المرور."
-                                mode != AuthMode.SIGN_IN && password.length < 8 -> "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل."
-                                mode == AuthMode.SIGN_UP && displayName.isBlank() -> "أدخل اسم المطور."
-                                mode != AuthMode.SIGN_IN && !passwordsMatch -> "كلمتا المرور غير متطابقتين."
-                                else -> null
-                            }
-                            if (validationError == null) {
-                                when (mode) {
-                                    AuthMode.SIGN_IN -> viewModel.signIn(email.trim(), password) { success ->
-                                        if (success) onAuthSuccess()
-                                    }
-                                    AuthMode.SIGN_UP -> viewModel.signUp(
-                                        email.trim(), password, displayName.trim(), organization.trim()
-                                    ) { success -> if (success) onAuthSuccess() }
-                                    AuthMode.RECOVER_PASSWORD -> viewModel.resetPassword(email.trim(), password) { success ->
-                                        if (success) {
-                                            mode = AuthMode.SIGN_IN
-                                            password = ""
-                                            confirmPassword = ""
-                                        }
-                                    }
-                                }
-                            }
-                        },
+                        onClick = submit,
                         enabled = canSubmit,
                         modifier = Modifier.fillMaxWidth().height(54.dp),
                         shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
@@ -390,19 +504,25 @@ fun LoginScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            TextButton(onClick = {
-                                mode = AuthMode.RECOVER_PASSWORD
-                                confirmPassword = ""
-                                validationError = null
-                                viewModel.clearMessages()
-                            }) { Text("نسيت كلمة المرور؟", color = CyberCyan) }
+                            TextButton(
+                                onClick = {
+                                    mode = AuthMode.RECOVER_PASSWORD
+                                    confirmPassword = ""
+                                    validationError = null
+                                    viewModel.clearMessages()
+                                },
+                                enabled = !actionState.isLoading
+                            ) { Text("نسيت كلمة المرور؟", color = CyberCyan) }
 
-                            TextButton(onClick = {
-                                mode = AuthMode.SIGN_UP
-                                confirmPassword = ""
-                                validationError = null
-                                viewModel.clearMessages()
-                            }) { Text("إنشاء حساب", color = CyberCyan, fontWeight = FontWeight.Bold) }
+                            TextButton(
+                                onClick = {
+                                    mode = AuthMode.SIGN_UP
+                                    confirmPassword = ""
+                                    validationError = null
+                                    viewModel.clearMessages()
+                                },
+                                enabled = !actionState.isLoading
+                            ) { Text("إنشاء حساب", color = CyberCyan, fontWeight = FontWeight.Bold) }
                         }
                     } else {
                         TextButton(
@@ -412,6 +532,7 @@ fun LoginScreen(
                                 validationError = null
                                 viewModel.clearMessages()
                             },
+                            enabled = !actionState.isLoading,
                             modifier = Modifier.align(Alignment.CenterHorizontally)
                         ) { Text("العودة لتسجيل الدخول", color = CyberCyan) }
                     }
@@ -437,16 +558,32 @@ private fun CyberTextField(
     onValueChange: (String) -> Unit,
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    keyboardType: KeyboardType = KeyboardType.Text
+    focusRequester: FocusRequester,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    imeAction: ImeAction = ImeAction.Next,
+    onNext: (() -> Unit)? = null,
+    onDone: (() -> Unit)? = null,
+    enabled: Boolean = true,
+    isError: Boolean = false,
+    errorMessage: String? = null
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
+        enabled = enabled,
+        isError = isError,
+        supportingText = errorMessage?.let { message -> { Text(message) } },
         label = { Text(label) },
         leadingIcon = { Icon(icon, null, tint = CyberCyan) },
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
+        keyboardActions = KeyboardActions(
+            onNext = { onNext?.invoke() },
+            onDone = { onDone?.invoke() }
+        ),
         singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth()
+            .focusRequester(focusRequester)
+            .semantics { if (isError && errorMessage != null) error(errorMessage) },
         shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
         colors = cyberFieldColors()
     )
