@@ -62,7 +62,7 @@ internal fun deriveFixAssistantContentState(uiState: FixAssistantUiState): FixAs
 
     val crash = uiState.crash
     if (crash == null) {
-        return uiState.error?.let(FixAssistantContentState::LoadError)
+        return uiState.error?.let { FixAssistantContentState.LoadError(it) }
             ?: FixAssistantContentState.MissingCrash
     }
 
