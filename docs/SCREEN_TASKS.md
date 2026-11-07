@@ -848,3 +848,45 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Source verification:** re-fetched the implementation from main (blob SHA af71db2deca6f3da8b7cae464f79cb786b79d0bb) and confirmed sign-in/sign-up/refresh/sign-out use the shared mutex, local session and user state are cleared before api.signOut, and cancellation is rethrown. Re-fetched the test file (blob SHA 393e2cdedb7b41b32503e2786591790fd60440a4) and confirmed both regression cases and their pre-revocation state assertions are present. Recent commit search confirms both source and test commits are at the head of main.
 - **Build/test/CI status:** the regression tests were added but not executed. The available runtime has Java but no Gradle executable, Gradle wrapper checkout, or local repository working tree. The latest documented CI runs before this batch—Android CI/CD 42304555450, Code Quality 42304555265, and APK 42304555247—all failed with job steps null and no runner logs, so they provide no compilation or test evidence. GitHub's commit-workflow-run lookup returned no runs for the new test commit (the connector lookup is PR-run filtered). No successful build, unit test, lint, APK, emulator/device run, or rendered Login visual review is claimed.
 - **Still open:** execute the two tests and full Android build when a functioning runner/local Gradle environment is available; validate logout/session refresh/account switching against real Supabase and Android runtime; complete verified password recovery/deep-link and Login RTL/LTR, IME, accessibility and rendered visual review. Identity/account and Login remain unchecked and incomplete.
+
+
+## 2026-11-08 — Fix Assistant verification integrity, error isolation, and local-first auth race (source changes; runtime/build verification blocked)
+
+### Independent review of the preceding agent's batch
+
+- Re-read the current task priorities and recent main history. No root or nested AGENTS.md / agents.md instruction file was found; the app/src/main/java/com/example/data/agent/ directory is application code.
+- Reviewed the Login validation-reachability change (384922f5) and signup email-confirmation regression test (a28cc9aa). The primary action is now reachable for sign-in/sign-up when not loading; its click handler validates email, password, display name and password confirmation before calling the repository. Recovery remains deliberately disabled until its verified callback/deep-link flow exists. This is a partial Login slice, not screen completion.
+- Reviewed the prior local-first Supabase sign-out change. It cleared the local session before remote revocation, but only after acquiring sessionMutex; an in-flight token refresh held that mutex across its network request and could delay local logout. This was corrected in this batch with a session generation guard and a separate state lock: sign-out invalidates in-flight auth requests and clears local state before waiting for the network-operation mutex, auth/refresh responses check the generation before persistence, and sign-out clears again under the mutex so a queued sign-in cannot win the logout race. Remote revocation remains best-effort and cancellation is preserved.
+- Reviewed the preceding Fix Assistant ViewModel resilience changes. A confirmed state-model defect remained: diagnosis-load and suggestions/history-flow failures were placed in the same error channel as generation/PR failures. A diagnosis error could therefore be presented as “generate a fix again” even though no diagnosis existed. The error channels and screen state mapping were separated below.
+
+### Fix Assistant / Fix History changes
+
+- FixAssistantScreen.kt: applied a native Compose Vibe/cyber visual refresh (shared tokens, grid/glow backdrop, diagnosis/evidence and crash metadata panels, structured loading/missing/load-error/diagnosis-missing/empty/generation-error/fix-list states). Copy-code now reports through a snackbar; GitHub PR links are host/path validated; PR creation is disabled without a nonblank authenticated user ID. The verification action is disabled with an explicit unavailable state rather than opening a simulated sandbox dialog.
+- FixHistoryScreen.kt: removed the simulated re-verification dialog and disabled re-verification. All historical verification badges are neutralized as unverified; stored comparison summaries, test metrics and new stack traces are not presented as trusted results. The original crash stack trace remains available. PR links are validated before opening. Vibe token styling is applied to the history, filters, cards and empty state.
+- FixAssistantViewModel.kt: separated loadError, suggestionsLoadError, and verificationsLoadError from generation/operation error; preserved cancellation; reports missing crash records and diagnosis failures as load errors; keeps already loaded suggestions visible if a later suggestions-flow error occurs. Initial UI state starts in loading to avoid a one-frame missing-crash flash.
+- CrashRepositoryImpl.kt: verifyFix now returns an explicit UnsupportedOperationException until a real runner is connected. It no longer creates synthetic sessions, test events, mock stack traces, verification records, audit logs, or success notifications. Fix generation no longer attaches fabricated PASSED compilation/static-analysis/unit-test results; testResults is null. Fix generation and PR creation preserve coroutine cancellation.
+- SeedData.kt: sandbox fix/history fixtures are labeled inconclusive, have no sample PR URL/commit/session IDs, no synthetic test results, and no claimed verified/reproduced outcome.
+- ProductQualityGateEngine.kt: Fix Assistant and Fix History are explicitly BLOCKED until real verification operations and evidence exist; test execution and rendered design review remain unsatisfied. The release blocker wording now describes unavailable/simulated core operations rather than claiming every interaction is cosmetic.
+
+### Regression coverage added or updated
+
+- IntegrationWorkflowTest.kt: asserts verifyFix fails with UnsupportedOperationException, no verification record is persisted, and no VERIFICATION_PASSED notification is emitted.
+- FixAssistantViewModelTest.kt: covers empty/missing crash, lookup failure, diagnosis failure, suggestions-flow failure and verification-history-flow failure, including separation from generation errors.
+- FixAssistantScreenStateTest.kt: covers initial/loading, missing crash, load errors, diagnosis missing, empty generation state, generation error, populated suggestions and non-blocking history errors.
+- ProductQualityGateEngineTest.kt: asserts both verification screens remain blocked and the overall verdict is blocked while a real runner is unavailable.
+- AuthRepositorySignOutRaceTest.kt: holds a refresh request in flight, starts sign-out, asserts local session/current-user are cleared before releasing refresh, then asserts the refresh cannot persist a new session and remote revocation observes cleared local state.
+- English and Arabic resources were updated for unavailable verification, unverified legacy records, load errors, and test-result provenance. Source-level resource checks found no missing referenced IDs or duplicate IDs in either locale.
+
+### Source changes and key commits
+
+- Fix Assistant / Fix History UI and truthful verification behavior: cb3b903d, 41ac3bf1, d84eeebc, 893238b5, 3237be99.
+- Quality-gate blocking and regression coverage: ed6be8f7, ad696b53, 473e59a4, f16269e8.
+- Fix Assistant error isolation and tests: be896f46, 0f5d682f, 11ce3940, 2a676cdb, 821a632a, 3e2a3175, 0f70c1bf.
+- Auth refresh/logout race correction and test: fc8cdfc3, 92551afe, c0517445.
+
+### Verification limits and remaining work
+
+- GitHub Actions for code commit c051744533b992777bc493ca471562ba92027d08: Android CI/CD run 42424532968, APK run 42424532922, and Code Quality run 42424533018 all concluded failure. Their jobs report runner_id = 0 and steps = []; the connector could not retrieve job logs. These runs do not evidence Gradle compilation, unit tests, lint, or APK packaging.
+- The new/updated tests have not been executed. No Android runtime, emulator/device, screenshot review, RTL/LTR rendered review, live Supabase Auth request, email confirmation/deep-link callback, or GitHub PR creation was tested. Source inspection/resource consistency checks are not substitutes for those validations.
+- Fix Assistant and Fix History remain open/blocked: no real verification runner is integrated and the mandatory rendered UI/accessibility review is outstanding. Do not mark either screen complete.
+- Next backlog priority remains Identity and account — Login / profile/session flows, including verified recovery/deep-link configuration, session restoration/refresh/account switching tests, and a full same-slice visual/interaction review. The broader Supabase/Firebase migration and Android CI runner availability remain separate blockers.
