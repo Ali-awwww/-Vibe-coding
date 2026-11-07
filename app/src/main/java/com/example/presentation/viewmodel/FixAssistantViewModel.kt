@@ -14,7 +14,7 @@ data class FixAssistantUiState(
     val diagnosis: AIDiagnosis? = null,
     val suggestions: List<FixSuggestion> = emptyList(),
     val verifications: List<CrashVerificationRecord> = emptyList(),
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val isGenerating: Boolean = false,
     val isCreatingPr: Boolean = false,
     val isVerifying: Boolean = false,
