@@ -213,7 +213,7 @@
     <string name="fix_assistant_generate_more">توليد اقتراح إضافي</string>
     <string name="fix_assistant_missing_crash_title">لم يتم العثور على تقرير الانهيار</string>
     <string name="fix_assistant_missing_crash_desc">تحقق من معرف التقرير أو ارجع إلى قائمة الأعطال.</string>
-    <string name="fix_assistant_load_error_title">تعذر تحميل تقرير الانهيار</string>
+    <string name="fix_assistant_load_error_title">تعذر تحميل بيانات مساعد الإصلاح</string>
     <string name="fix_assistant_generation_error_title">تعذر توليد مقترح الإصلاح</string>
     <string name="fix_assistant_no_fix_title">لا توجد مقترحات إصلاح بعد</string>
     <string name="fix_assistant_no_fix_desc">اطلب مقترحًا بعد توفر التشخيص والمصدر المرتبط به.</string>
