@@ -9,6 +9,7 @@ import com.example.util.SecurityUtils
 import com.google.ai.client.generativeai.GenerativeModel
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.security.MessageDigest
@@ -1016,7 +1017,7 @@ class CrashRepositoryImpl(
     override suspend fun generateFixSuggestion(
         crashReport: CrashReport,
         diagnosis: AIDiagnosis
-    ): Result<FixSuggestion> = runCatching {
+    ): Result<FixSuggestion> = runCatchingCancellable {
         val mapping = crashDao.getRepositoryMapping(crashReport.applicationId)
             ?: throw IllegalStateException("يجب ربط مستودع GitHub أولاً لاقتراح إصلاح برمجي.")
         
@@ -1097,7 +1098,7 @@ class CrashRepositoryImpl(
             filePath = filePath,
             branchName = "fix/${crashReport.exceptionType.lowercase()}-${fixId.take(5)}",
             status = FixStatus.PROPOSED,
-            testResults = """{"compilation": "PASSED", "static_analysis": "PASSED", "unit_tests": "PASSED"}""" // Simulated real verification
+            testResults = null // Compilation, static analysis, and unit tests have not been executed here.
         )
         
         crashDao.insertFixSuggestion(fixSuggestion)
@@ -1117,7 +1118,7 @@ class CrashRepositoryImpl(
         fixSuggestion
     }
 
-    override suspend fun applyFixAndCreatePR(fixId: String, userId: String): Result<String> = runCatching {
+    override suspend fun applyFixAndCreatePR(fixId: String, userId: String): Result<String> = runCatchingCancellable {
         val fix = crashDao.getFixSuggestionById(fixId)
             ?: throw IllegalArgumentException("لم يتم العثور على مقترح الإصلاح المعني.")
             
@@ -1208,223 +1209,13 @@ class CrashRepositoryImpl(
         buildId: String,
         scenarioName: String,
         simulatedOutcome: VerificationStatus?
-    ): Result<CrashVerificationRecord> = runCatching {
-        val crash = crashDao.getCrashDetails(crashId).first()
-            ?: throw IllegalArgumentException("لم يتم العثور على تقرير الانهيار الأصلي.")
-
-        val app = if (crash.applicationId.isNotBlank()) crashDao.getApplicationById(crash.applicationId) else null
-        val existingFixes = crashDao.getFixSuggestions(crashId).first()
-        val fix = if (fixSuggestionId != null) existingFixes.find { it.id == fixSuggestionId } else existingFixes.firstOrNull()
-
-        // 1. Verify Test Environment Validity
-        val isEnvValid = app != null
-        val testSessionId = UUID.randomUUID().toString()
-
-        val testSession = TestSession(
-            id = testSessionId,
-            projectId = crash.projectId,
-            applicationId = crash.applicationId,
-            buildId = buildId,
-            version = newVersion,
-            deviceId = "sandbox-verifier-arm64",
-            deviceName = crash.deviceModel.ifBlank { "Google Pixel 8 (Sandbox)" },
-            os = crash.osVersion.ifBlank { "Android 14" },
-            startTime = System.currentTimeMillis(),
-            status = TestSessionStatus.APP_RUNNING
+    ): Result<CrashVerificationRecord> = Result.failure(
+        UnsupportedOperationException(
+            "التحقق الآلي غير متاح: لا يوجد مشغل اختبار فعلي مرتبط بالتطبيق. لم تُنشأ جلسة أو نتيجة تحقق."
         )
-        crashDao.insertTestSession(testSession)
+    )
 
-        crashDao.insertTestEvent(
-            TestEvent(
-                id = UUID.randomUUID().toString(),
-                sessionId = testSessionId,
-                type = TestEventType.APP_START,
-                details = "Started isolated test runner for build '$buildId' (target version: $newVersion)"
-            )
-        )
-
-        crashDao.insertTestEvent(
-            TestEvent(
-                id = UUID.randomUUID().toString(),
-                sessionId = testSessionId,
-                type = TestEventType.SCREEN_TRANSITION,
-                details = "Executed reproductive scenario: '$scenarioName'"
-            )
-        )
-
-        // Determine outcome based on AI analysis or simulation
-        val mockNewStackTrace = "java.lang.IllegalStateException: Concurrency lock conflict during state restore\n\tat com.superapp.mobile.ui.profile.ProfileFragment.onSaveInstanceState(ProfileFragment.kt:112)"
-
-        val aiComparison = if (simulatedOutcome == null) {
-            val oldTrace = truncateText(crash.stackTrace, 2000)
-            val newTraceText = truncateText(mockNewStackTrace, 2000) 
-            
-            val prompt = """
-                You are a QA Automation Specialist. Verify if a code fix successfully resolved a crash.
-                
-                OLD CRASH (${crash.appVersion}):
-                Type: ${crash.exceptionType}
-                Message: ${crash.message}
-                Stack Trace:
-                $oldTrace
-                
-                NEW TEST RUN (${newVersion}):
-                Status: CRASH_DETECTED
-                New Stack Trace (if any):
-                $newTraceText
-                
-                SCENARIO: $scenarioName
-                
-                INSTRUCTIONS:
-                1. Compare the traces.
-                2. If no new crash, confirm if the fix looks solid.
-                3. If same crash persists, the fix failed.
-                4. If a different crash appeared, it's a regression.
-                5. Provide a summary in Arabic.
-                6. Output raw JSON ONLY.
-                
-                JSON SCHEMA:
-                {
-                  "status": "FIX_VERIFIED_IN_TEST | CRASH_REPRODUCED | DIFFERENT_CRASH_DETECTED | INCONCLUSIVE",
-                  "summary": "Detailed Arabic explanation of the comparison"
-                }
-            """.trimIndent()
-            
-            val userId = crash.userId.ifBlank { requireUserId() }
-            val defaultModel = aiModelRepository.getDefaultModel(userId) ?: throw Exception("No AI model")
-            
-            val response = aiModelRepository.generateResponse(
-                userId = userId,
-                modelId = defaultModel.id,
-                prompt = prompt,
-                systemInstruction = "You are a QA Specialist. Analyze crash verification results.",
-                taskId = testSessionId,
-                taskType = AITaskType.REGRESSION_ANALYSIS
-            ).getOrNull()
-            
-            response?.let { 
-                val json = it.removeSurrounding("```json", "```").trim()
-                try {
-                    moshi.adapter(AIComparisonResponse::class.java).fromJson(json)
-                } catch(e: Exception) { null }
-            }
-        } else null
-
-        val finalStatus: VerificationStatus = simulatedOutcome ?: run {
-            if (!isEnvValid) {
-                VerificationStatus.TEST_FAILED
-            } else if (aiComparison != null) {
-                try { VerificationStatus.valueOf(aiComparison.status) } catch(e: Exception) { VerificationStatus.INCONCLUSIVE }
-            } else if (fix == null) {
-                VerificationStatus.CRASH_REPRODUCED
-            } else {
-                VerificationStatus.FIX_VERIFIED_IN_TEST
-            }
-        }
-
-        val newStackTrace = when (finalStatus) {
-            VerificationStatus.CRASH_REPRODUCED -> crash.stackTrace
-            VerificationStatus.DIFFERENT_CRASH_DETECTED -> 
-                "java.lang.IllegalStateException: Concurrency lock conflict during state restore\n\tat com.superapp.mobile.ui.profile.ProfileFragment.onSaveInstanceState(ProfileFragment.kt:112)"
-            else -> null
-        }
-
-        // Comparison Engine Analysis
-        val comparisonSummary = aiComparison?.summary ?: buildString {
-            append("مقارنة الإصدارات: تم اختبار الإصدار الجديد $newVersion (بناء $buildId) مقابل الإصدار المتأثر السابق ${crash.appVersion}.\n")
-            when (finalStatus) {
-                VerificationStatus.FIX_VERIFIED_IN_TEST -> {
-                    append("تحليل Stack Trace: تم القضاء على استثناء ${crash.exceptionType} بالكامل. لم يظهر أي مؤشر لعطل مماثل أثناء تنفيذ سيناريو الاختبار.\n")
-                    append("معدل التكرار: انخفض من معدل تكرار نشط في ${crash.appVersion} إلى 0 أعطال خلال 20 جولة اختبار آلية.\n")
-                    append("حالة المشكلة: تم التحقق بنجاح في بيئة الاختبار (Fix Verified in Test).")
-                }
-                VerificationStatus.CRASH_REPRODUCED -> {
-                    append("تحليل Stack Trace: تكرر نفس استثناء ${crash.exceptionType} عند نفس السطر البرمجي بالضبط.\n")
-                    append("معدل التكرار: لا يزال العطل قابلاً لإعادة الإنتاج بنسبة 100% في سيناريو الاختبار.\n")
-                    append("حالة المشكلة: الانهيار لم يتم إصلاحه بالكامل بعد (Crash Reproduced).")
-                }
-                VerificationStatus.DIFFERENT_CRASH_DETECTED -> {
-                    append("تحليل Stack Trace: تم تفادي الخطأ الأصلي ولكن ظهر استثناء جانبي جديد (Regression) أثناء استعادة الحالة.\n")
-                    append("حالة المشكلة: تراجع برمجي مكتشف (Different Crash Detected).")
-                }
-                VerificationStatus.INCONCLUSIVE -> {
-                    append("تحليل Stack Trace: لم تكتمل دورة التأكيدات الكافية للحكم القاطع.\n")
-                    append("حالة المشكلة: نتائج غير حاسمة تتطلب جولات اختبار إضافية (Inconclusive).")
-                }
-                VerificationStatus.TEST_FAILED -> {
-                    append("بيئة الاختبار: تعذر إكمال فحص الانهيار بسبب مشكلة في تهيئة المشغل أو اتصال العميل.\n")
-                    append("حالة المشكلة: فشل تشغيل بيئة الاختبار (Test Failed).")
-                }
-            }
-        }
-
-        val testScopeDetails = "السيناريو المختبر: '$scenarioName' | الجولات: 20 جولة آلية | الذاكرة المراقبة: Heap Peak 64MB | العمليات: UI Rendering, Network Hook, DB Queries | الحدود: لا يشمل هذا السيناريو انقطاع الطاقة المفاجئ أو نفاد شحن البطارية."
-
-        val verificationRecord = CrashVerificationRecord(
-            id = UUID.randomUUID().toString(),
-            projectId = crash.projectId,
-            applicationId = crash.applicationId,
-            crashId = crash.id,
-            issueId = null,
-            fixSuggestionId = fix?.id,
-            fixCommitSha = fix?.branchName?.substringAfterLast("-") ?: "sha-fix-9a1b",
-            githubPrUrl = fix?.githubPrUrl,
-            previousAppVersion = crash.appVersion,
-            newAppVersion = newVersion,
-            buildId = buildId,
-            testSessionId = testSessionId,
-            scenarioName = scenarioName,
-            status = finalStatus,
-            comparisonSummary = comparisonSummary,
-            oldStackTrace = crash.stackTrace,
-            newStackTrace = newStackTrace,
-            testScopeDetails = testScopeDetails,
-            verifiedAt = System.currentTimeMillis(),
-            crashExceptionType = crash.exceptionType,
-            crashMessage = crash.message,
-            environmentValid = isEnvValid
-        )
-
-        crashDao.insertVerification(verificationRecord)
-
-        // Conclude session & audit
-        val sessionStatus = if (finalStatus == VerificationStatus.CRASH_REPRODUCED || finalStatus == VerificationStatus.DIFFERENT_CRASH_DETECTED) {
-            TestSessionStatus.CRASH_DETECTED
-        } else if (finalStatus == VerificationStatus.TEST_FAILED) {
-            TestSessionStatus.FAILED
-        } else {
-            TestSessionStatus.COMPLETED
-        }
-        crashDao.updateTestSessionStatus(testSessionId, sessionStatus, System.currentTimeMillis(), if (finalStatus == VerificationStatus.CRASH_REPRODUCED) crash.id else null)
-
-        if (finalStatus == VerificationStatus.FIX_VERIFIED_IN_TEST) {
-            crashDao.updateCrashStatus(crash.id, true)
-        }
-
-        crashDao.insertAuditLog(
-            AuditLog(
-                projectId = crash.projectId,
-                action = "FIX_VERIFIED",
-                details = "Fix verification executed: ${finalStatus.name} for crash ${crash.exceptionType} on build $buildId ($newVersion)"
-            )
-        )
-
-        // System notification for verification outcome
-        crashDao.insertNotification(
-            SystemNotification(
-                id = UUID.randomUUID().toString(),
-                projectId = crash.projectId,
-                title = if (finalStatus == VerificationStatus.FIX_VERIFIED_IN_TEST) "نجح التحقق من الإصلاح (Verified)" else "نتيجة فحص الإصلاح: ${finalStatus.name}",
-                message = comparisonSummary.take(150),
-                type = if (finalStatus == VerificationStatus.FIX_VERIFIED_IN_TEST) NotificationType.VERIFICATION_PASSED else NotificationType.VERIFICATION_FAILED,
-                targetCrashId = crash.id
-            )
-        )
-
-        verificationRecord
-    }
-
-    override suspend fun addVerificationRecord(record: CrashVerificationRecord) {
+        override suspend fun addVerificationRecord(record: CrashVerificationRecord) {
         crashDao.insertVerification(record)
     }
 
@@ -1529,10 +1320,14 @@ class CrashRepositoryImpl(
     }
 }
 
-private data class AIComparisonResponse(
-    val status: String,
-    val summary: String
-)
+private suspend fun <T> runCatchingCancellable(block: suspend () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        Result.failure(error)
+    }
 
 private data class FixResultResponse(
     val suggestedCode: String,
