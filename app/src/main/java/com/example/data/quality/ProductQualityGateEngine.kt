@@ -193,11 +193,11 @@ class ProductQualityGateEngine {
                 routeClass = "Screen.FixAssistant",
                 sourceFile = "presentation/ui/screens/FixAssistantScreen.kt",
                 testFile = "UnifiedClosedLoopTest.kt",
-                status = ScreenCompletionStatus.PRODUCTION_READY,
-                evaluations = createStandardEvaluations(
+                status = ScreenCompletionStatus.BLOCKED,
+                evaluations = createVerificationUnavailableEvaluations(
                     hasBackend = true,
-                    hasApi = true,
-                    evidence = "DiffUtils verification, closed-loop git checkpoint generation, and verification tracking"
+                    hasApi = false,
+                    apiExemption = null
                 )
             )
         )
@@ -212,12 +212,11 @@ class ProductQualityGateEngine {
                 routeClass = "Screen.FixHistory",
                 sourceFile = "presentation/ui/screens/FixHistoryScreen.kt",
                 testFile = "UnifiedClosedLoopTest.kt",
-                status = ScreenCompletionStatus.PRODUCTION_READY,
-                evaluations = createStandardEvaluations(
+                status = ScreenCompletionStatus.BLOCKED,
+                evaluations = createVerificationUnavailableEvaluations(
                     hasBackend = true,
                     hasApi = false,
-                    apiExemption = "Backed by local Room fix entities and verification status log",
-                    evidence = "Verified fix records and verification progression states"
+                    apiExemption = "No external API is required for local Room history."
                 )
             )
         )
@@ -622,6 +621,86 @@ class ProductQualityGateEngine {
         )
     }
 
+    private fun createVerificationUnavailableEvaluations(
+        hasBackend: Boolean,
+        backendExemption: String? = null,
+        hasApi: Boolean,
+        apiExemption: String? = null
+    ): Map<CompletionCriterion, CriterionEvaluation> {
+        val evaluations = createStandardEvaluations(
+            hasBackend = hasBackend,
+            backendExemption = backendExemption,
+            hasApi = hasApi,
+            apiExemption = apiExemption,
+            evidence = "Source implementation updated; automated verification remains unavailable."
+        ).toMutableMap()
+
+        evaluations[CompletionCriterion.HAS_REAL_DESIGN] = CriterionEvaluation(
+            criterion = CompletionCriterion.HAS_REAL_DESIGN,
+            isSatisfied = true,
+            isApplicable = true,
+            evidence = "Native Compose screen uses VibeDesignTokens, cyber backdrop, and explicit content states; device visual review is not recorded."
+        )
+        evaluations[CompletionCriterion.HAS_BACKEND_IF_NEEDED] = CriterionEvaluation(
+            criterion = CompletionCriterion.HAS_BACKEND_IF_NEEDED,
+            isSatisfied = hasBackend,
+            isApplicable = hasBackend || backendExemption == null,
+            exemptionReason = if (!hasBackend) backendExemption else null,
+            evidence = if (hasBackend) "Crash/fix history is backed by Room source paths; Supabase cloud verification writes are not integrated." else (backendExemption ?: "Exempt")
+        )
+        evaluations[CompletionCriterion.HAS_CONNECTED_API_IF_NEEDED] = CriterionEvaluation(
+            criterion = CompletionCriterion.HAS_CONNECTED_API_IF_NEEDED,
+            isSatisfied = hasApi,
+            isApplicable = hasApi || apiExemption == null,
+            exemptionReason = if (!hasApi) apiExemption else null,
+            evidence = if (hasApi) "Live API/runner integration is available." else (apiExemption ?: "No real sandbox runner/API transport is connected; verification is disabled.")
+        )
+        evaluations[CompletionCriterion.HAS_REAL_OPERATIONS] = CriterionEvaluation(
+            criterion = CompletionCriterion.HAS_REAL_OPERATIONS,
+            isSatisfied = false,
+            isApplicable = true,
+            evidence = "verifyFix returns UnsupportedOperationException until a real test runner is connected; no synthetic session, stack trace, verification record, or success notification is created."
+        )
+        evaluations[CompletionCriterion.HAS_LOADING_EMPTY_ERROR_STATES] = CriterionEvaluation(
+            criterion = CompletionCriterion.HAS_LOADING_EMPTY_ERROR_STATES,
+            isSatisfied = true,
+            isApplicable = true,
+            evidence = "FixAssistant state mapping covers loading, missing crash, load error, diagnosis missing, empty suggestions, generation error, and populated suggestions."
+        )
+        evaluations[CompletionCriterion.HAS_APPROPRIATE_PERMISSIONS] = CriterionEvaluation(
+            criterion = CompletionCriterion.HAS_APPROPRIATE_PERMISSIONS,
+            isSatisfied = true,
+            isApplicable = true,
+            evidence = "GitHub PR creation is disabled without an authenticated user identifier; no default developer identity is used."
+        )
+        evaluations[CompletionCriterion.HAS_TESTS] = CriterionEvaluation(
+            criterion = CompletionCriterion.HAS_TESTS,
+            isSatisfied = true,
+            isApplicable = true,
+            evidence = "JUnit/Robolectric regression sources cover unsupported verification without persistence and screen-state classification; execution is unconfirmed."
+        )
+        evaluations[CompletionCriterion.PASSES_REQUIRED_TESTS] = CriterionEvaluation(
+            criterion = CompletionCriterion.PASSES_REQUIRED_TESTS,
+            isSatisfied = false,
+            isApplicable = true,
+            evidence = "No confirmed Gradle or CI test execution is available for this source change."
+        )
+        evaluations[CompletionCriterion.PASSES_DESIGN_REVIEW] = CriterionEvaluation(
+            criterion = CompletionCriterion.PASSES_DESIGN_REVIEW,
+            isSatisfied = false,
+            isApplicable = true,
+            evidence = "Source-level UI refresh is implemented, but no emulator/device screenshot review is recorded."
+        )
+        evaluations[CompletionCriterion.NO_UNCONNECTED_CORE_INTERACTIONS] = CriterionEvaluation(
+            criterion = CompletionCriterion.NO_UNCONNECTED_CORE_INTERACTIONS,
+            isSatisfied = true,
+            isApplicable = true,
+            evidence = "Unavailable verification controls are disabled and labeled; remaining fix/PR actions retain their ViewModel callbacks."
+        )
+
+        return evaluations
+    }
+
     private fun createStandardEvaluations(
         hasBackend: Boolean,
         backendExemption: String? = null,
@@ -797,8 +876,8 @@ class ProductQualityGateEngine {
                     titleAr = "اكتشاف عمليات شكلية أو وهمية",
                     category = BlockerCategory.MOCK_OR_COSMETIC_OP,
                     severity = BlockerSeverity.CRITICAL_RELEASE_BLOCKER,
-                    description = "Screens containing fake operation claims: ${cosmeticOps.joinToString { it.screenName }}",
-                    remediationHint = "Connect buttons to real ViewModel coroutines and database operations.",
+                    description = "Core operations are unavailable or simulated for: ${cosmeticOps.joinToString { it.screenName }}",
+                    remediationHint = "Implement the missing real operation or keep its UI disabled with a documented blocker; never record a fabricated success.",
                     isResolved = false
                 )
             )
