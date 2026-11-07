@@ -217,4 +217,5 @@
     <string name="fix_assistant_generation_error_title">تعذر توليد مقترح الإصلاح</string>
     <string name="fix_assistant_no_fix_title">لا توجد مقترحات إصلاح بعد</string>
     <string name="fix_assistant_no_fix_desc">اطلب مقترحًا بعد توفر التشخيص والمصدر المرتبط به.</string>
+    <string name="verification_history_untrusted_details">نطاق الاختبار والقياسات وStack Trace الجديد في السجلات القديمة غير موثقة؛ المعروض فقط هو Stack Trace الأصلي للسياق.</string>
 </resources>
