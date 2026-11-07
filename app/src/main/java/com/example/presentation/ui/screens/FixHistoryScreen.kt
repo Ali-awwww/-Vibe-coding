@@ -188,11 +188,7 @@ fun VerificationCard(
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(record.verifiedAt))
     }
     val validPrUrl = record.githubPrUrl?.takeIf(::isGitHubPullRequestUrl)
-    val displayedSummary = if (record.status == VerificationStatus.FIX_VERIFIED_IN_TEST) {
-        stringResource(R.string.verification_unavailable_desc)
-    } else {
-        record.comparisonSummary.ifBlank { "لا توجد تفاصيل مقارنة محفوظة." }
-    }
+    val displayedSummary = stringResource(R.string.verification_unavailable_desc)
 
     EngCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Medium)) {
@@ -275,13 +271,11 @@ fun VerificationCard(
                 }
             }
 
-            if (record.status == VerificationStatus.FIX_VERIFIED_IN_TEST) {
-                Text(
-                    stringResource(R.string.status_legacy_unverified),
-                    color = VibeDesignTokens.Color.TextMuted,
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
+            Text(
+                "الحالة المسجلة (غير موثقة): ${getVerificationStatusLabel(record.status)}",
+                color = VibeDesignTokens.Color.TextMuted,
+                style = MaterialTheme.typography.labelSmall
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -362,7 +356,7 @@ fun VerificationCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                record.testScopeDetails,
+                                stringResource(R.string.verification_history_untrusted_details),
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(12.dp),
                                 color = VibeDesignTokens.Color.TextMuted
@@ -378,15 +372,6 @@ fun VerificationCard(
                     )
                     StackTraceCard(record.oldStackTrace)
 
-                    if (!record.newStackTrace.isNullOrBlank()) {
-                        Text(
-                            stringResource(R.string.new_stack_trace),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = VibeDesignTokens.Color.Error
-                        )
-                        StackTraceCard(record.newStackTrace)
-                    }
                 }
             }
         }
@@ -409,15 +394,8 @@ private fun VerificationMetadataColumn(label: String, value: String, modifier: M
 
 @Composable
 fun VerificationStatusBadge(status: VerificationStatus) {
-    val color = getVerificationStatusColor(status)
-    val label = getVerificationStatusLabel(status)
-    val icon = when (status) {
-        VerificationStatus.FIX_VERIFIED_IN_TEST -> Icons.Default.HelpOutline
-        VerificationStatus.CRASH_REPRODUCED -> Icons.Default.Cancel
-        VerificationStatus.DIFFERENT_CRASH_DETECTED -> Icons.Default.Warning
-        VerificationStatus.INCONCLUSIVE -> Icons.Default.HelpOutline
-        VerificationStatus.TEST_FAILED -> Icons.Default.Block
-    }
+    val color = VibeDesignTokens.Color.TextMuted
+    val label = stringResource(R.string.status_legacy_unverified)
 
     Surface(
         color = color.copy(alpha = 0.14f),
@@ -429,7 +407,7 @@ fun VerificationStatusBadge(status: VerificationStatus) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.HelpOutline, contentDescription = label, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text(label, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         }
@@ -438,22 +416,15 @@ fun VerificationStatusBadge(status: VerificationStatus) {
 
 
 
-fun getVerificationStatusColor(status: VerificationStatus): Color {
-    return when (status) {
-        VerificationStatus.FIX_VERIFIED_IN_TEST -> VibeDesignTokens.Color.TextMuted
-        VerificationStatus.CRASH_REPRODUCED -> VibeDesignTokens.Color.Error
-        VerificationStatus.DIFFERENT_CRASH_DETECTED -> VibeDesignTokens.Color.Violet
-        VerificationStatus.INCONCLUSIVE -> VibeDesignTokens.Color.TextMuted
-        VerificationStatus.TEST_FAILED -> VibeDesignTokens.Color.Error
-    }
-}
+fun getVerificationStatusColor(status: VerificationStatus): Color =
+    VibeDesignTokens.Color.TextMuted
 
 
 
 @Composable
 fun getVerificationStatusLabel(status: VerificationStatus): String {
     return when (status) {
-        VerificationStatus.FIX_VERIFIED_IN_TEST -> stringResource(R.string.status_legacy_unverified)
+        VerificationStatus.FIX_VERIFIED_IN_TEST -> stringResource(R.string.status_fix_verified)
         VerificationStatus.CRASH_REPRODUCED -> stringResource(R.string.status_crash_reproduced)
         VerificationStatus.DIFFERENT_CRASH_DETECTED -> stringResource(R.string.status_different_crash)
         VerificationStatus.INCONCLUSIVE -> stringResource(R.string.status_inconclusive)
