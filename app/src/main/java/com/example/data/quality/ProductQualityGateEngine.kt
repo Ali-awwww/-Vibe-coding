@@ -665,7 +665,7 @@ class ProductQualityGateEngine {
             criterion = CompletionCriterion.HAS_LOADING_EMPTY_ERROR_STATES,
             isSatisfied = true,
             isApplicable = true,
-            evidence = "Both screens expose loading/empty states; FixAssistant additionally distinguishes missing crash, diagnosis missing, generation error, and populated suggestions."
+            evidence = "Both screens expose loading/empty states; FixAssistant separates crash/diagnosis load errors, suggestion-stream errors, history-stream errors, diagnosis missing, generation errors, and populated suggestions."
         )
         evaluations[CompletionCriterion.HAS_APPROPRIATE_PERMISSIONS] = CriterionEvaluation(
             criterion = CompletionCriterion.HAS_APPROPRIATE_PERMISSIONS,
