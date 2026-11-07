@@ -89,19 +89,30 @@ class ProductQualityGateEngineTest {
     }
 
     @Test
-    fun `test zero active critical blockers in production ready state`() {
+    fun `test verification workflows prevent production readiness until a real runner exists`() {
         val assessment = engine.performFullAssessment()
+        val fixAssistant = assessment.screenAudits.first { it.screenId == "SCR_FIX_ASSISTANT" }
+        val fixHistory = assessment.screenAudits.first { it.screenId == "SCR_FIX_HISTORY" }
 
-        val criticalBlockers = assessment.blockers.filter {
-            it.severity == BlockerSeverity.CRITICAL_RELEASE_BLOCKER && !it.isResolved
+        listOf(fixAssistant, fixHistory).forEach { screen ->
+            assertEquals(ScreenCompletionStatus.BLOCKED, screen.status)
+            assertFalse(screen.evaluations.getValue(CompletionCriterion.HAS_REAL_OPERATIONS).isSatisfied)
+            assertFalse(screen.evaluations.getValue(CompletionCriterion.PASSES_REQUIRED_TESTS).isSatisfied)
+            assertFalse(screen.evaluations.getValue(CompletionCriterion.PASSES_DESIGN_REVIEW).isSatisfied)
+            assertTrue(screen.evaluations.getValue(CompletionCriterion.HAS_LOADING_EMPTY_ERROR_STATES).isSatisfied)
+            assertTrue(screen.evaluations.getValue(CompletionCriterion.HAS_TESTS).isSatisfied)
         }
 
-        assertEquals(
-            "Zero critical release blockers should be active for production readiness",
-            0,
-            criticalBlockers.size
+        assertTrue(
+            "The release gate must surface the unavailable verification operation",
+            assessment.blockers.any {
+                it.id == "BLK_COSMETIC_OPS" &&
+                    it.description.contains(fixAssistant.screenName) &&
+                    it.description.contains(fixHistory.screenName)
+            }
         )
-        assertEquals(GateVerdictStatus.PRODUCTION_READY, assessment.verdict)
+        assertTrue(assessment.criticalBlockersCount > 0)
+        assertEquals(GateVerdictStatus.BLOCKED, assessment.verdict)
     }
 
     @Test
