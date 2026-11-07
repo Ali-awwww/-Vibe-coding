@@ -29,7 +29,63 @@ class FixAssistantScreenStateTest {
     fun missingCrashWithErrorShowsLoadError() {
         assertEquals(
             FixAssistantContentState.LoadError("network unavailable"),
-            deriveFixAssistantContentState(FixAssistantUiState(error = "network unavailable"))
+            deriveFixAssistantContentState(FixAssistantUiState(loadError = "network unavailable"))
+        )
+    }
+
+    @Test
+    fun diagnosisLoadFailureWithExistingCrashShowsLoadError() {
+        assertEquals(
+            FixAssistantContentState.LoadError("diagnosis unavailable"),
+            deriveFixAssistantContentState(
+                FixAssistantUiState(
+                    crash = CrashReport(id = "crash-1"),
+                    loadError = "diagnosis unavailable"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun suggestionsStreamFailureWithoutSuggestionsShowsLoadError() {
+        assertEquals(
+            FixAssistantContentState.LoadError("suggestions offline"),
+            deriveFixAssistantContentState(
+                FixAssistantUiState(
+                    crash = CrashReport(id = "crash-1"),
+                    diagnosis = AIDiagnosis(crashId = "crash-1"),
+                    suggestionsLoadError = "suggestions offline"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun existingSuggestionsRemainReadyWhenSuggestionStreamFails() {
+        assertEquals(
+            FixAssistantContentState.ReadyWithFixes(1),
+            deriveFixAssistantContentState(
+                FixAssistantUiState(
+                    crash = CrashReport(id = "crash-1"),
+                    diagnosis = AIDiagnosis(crashId = "crash-1"),
+                    suggestions = listOf(FixSuggestion(id = "fix-1")),
+                    suggestionsLoadError = "stream stopped"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun verificationHistoryLoadFailureDoesNotBlockFixGeneration() {
+        assertEquals(
+            FixAssistantContentState.ReadyWithoutFix,
+            deriveFixAssistantContentState(
+                FixAssistantUiState(
+                    crash = CrashReport(id = "crash-1"),
+                    diagnosis = AIDiagnosis(crashId = "crash-1"),
+                    verificationsLoadError = "history offline"
+                )
+            )
         )
     }
 
