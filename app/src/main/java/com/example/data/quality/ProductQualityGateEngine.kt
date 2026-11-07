@@ -639,7 +639,7 @@ class ProductQualityGateEngine {
             criterion = CompletionCriterion.HAS_REAL_DESIGN,
             isSatisfied = true,
             isApplicable = true,
-            evidence = "Native Compose screen uses VibeDesignTokens, cyber backdrop, and explicit content states; device visual review is not recorded."
+            evidence = "Native Compose screens use VibeDesignTokens and explicit state/status surfaces; device visual review is not recorded."
         )
         evaluations[CompletionCriterion.HAS_BACKEND_IF_NEEDED] = CriterionEvaluation(
             criterion = CompletionCriterion.HAS_BACKEND_IF_NEEDED,
@@ -665,13 +665,13 @@ class ProductQualityGateEngine {
             criterion = CompletionCriterion.HAS_LOADING_EMPTY_ERROR_STATES,
             isSatisfied = true,
             isApplicable = true,
-            evidence = "FixAssistant state mapping covers loading, missing crash, load error, diagnosis missing, empty suggestions, generation error, and populated suggestions."
+            evidence = "Both screens expose loading/empty states; FixAssistant additionally distinguishes missing crash, diagnosis missing, generation error, and populated suggestions."
         )
         evaluations[CompletionCriterion.HAS_APPROPRIATE_PERMISSIONS] = CriterionEvaluation(
             criterion = CompletionCriterion.HAS_APPROPRIATE_PERMISSIONS,
             isSatisfied = true,
             isApplicable = true,
-            evidence = "GitHub PR creation is disabled without an authenticated user identifier; no default developer identity is used."
+            evidence = "FixAssistant PR creation is disabled without an authenticated user identifier; FixHistory re-verification is disabled until a real runner exists."
         )
         evaluations[CompletionCriterion.HAS_TESTS] = CriterionEvaluation(
             criterion = CompletionCriterion.HAS_TESTS,
@@ -695,7 +695,7 @@ class ProductQualityGateEngine {
             criterion = CompletionCriterion.NO_UNCONNECTED_CORE_INTERACTIONS,
             isSatisfied = true,
             isApplicable = true,
-            evidence = "Unavailable verification controls are disabled and labeled; remaining fix/PR actions retain their ViewModel callbacks."
+            evidence = "Unavailable verification controls are disabled and labeled; no unsupported verification action is exposed as active."
         )
 
         return evaluations
