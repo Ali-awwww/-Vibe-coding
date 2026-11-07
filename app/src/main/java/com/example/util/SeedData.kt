@@ -428,13 +428,14 @@ object SeedData {
             explanation = "إضافة فحص الأمان لقيم null وتجنب استخدام المعامل الخطير (!!) مع توفير قيمة افتراضية لطول الاسم.",
             potentialSideEffects = "إذا كان المستخدم فارغاً لن يتم عرض الصورة الرمزية حتى تتوفر البيانات، وهو سلوك آمن.",
             filePath = "app/src/main/java/com/superapp/mobile/ui/profile/ProfileFragment.kt",
-            branchName = "fix/npe-profile-74-a8f1",
-            githubPrUrl = "https://github.com/crash-intelligence-ai/superapp-android-demo/pull/14",
-            status = com.example.domain.model.FixStatus.PR_CREATED,
-            testResults = """{"compilation":"PASSED","static_analysis":"PASSED","unit_tests":"PASSED"}"""
+            branchName = "demo/fix-npe-profile-74",
+            githubPrUrl = null,
+            status = com.example.domain.model.FixStatus.PROPOSED,
+            testResults = null // Sandbox example only; no PR or test run is represented.
         )
 
-        // Seed Sample Verification Records (Demonstrating verified vs reproduced vs inconclusive)
+        // Sandbox-only verification fixtures: no real test session or outcome was executed.
+
         repository.addVerificationRecord(
             com.example.domain.model.CrashVerificationRecord(
                 id = "verif_001",
@@ -443,22 +444,22 @@ object SeedData {
                 crashId = "crash_001",
                 issueId = "issue_npe_profile",
                 fixSuggestionId = fixSuggestion.id,
-                fixCommitSha = "commit-7c48f21",
-                githubPrUrl = fixSuggestion.githubPrUrl,
+                fixCommitSha = null,
+                githubPrUrl = null,
                 previousAppVersion = "1.2.0",
                 newAppVersion = "1.2.1-patch",
-                buildId = "build-prod-1042",
-                testSessionId = "session_verif_01",
-                scenarioName = "Profile Avatar & User Data Load Stress Test",
-                status = com.example.domain.model.VerificationStatus.FIX_VERIFIED_IN_TEST,
-                comparisonSummary = "مقارنة الإصدارات: تم اختبار الإصدار 1.2.1-patch (بناء build-prod-1042) مقابل 1.2.0.\nتحليل Stack Trace: تم القضاء على استثناء NullPointerException في ProfileFragment.kt:74 بالكامل.\nمعدل التكرار: انخفض من 3 انهيارات سابقة إلى 0 انهيارات عبر 25 جولة اختبار آلية.\nحالة المشكلة: تم التحقق بنجاح في بيئة الاختبار (Fix Verified in Test).",
+                buildId = "demo-build-1042",
+                testSessionId = null,
+                scenarioName = "Demo fixture — no test executed",
+                status = com.example.domain.model.VerificationStatus.INCONCLUSIVE,
+                comparisonSummary = "بيانات Sandbox توضيحية فقط؛ لم يتم تشغيل اختبار أو إثبات إصلاح فعلي.",
                 oldStackTrace = "java.lang.NullPointerException: Attempt to invoke virtual method 'int java.lang.String.length()' on a null object reference\n\tat com.superapp.mobile.ui.profile.ProfileFragment.bindData(ProfileFragment.kt:74)",
                 newStackTrace = null,
-                testScopeDetails = "السيناريو المختبر: 'Profile Avatar & User Data Load Stress Test' | الجولات: 25 جولة | الذاكرة: 48MB Heap Peak | العمليات: UI Rendering, Room Query, Safe Null Checks | الحدود: لا يشمل هذا السيناريو انقطاع الطاقة المفاجئ أو نفاد شحن البطارية.",
+                testScopeDetails = "بيانات Sandbox توضيحية فقط؛ لا توجد جلسة اختبار أو قياسات ذاكرة فعلية.",
                 verifiedAt = now - 1 * hour,
                 crashExceptionType = "NullPointerException",
                 crashMessage = "Attempt to invoke virtual method 'int java.lang.String.length()' on a null object reference",
-                environmentValid = true
+                environmentValid = false
             )
         )
 
@@ -470,22 +471,22 @@ object SeedData {
                 crashId = "crash_004",
                 issueId = "issue_oom_gallery",
                 fixSuggestionId = null,
-                fixCommitSha = "commit-3b91a02",
+                fixCommitSha = null,
                 githubPrUrl = null,
                 previousAppVersion = "1.2.0",
                 newAppVersion = "1.2.0-rc2",
-                buildId = "build-test-oom-check",
-                testSessionId = "session_verif_02",
-                scenarioName = "Rapid Gallery Multi-Image Decode Stress Test",
-                status = com.example.domain.model.VerificationStatus.CRASH_REPRODUCED,
-                comparisonSummary = "مقارنة الإصدارات: تم اختبار البناء التجريبي build-test-oom-check مقابل الإصدار السابق 1.2.0.\nتحليل Stack Trace: تكرر نفس استثناء OutOfMemoryError في BitmapFactory.nativeDecodeStream.\nمعدل التكرار: لا يزال الانهيار قابلاً لإعادة الإنتاج بنسبة 100% عند فك ترميز أكثر من 8 صور فائقة الدقة بالتوازي.\nحالة المشكلة: الانهيار لم يتم إصلاحه بعد (Crash Reproduced).",
+                buildId = "demo-build-oom-check",
+                testSessionId = null,
+                scenarioName = "Demo fixture — no test executed",
+                status = com.example.domain.model.VerificationStatus.INCONCLUSIVE,
+                comparisonSummary = "بيانات Sandbox توضيحية فقط؛ لم يتم تشغيل اختبار أو إثبات إعادة إنتاج فعلية.",
                 oldStackTrace = "java.lang.OutOfMemoryError: Failed to allocate a 33554432 byte allocation with 4194304 free bytes\n\tat dalvik.system.VMRuntime.newNonMovableArray\n\tat android.graphics.BitmapFactory.nativeDecodeStream(BitmapFactory.java)\n\tat com.superapp.mobile.media.GalleryPicker.processImage(GalleryPicker.kt:118)",
-                newStackTrace = "java.lang.OutOfMemoryError: Failed to allocate a 33554432 byte allocation with 4194304 free bytes\n\tat dalvik.system.VMRuntime.newNonMovableArray\n\tat android.graphics.BitmapFactory.nativeDecodeStream(BitmapFactory.java)\n\tat com.superapp.mobile.media.GalleryPicker.processImage(GalleryPicker.kt:118)",
-                testScopeDetails = "السيناريو المختبر: 'Rapid Gallery Multi-Image Decode Stress Test' | الجولات: 8 جولات | الذاكرة: تجاوزت سقف 256MB | العمليات: Bitmap Allocation | الحدود: تم اختبار سعة الذاكرة فقط على نظام 32-bit runtime.",
+                newStackTrace = null,
+                testScopeDetails = "بيانات Sandbox توضيحية فقط؛ لا توجد جلسة اختبار أو قياسات ذاكرة فعلية.",
                 verifiedAt = now - 5 * hour,
                 crashExceptionType = "OutOfMemoryError",
                 crashMessage = "Failed to allocate a 32MB bitmap buffer with only 4MB heap remaining",
-                environmentValid = true
+                environmentValid = false
             )
         )
     }
