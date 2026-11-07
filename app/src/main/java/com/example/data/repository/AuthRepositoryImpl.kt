@@ -33,7 +33,8 @@ class AuthRepositoryImpl(
     private val sessionStore: SupabaseSessionStore
 ) : AuthRepository {
 
-    private val refreshMutex = Mutex()
+    // Serialize auth requests and session mutations so logout cannot race a refresh or sign-in.
+    private val sessionMutex = Mutex()
     private val _currentUser = MutableStateFlow(
         sessionStore.read()?.takeIf { it.expiresAtEpochSeconds > nowEpochSeconds() }?.user?.toAccount()
     )
@@ -52,57 +53,62 @@ class AuthRepositoryImpl(
         organization: String
     ): Result<UserAccount> = authResult {
         require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
-        val response = api.signUp(
-            publishableKey = publishableKey,
-            request = SupabaseSignUpRequest(
-                email = email.trim(),
-                password = password,
-                data = SupabaseUserMetadata(
-                    displayName = displayName.trim(),
-                    organization = organization.trim()
+        sessionMutex.withLock {
+            val response = api.signUp(
+                publishableKey = publishableKey,
+                request = SupabaseSignUpRequest(
+                    email = email.trim(),
+                    password = password,
+                    data = SupabaseUserMetadata(
+                        displayName = displayName.trim(),
+                        organization = organization.trim()
+                    )
                 )
             )
-        )
-        val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
-        val session = body.toStoredSession()
-            ?: throw EmailConfirmationRequiredException(
-                "تم قبول طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول."
-            )
-        sessionStore.write(session)
-        session.user.toAccount().also { _currentUser.value = it }
+            val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
+            val session = body.toStoredSession()
+                ?: throw EmailConfirmationRequiredException(
+                    "تم قبول طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول."
+                )
+            sessionStore.write(session)
+            session.user.toAccount().also { _currentUser.value = it }
+        }
     }
 
     override suspend fun signIn(email: String, password: String): Result<UserAccount> = authResult {
         require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
-        val response = api.signInWithPassword(
-            publishableKey = publishableKey,
-            request = SupabasePasswordGrantRequest(email = email.trim(), password = password)
-        )
-        val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
-        val session = body.toStoredSession()
-            ?: throw IllegalStateException("لم يُرجع Supabase جلسة مصادقة صالحة.")
-        sessionStore.write(session)
-        session.user.toAccount().also { _currentUser.value = it }
+        sessionMutex.withLock {
+            val response = api.signInWithPassword(
+                publishableKey = publishableKey,
+                request = SupabasePasswordGrantRequest(email = email.trim(), password = password)
+            )
+            val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
+            val session = body.toStoredSession()
+                ?: throw IllegalStateException("لم يُرجع Supabase جلسة مصادقة صالحة.")
+            sessionStore.write(session)
+            session.user.toAccount().also { _currentUser.value = it }
+        }
     }
 
-    override suspend fun signOut() {
+    override suspend fun signOut() = sessionMutex.withLock {
+        // Clear the local identity before the network revocation attempt so the app
+        // cannot continue exposing an authenticated state while logout is in flight.
         val session = sessionStore.read()
-        try {
-            if (session != null && publishableKey.isNotBlank()) {
-                try {
-                    api.signOut(
-                        publishableKey = publishableKey,
-                        bearerToken = "Bearer ${session.accessToken}"
-                    )
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    // Remote revocation is best-effort; local credentials are always cleared below.
-                }
+        sessionStore.clear()
+        _currentUser.value = null
+
+        if (session != null && publishableKey.isNotBlank()) {
+            try {
+                api.signOut(
+                    publishableKey = publishableKey,
+                    bearerToken = "Bearer ${session.accessToken}"
+                )
+            } catch (cancelled: CancellationException) {
+                // Local logout is already complete; preserve structured cancellation.
+                throw cancelled
+            } catch (_: Exception) {
+                // Remote revocation is best-effort; local credentials have already been cleared.
             }
-        } finally {
-            sessionStore.clear()
-            _currentUser.value = null
         }
     }
 
@@ -120,7 +126,7 @@ class AuthRepositoryImpl(
             )
         )
 
-    private suspend fun refreshStoredSessionIfNeeded() = refreshMutex.withLock {
+    private suspend fun refreshStoredSessionIfNeeded() = sessionMutex.withLock {
         val stored = sessionStore.read() ?: run {
             _currentUser.value = null
             return
