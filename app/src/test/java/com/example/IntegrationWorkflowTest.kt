@@ -198,7 +198,7 @@ class IntegrationWorkflowTest {
     }
 
     @Test
-    fun testFixVerification_statusProgressionAndNotification() = runBlocking {
+    fun testFixVerification_doesNotPersistSimulatedSuccessWithoutARealRunner() = runBlocking {
         val project = Project(id = "proj-300", name = "Banking App", description = "Fix Verification", ownerId = "usr-dev")
         repository.addProject(project)
 
@@ -227,7 +227,6 @@ class IntegrationWorkflowTest {
         )
         db.crashDao().insertFixSuggestion(fixSuggestion)
 
-        // Verify fix directly
         val verificationResult = repository.verifyFix(
             crashId = "crash-bank-1",
             fixSuggestionId = "fix-301",
@@ -237,14 +236,12 @@ class IntegrationWorkflowTest {
             simulatedOutcome = VerificationStatus.FIX_VERIFIED_IN_TEST
         )
 
-        assertTrue(verificationResult.isSuccess)
-        val verification = verificationResult.getOrThrow()
-        assertEquals(VerificationStatus.FIX_VERIFIED_IN_TEST, verification.status)
-        assertEquals("fix-301", verification.fixSuggestionId)
+        assertTrue(verificationResult.isFailure)
+        assertTrue(verificationResult.exceptionOrNull() is UnsupportedOperationException)
+        assertTrue(repository.getVerificationsByCrash("crash-bank-1").first().isEmpty())
 
-        // Verify Notification was dispatched
         val notifications = repository.getNotifications().first()
-        assertTrue(notifications.any { it.type == NotificationType.VERIFICATION_PASSED })
+        assertFalse(notifications.any { it.type == NotificationType.VERIFICATION_PASSED })
     }
 
 
