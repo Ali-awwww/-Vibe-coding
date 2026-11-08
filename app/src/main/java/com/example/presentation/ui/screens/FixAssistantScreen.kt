@@ -69,11 +69,11 @@ internal fun deriveFixAssistantContentState(uiState: FixAssistantUiState): FixAs
         return FixAssistantContentState.ReadyWithFixes(uiState.suggestions.size)
     }
 
-    uiState.suggestionsLoadError?.let { return FixAssistantContentState.LoadError(it) }
-
     if (uiState.error != null) {
         return FixAssistantContentState.GenerationError(uiState.error)
     }
+
+    uiState.suggestionsLoadError?.let { return FixAssistantContentState.LoadError(it) }
 
     if (uiState.diagnosis == null) {
         return FixAssistantContentState.DiagnosisMissing
