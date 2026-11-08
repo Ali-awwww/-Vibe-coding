@@ -924,3 +924,30 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### CI recheck after task-register commit b2379aad00773a29328cb5826e427788474bdfb6
 
 - Docs commit workflows: Android CI/CD run 42425558085, Code Quality run 42425558106, and APK run 42425557955 all failed. I reran the failed jobs for all three (attempt 2); the same pre-step failure persisted. Latest jobs expose empty step arrays, and each log download returned BlobNotFound (job IDs 128563024551, 128563017970, 128563029491). No Gradle/build/test/lint/APK execution is evidenced. The runner-start/log availability blocker remains unresolved.
+
+## 2026-11-08 — Fix History collector lifecycle and actionable load failure (source + regression tests; Android execution blocked)
+
+### Selected task and scope
+- Selected the independent Fix History ViewModel loading/error lifecycle follow-up listed after the preceding Login and Fix Assistant batches. Latest main, the task register and recent commits were inspected first; no competing commit had touched the FixHistoryViewModel or FixHistoryScreen paths during this slice.
+- Read repository instruction candidates at root, docs/, and app/; no AGENTS.md / agents.md file was found in those locations.
+
+### Changes
+- FixHistoryViewModel.kt: removed constructor-time init { loadData() } so the screen's LaunchedEffect(projectId) owns initial loading and does not duplicate the first subscription.
+- Replaced accumulating verification collectors with one cancellable Job; retry/project selection cancels the previous stream. Added a generation guard so late emissions/errors from an older request cannot overwrite the currently selected project state.
+- Clear stale verification rows when changing project; preserve current rows for same-project retry. Clear load errors on retry/emission, expose stream failures, preserve coroutine cancellation, and stop loading when a source completes without emitting.
+- FixHistoryScreen.kt: added a Vibe-styled, accessible error panel with a retry action. When refresh fails but prior rows remain, the error is shown alongside them; when no rows exist, the panel replaces the empty-state message so a load failure is not misreported as an empty history.
+- Added app/src/test/java/com/example/FixHistoryViewModelTest.kt: covers no eager fetch on ViewModel construction, stream failure clears loading and retry recovers, project switching cancels the prior collector, and an empty-completing stream does not leave a spinner active.
+- Post-write re-fetch caught a malformed intermediate ViewModel patch boundary; the complete ViewModel file was reconstructed and re-fetched before proceeding. The final source is the corrected version in commit 4aedeacc.
+
+### Commits
+- ViewModel lifecycle/error handling: adca7276374d42f7cc5e4e3aaa216000bb510959
+- Screen error/retry UI: 1e481f9f0a85027499f2194dacc27352b0d9ca1c
+- Regression tests: 5fac0e73261657c7afd631e7233865f3d4fce063
+- Existing-token correction in error UI: 32c030b8b6392571fc506122728307101f1427f8
+- Corrected complete ViewModel source: 4aedeacc892b02cd72216e1366a80ac64321ba2c
+
+### Verification and remaining work
+- Re-fetched the final ViewModel, screen, test file and commit diffs from main; verified source boundaries, single collector ownership, generation guard, cancellation handling, retry UI and regression tests are present.
+- GitHub combined-status calls returned no status entries for these commits; the commit-workflow-run wrapper returned no runs (it only exposes PR-triggered runs). This is not evidence of successful CI or test execution.
+- The latest documented Android CI/CD, APK and Code Quality jobs continue to fail before exposing runner steps/logs; no Gradle compilation, unit test, lint, APK packaging, emulator/device run, screenshot review, or RTL/LTR rendered review was executed in this batch.
+- Fix History remains open: run FixHistoryViewModelTest and app build under a functioning Gradle/Android runner, review rendered error/retry and empty/loading states on device, and verify Arabic RTL / English LTR accessibility. No screen-completion claim is made.
