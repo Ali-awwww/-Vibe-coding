@@ -456,7 +456,7 @@ private fun FixHistoryLoadError(
                 Icon(
                     Icons.Default.CloudOff,
                     contentDescription = null,
-                    tint = VibeDesignTokens.Color.Warning
+                    tint = VibeDesignTokens.Color.Error
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
