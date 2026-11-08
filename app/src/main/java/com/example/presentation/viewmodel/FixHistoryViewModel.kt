@@ -26,61 +26,62 @@ class FixHistoryViewModel(
     private val _uiState = MutableStateFlow(FixHistoryUiState(isLoading = true))
     val uiState: StateFlow<FixHistoryUiState> = _uiState.asStateFlow()
 
-    init {
-        loadData()
-    }
+    fun loadData(initialProjectId: St    private var verificationJob: kotlinx.coroutines.Job? = null
 
     fun loadData(initialProjectId: String? = null) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, selectedProjectId = initialProjectId) }
+        val projectChanged = _uiState.value.selectedProjectId != initialProjectId
+        _uiState.update { state ->
+            state.copy(
+                selectedProjectId = initialProjectId,
+                verifications = if (projectChanged) emptyList() else state.verifications,
+                filteredVerifications = if (projectChanged) emptyList() else state.filteredVerifications,
+                isLoading = true,
+                error = null
+            )
+        }
 
-            launch {
-                repository.getProjects().collect { projects ->
-                    _uiState.update { it.copy(projects = projects) }
-                }
-            }
+        verificationJob?.cancel()
+        val source = if (initialProjectId != null) {
+            repository.getVerificationsByProject(initialProjectId)
+        } else {
+            repository.getAllVerifications()
+        }
 
-            launch {
-                val flow = if (initialProjectId != null) {
-                    repository.getVerificationsByProject(initialProjectId)
-                } else {
-                    repository.getAllVerifications()
-                }
-
-                flow.collect { list ->
+        verificationJob = viewModelScope.launch {
+            var receivedEmission = false
+            try {
+                source.collect { list ->
+                    receivedEmission = true
                     _uiState.update { state ->
                         state.copy(
                             verifications = list,
                             filteredVerifications = applyFilter(list, state.selectedStatus),
-                            isLoading = false
+                            isLoading = false,
+                            error = null
                         )
                     }
                 }
-            }
-        }
-    }
-
-    fun selectProject(projectId: String?) {
-        _uiState.update { it.copy(selectedProjectId = projectId, isLoading = true) }
-        viewModelScope.launch {
-            val flow = if (projectId != null) {
-                repository.getVerificationsByProject(projectId)
-            } else {
-                repository.getAllVerifications()
-            }
-            flow.collect { list ->
-                _uiState.update { state ->
-                    state.copy(
-                        verifications = list,
-                        filteredVerifications = applyFilter(list, state.selectedStatus),
-                        isLoading = false
+                if (!receivedEmission) {
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = failure.message ?: "تعذر تحميل سجل التحقق. حاول مرة أخرى."
                     )
                 }
             }
         }
     }
 
-    fun filterByStatus(status: VerificationStatus?) {
+    fun selectProject(projectId: String?) {
+        loadData(projectId)
+    }
+
+cationStatus?) {
         _uiState.update { state ->
             state.copy(
                 selectedStatus = status,
