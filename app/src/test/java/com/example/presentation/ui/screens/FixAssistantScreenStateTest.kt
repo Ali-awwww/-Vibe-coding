@@ -139,6 +139,22 @@ class FixAssistantScreenStateTest {
     }
 
     @Test
+    fun generationFailureTakesPrecedenceOverSuggestionStreamFailure() {
+        assertEquals(
+            FixAssistantContentState.GenerationError("model request failed"),
+            deriveFixAssistantContentState(
+                FixAssistantUiState(
+                    isLoading = false,
+                    crash = CrashReport(id = "crash-1"),
+                    diagnosis = AIDiagnosis(crashId = "crash-1"),
+                    suggestionsLoadError = "suggestions offline",
+                    error = "model request failed"
+                )
+            )
+        )
+    }
+
+    @Test
     fun existingSuggestionsRemainVisibleWhenAnotherActionFails() {
         assertEquals(
             FixAssistantContentState.ReadyWithFixes(1),
