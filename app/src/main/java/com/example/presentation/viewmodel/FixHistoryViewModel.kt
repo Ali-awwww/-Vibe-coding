@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.*
 import com.example.domain.repository.CrashRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -26,10 +28,17 @@ class FixHistoryViewModel(
     private val _uiState = MutableStateFlow(FixHistoryUiState(isLoading = true))
     val uiState: StateFlow<FixHistoryUiState> = _uiState.asStateFlow()
 
-    fun loadData(initialProjectId: St    private var verificationJob: kotlinx.coroutines.Job? = null
+    private var verificationJob: Job? = null
+    private var loadGeneration = 0L
 
+    /**
+     * The screen owns initial loading. Repeated calls replace the previous collector,
+     * so project changes and retries cannot accumulate subscriptions.
+     */
     fun loadData(initialProjectId: String? = null) {
+        val generation = ++loadGeneration
         val projectChanged = _uiState.value.selectedProjectId != initialProjectId
+
         _uiState.update { state ->
             state.copy(
                 selectedProjectId = initialProjectId,
@@ -41,37 +50,48 @@ class FixHistoryViewModel(
         }
 
         verificationJob?.cancel()
-        val source = if (initialProjectId != null) {
-            repository.getVerificationsByProject(initialProjectId)
-        } else {
-            repository.getAllVerifications()
-        }
-
         verificationJob = viewModelScope.launch {
             var receivedEmission = false
             try {
+                val source = if (initialProjectId != null) {
+                    repository.getVerificationsByProject(initialProjectId)
+                } else {
+                    repository.getAllVerifications()
+                }
+
                 source.collect { list ->
                     receivedEmission = true
                     _uiState.update { state ->
-                        state.copy(
-                            verifications = list,
-                            filteredVerifications = applyFilter(list, state.selectedStatus),
-                            isLoading = false,
-                            error = null
-                        )
+                        if (generation != loadGeneration) {
+                            state
+                        } else {
+                            state.copy(
+                                verifications = list,
+                                filteredVerifications = applyFilter(list, state.selectedStatus),
+                                isLoading = false,
+                                error = null
+                            )
+                        }
                     }
                 }
+
                 if (!receivedEmission) {
-                    _uiState.update { it.copy(isLoading = false) }
+                    _uiState.update { state ->
+                        if (generation == loadGeneration) state.copy(isLoading = false) else state
+                    }
                 }
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = failure.message ?: "تعذر تحميل سجل التحقق. حاول مرة أخرى."
-                    )
+                _uiState.update { state ->
+                    if (generation != loadGeneration) {
+                        state
+                    } else {
+                        state.copy(
+                            isLoading = false,
+                            error = failure.message ?: "تعذر تحميل سجل التحقق. حاول مرة أخرى."
+                        )
+                    }
                 }
             }
         }
@@ -81,7 +101,7 @@ class FixHistoryViewModel(
         loadData(projectId)
     }
 
-cationStatus?) {
+    fun filterByStatus(status: VerificationStatus?) {
         _uiState.update { state ->
             state.copy(
                 selectedStatus = status,
@@ -104,25 +124,39 @@ cationStatus?) {
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isVerifying = true, error = null) }
-            val result = repository.verifyFix(
-                crashId = crashId,
-                fixSuggestionId = fixSuggestionId,
-                newVersion = newVersion,
-                buildId = buildId,
-                scenarioName = scenarioName,
-                simulatedOutcome = simulatedOutcome
-            )
-            _uiState.update { state ->
-                state.copy(
-                    isVerifying = false,
-                    selectedRecord = result.getOrNull(),
-                    error = result.exceptionOrNull()?.message
+            try {
+                val result = repository.verifyFix(
+                    crashId = crashId,
+                    fixSuggestionId = fixSuggestionId,
+                    newVersion = newVersion,
+                    buildId = buildId,
+                    scenarioName = scenarioName,
+                    simulatedOutcome = simulatedOutcome
                 )
+                _uiState.update { state ->
+                    state.copy(
+                        isVerifying = false,
+                        selectedRecord = result.getOrNull(),
+                        error = result.exceptionOrNull()?.message
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isVerifying = false,
+                        error = failure.message ?: "تعذر إعادة التحقق من الإصلاح."
+                    )
+                }
             }
         }
     }
 
-    private fun applyFilter(list: List<CrashVerificationRecord>, status: VerificationStatus?): List<CrashVerificationRecord> {
+    private fun applyFilter(
+        list: List<CrashVerificationRecord>,
+        status: VerificationStatus?
+    ): List<CrashVerificationRecord> {
         return if (status == null) list else list.filter { it.status == status }
     }
 }
