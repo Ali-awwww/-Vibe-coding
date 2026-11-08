@@ -102,9 +102,17 @@ fun FixHistoryScreen(
                         onSelectStatus = { viewModel.filterByStatus(it) }
                     )
                 }
+                uiState.error?.let { message ->
+                    item {
+                        FixHistoryLoadError(
+                            message = message,
+                            onRetry = { viewModel.loadData(uiState.selectedProjectId) }
+                        )
+                    }
+                }
 
                 if (uiState.filteredVerifications.isEmpty()) {
-                    item { EmptyVerificationsView() }
+                    if (uiState.error == null) item { EmptyVerificationsView() }
                 } else {
                     items(uiState.filteredVerifications, key = { it.id }) { record ->
                         VerificationCard(record = record, onReVerify = null)
@@ -433,6 +441,47 @@ fun getVerificationStatusLabel(status: VerificationStatus): String {
 }
 
 
+
+@Composable
+private fun FixHistoryLoadError(
+    message: String,
+    onRetry: () -> Unit
+) {
+    EngCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(VibeDesignTokens.Spacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Small)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.CloudOff,
+                    contentDescription = null,
+                    tint = VibeDesignTokens.Color.Warning
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "تعذر تحميل سجل التحقق",
+                    color = VibeDesignTokens.Color.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleSmall
+                )
+            }
+            Text(
+                message,
+                color = VibeDesignTokens.Color.TextMuted,
+                style = MaterialTheme.typography.bodySmall
+            )
+            OutlinedButton(
+                onClick = onRetry,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("إعادة المحاولة")
+            }
+        }
+    }
+}
 
 @Composable
 fun EmptyVerificationsView() {
