@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+internal fun authenticatedUserIdOrNull(user: UserAccount?): String? =
+    user?.id?.takeIf { it.isNotBlank() }
+
 class VibeStudioViewModel(
     private val repository: VibeStudioRepository,
     private val teamRepository: com.example.domain.repository.AIModelTeamRepository,
@@ -26,25 +29,42 @@ class VibeStudioViewModel(
         loadTeams()
     }
 
+    private suspend fun requireAuthenticatedUserId(): String? {
+        val userId = authenticatedUserIdOrNull(authRepository.currentUser.firstOrNull())
+        if (userId == null) {
+            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لمتابعة هذا الإجراء.") }
+        }
+        return userId
+    }
+
     private fun loadTeams() {
         viewModelScope.launch {
-            authRepository.currentUser.filterNotNull().collect { user ->
-                teamRepository.getTeams(user.id).collect { list ->
-                    _uiState.update { it.copy(availableTeams = list) }
+            authRepository.currentUser
+                .map(::authenticatedUserIdOrNull)
+                .distinctUntilChanged()
+                .flatMapLatest { userId ->
+                    if (userId == null) flowOf(emptyList<ModelTeam>())
+                    else teamRepository.getTeams(userId)
                 }
-            }
+                .collect { teams -> _uiState.update { it.copy(availableTeams = teams) } }
         }
     }
 
     private fun loadWorkspaces() {
         viewModelScope.launch {
-            authRepository.currentUser.collect { user ->
-                user?.let {
-                    repository.getWorkspaces(it.id).collect { list ->
-                        _workspaces.value = list
-                    }
+            authRepository.currentUser
+                .map(::authenticatedUserIdOrNull)
+                .distinctUntilChanged()
+                .onEach {
+                    _workspaces.value = emptyList()
+                    // Clear all workspace-scoped state when the authenticated account changes.
+                    _uiState.value = StudioUiState()
                 }
-            }
+                .flatMapLatest { userId ->
+                    if (userId == null) flowOf(emptyList<Workspace>())
+                    else repository.getWorkspaces(userId)
+                }
+                .collect { workspaces -> _workspaces.value = workspaces }
         }
     }
 
@@ -55,7 +75,8 @@ class VibeStudioViewModel(
                 return@launch
             }
 
-            _uiState.update { it.copy(isLoading = true, activeWorkspace = workspace) }
+            val userId = requireAuthenticatedUserId() ?: return@launch
+            _uiState.update { it.copy(isLoading = true, activeWorkspace = workspace, error = null) }
             repository.updateWorkspaceAccess(workspace.id)
             
             // Collect files
@@ -166,8 +187,7 @@ class VibeStudioViewModel(
 
             // Collect Agent Model Status
             launch {
-                val user = authRepository.currentUser.firstOrNull()
-                val defaultModel = repository.getDefaultModel(user?.id ?: "anonymous")
+                val defaultModel = repository.getDefaultModel(userId)
                 _uiState.update { it.copy(
                     activeAgentModel = defaultModel?.name ?: "Auto (Free)",
                     agentIsFree = defaultModel?.isFree ?: true,
@@ -203,21 +223,21 @@ class VibeStudioViewModel(
 
     fun createNewProject(name: String, description: String, type: WorkspaceType, techStack: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val user = authRepository.currentUser.first()
+            val userId = requireAuthenticatedUserId() ?: return@launch
+            _uiState.update { it.copy(isLoading = true, error = null) }
             val workspace = Workspace(
                 id = UUID.randomUUID().toString(),
                 name = name,
                 description = description,
                 type = type,
                 techStack = techStack,
-                ownerId = user?.id ?: "anonymous"
+                ownerId = userId
             )
             repository.createWorkspace(workspace)
             selectWorkspace(workspace)
             
             // Generate project with AI
-            repository.generateProject(user?.id ?: "anonymous", description, workspace.id)
+            repository.generateProject(userId, description, workspace.id)
                 .onFailure { error ->
                     _uiState.update { it.copy(error = error.message) }
                 }
@@ -275,7 +295,7 @@ class VibeStudioViewModel(
         val workspace = _uiState.value.activeWorkspace ?: return
 
         viewModelScope.launch {
-            val user = authRepository.currentUser.first()
+            val userId = requireAuthenticatedUserId() ?: return@launch
             val currentMode = _uiState.value.executionMode
 
             // Add user message to chat
@@ -303,7 +323,7 @@ class VibeStudioViewModel(
 
             val result = if (_uiState.value.activeTeam != null) {
                 repository.executeTeamInstruction(
-                    userId = user?.id ?: "anonymous",
+                    userId = userId,
                     workspaceId = workspace.id,
                     teamId = _uiState.value.activeTeam!!.id,
                     memberId = _uiState.value.selectedMemberId,
@@ -312,7 +332,7 @@ class VibeStudioViewModel(
                 )
             } else {
                 repository.executeInstruction(
-                    userId = user?.id ?: "anonymous",
+                    userId = userId,
                     workspaceId = workspace.id,
                     instruction = instruction,
                     mode = currentMode,
@@ -389,11 +409,11 @@ class VibeStudioViewModel(
         val workspace = _uiState.value.activeWorkspace ?: return
 
         viewModelScope.launch {
+            val userId = requireAuthenticatedUserId() ?: return@launch
             _uiState.update { it.copy(isLoading = true, error = null) }
-            val user = authRepository.currentUser.first()
 
             repository.executePlan(
-                userId = user?.id ?: "anonymous",
+                userId = userId,
                 workspaceId = workspace.id,
                 plan = plan,
                 onStepProgress = { step ->
@@ -886,8 +906,7 @@ class VibeStudioViewModel(
 
     fun analyzeAppRequirements(prompt: String, preferredPlatform: String? = null) {
         viewModelScope.launch {
-            val user = authRepository.currentUser.firstOrNull()
-            val userId = user?.id ?: "local_user"
+            val userId = requireAuthenticatedUserId() ?: return@launch
             _uiState.update { it.copy(isAnalyzingRequirements = true, error = null) }
             repository.analyzeAppRequirements(userId, prompt, preferredPlatform)
                 .onSuccess { blueprint ->
@@ -916,8 +935,7 @@ class VibeStudioViewModel(
 
     fun buildApplication(blueprint: AppBlueprint) {
         viewModelScope.launch {
-            val user = authRepository.currentUser.firstOrNull()
-            val userId = user?.id ?: "local_user"
+            val userId = requireAuthenticatedUserId() ?: return@launch
             _uiState.update {
                 it.copy(
                     appBuildProgress = AppBuildProgress(
@@ -1186,8 +1204,7 @@ class VibeStudioViewModel(
     fun pushToGitHub(repoOwner: String, repoName: String) {
         val workspace = _uiState.value.activeWorkspace ?: return
         viewModelScope.launch {
-            val user = authRepository.currentUser.firstOrNull()
-            val userId = user?.id ?: "local_user"
+            val userId = requireAuthenticatedUserId() ?: return@launch
             _uiState.update { it.copy(isPushPulling = true, error = null) }
 
             repository.pushToGitHub(
@@ -1212,8 +1229,7 @@ class VibeStudioViewModel(
     fun pullFromGitHub(repoOwner: String, repoName: String) {
         val workspace = _uiState.value.activeWorkspace ?: return
         viewModelScope.launch {
-            val user = authRepository.currentUser.firstOrNull()
-            val userId = user?.id ?: "local_user"
+            val userId = requireAuthenticatedUserId() ?: return@launch
             _uiState.update { it.copy(isPushPulling = true, error = null) }
 
             repository.pullFromGitHub(
@@ -1239,8 +1255,7 @@ class VibeStudioViewModel(
     fun createGitHubPullRequest(title: String, head: String, base: String, body: String) {
         val workspace = _uiState.value.activeWorkspace ?: return
         viewModelScope.launch {
-            val user = authRepository.currentUser.firstOrNull()
-            val userId = user?.id ?: "local_user"
+            val userId = requireAuthenticatedUserId() ?: return@launch
             _uiState.update { it.copy(isPushPulling = true, error = null) }
 
             repository.createGitHubPullRequest(
@@ -1258,6 +1273,10 @@ class VibeStudioViewModel(
                 _uiState.update { it.copy(isPushPulling = false, error = err.message) }
             }
         }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
     }
 
     fun clearGitOperationMessage() {
