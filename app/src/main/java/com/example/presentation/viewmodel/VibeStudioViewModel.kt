@@ -25,8 +25,7 @@ class VibeStudioViewModel(
     val workspaces: StateFlow<List<Workspace>> = _workspaces.asStateFlow()
 
     init {
-        loadWorkspaces()
-        loadTeams()
+        loadAccountData()
     }
 
     private suspend fun requireAuthenticatedUserId(): String? {
@@ -37,34 +36,30 @@ class VibeStudioViewModel(
         return userId
     }
 
-    private fun loadTeams() {
-        viewModelScope.launch {
-            authRepository.currentUser
-                .map(::authenticatedUserIdOrNull)
-                .distinctUntilChanged()
-                .flatMapLatest { userId ->
-                    if (userId == null) flowOf(emptyList<ModelTeam>())
-                    else teamRepository.getTeams(userId)
-                }
-                .collect { teams -> _uiState.update { it.copy(availableTeams = teams) } }
-        }
-    }
-
-    private fun loadWorkspaces() {
+    private fun loadAccountData() {
         viewModelScope.launch {
             authRepository.currentUser
                 .map(::authenticatedUserIdOrNull)
                 .distinctUntilChanged()
                 .onEach {
                     _workspaces.value = emptyList()
-                    // Clear all workspace-scoped state when the authenticated account changes.
+                    // Clear account-scoped workspace and team state on sign-out or account switch.
                     _uiState.value = StudioUiState()
                 }
                 .flatMapLatest { userId ->
-                    if (userId == null) flowOf(emptyList<Workspace>())
-                    else repository.getWorkspaces(userId)
+                    if (userId == null) {
+                        flowOf(emptyList<Workspace>() to emptyList<ModelTeam>())
+                    } else {
+                        combine(
+                            repository.getWorkspaces(userId),
+                            teamRepository.getTeams(userId)
+                        ) { workspaces, teams -> workspaces to teams }
+                    }
                 }
-                .collect { workspaces -> _workspaces.value = workspaces }
+                .collect { (workspaces, teams) ->
+                    _workspaces.value = workspaces
+                    _uiState.update { it.copy(availableTeams = teams) }
+                }
         }
     }
 
