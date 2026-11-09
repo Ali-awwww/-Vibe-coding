@@ -2,6 +2,7 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import com.example.domain.model.*
 import com.example.domain.repository.CrashRepository
 import com.example.domain.repository.SymbolicationRepository
@@ -82,27 +83,49 @@ class CrashDetailViewModel(
         _uiState.update { it.copy(showTeamDialog = show) }
     }
 
-    fun investigateWithCrashTeam(orchestrator: com.example.domain.agent.TeamOrchestrator? = null, userId: String = "user_default") {
+    fun investigateWithCrashTeam(orchestrator: com.example.domain.agent.TeamOrchestrator? = null) {
         val crash = _uiState.value.crash ?: return
-        val orch = orchestrator ?: teamOrchestrator ?: return
+        val orch = orchestrator ?: teamOrchestrator
+        if (orch == null) {
+            _uiState.update {
+                it.copy(isInvestigatingWithTeam = false, error = "خدمة فريق التحقيق غير مهيأة.")
+            }
+            return
+        }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isInvestigatingWithTeam = true, showTeamDialog = true, error = null) }
-            val prompt = "crashId: ${crash.id}\n${crash.exceptionType}: ${crash.message}\n${crash.stackTrace}"
-            
+            val userId = authenticatedUserIdOrNull(authRepository?.currentUser?.firstOrNull())
+            if (userId == null) {
+                _uiState.update {
+                    it.copy(
+                        isInvestigatingWithTeam = false,
+                        error = "سجّل الدخول بحساب صالح لبدء تحقيق الفريق."
+                    )
+                }
+                return@launch
+            }
+
+            _uiState.update {
+                it.copy(isInvestigatingWithTeam = true, showTeamDialog = true, error = null)
+            }
+            val prompt = "crashId: ${crash.id}\\n${crash.exceptionType}: ${crash.message}\\n${crash.stackTrace}"
+
             try {
                 orch.executeTask(userId, TeamTemplates.CRASH_INVESTIGATION_TEAM, prompt).collect { exec ->
-                    _uiState.update { 
+                    _uiState.update {
                         it.copy(
                             teamExecution = exec,
                             isInvestigatingWithTeam = exec.status == ExecutionStatus.EXECUTING
-                        ) 
+                        )
                     }
                     if (exec.status == ExecutionStatus.COMPLETED && exec.finalResult != null) {
                         // Refresh diagnosis in background
                         repository.getAIDiagnosis(crash)
                     }
                 }
+            } catch (cancelled: CancellationException) {
+                _uiState.update { it.copy(isInvestigatingWithTeam = false) }
+                throw cancelled
             } catch (e: Exception) {
                 _uiState.update { it.copy(isInvestigatingWithTeam = false, error = e.message) }
             }
