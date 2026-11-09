@@ -2,6 +2,8 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.VibeStudioRepository
@@ -11,6 +13,20 @@ import java.util.UUID
 
 internal fun authenticatedUserIdOrNull(user: UserAccount?): String? =
     user?.id?.takeIf { it.isNotBlank() }
+
+internal class WorkspaceCollectorOwner(private val scope: CoroutineScope) {
+    private var activeJob: Job? = null
+
+    fun start(block: suspend CoroutineScope.() -> Unit): Job {
+        activeJob?.cancel()
+        return scope.launch(block = block).also { activeJob = it }
+    }
+
+    fun cancel() {
+        activeJob?.cancel()
+        activeJob = null
+    }
+}
 
 class VibeStudioViewModel(
     private val repository: VibeStudioRepository,
@@ -23,6 +39,7 @@ class VibeStudioViewModel(
 
     private val _workspaces = MutableStateFlow<List<Workspace>>(emptyList())
     val workspaces: StateFlow<List<Workspace>> = _workspaces.asStateFlow()
+    private val workspaceCollectorOwner = WorkspaceCollectorOwner(viewModelScope)
 
     init {
         loadAccountData()
@@ -42,8 +59,9 @@ class VibeStudioViewModel(
                 .map(::authenticatedUserIdOrNull)
                 .distinctUntilChanged()
                 .onEach {
+                    // Stop every workspace-bound child collector before clearing account state.
+                    workspaceCollectorOwner.cancel()
                     _workspaces.value = emptyList()
-                    // Clear account-scoped workspace and team state on sign-out or account switch.
                     _uiState.value = StudioUiState()
                 }
                 .flatMapLatest { userId ->
@@ -64,14 +82,20 @@ class VibeStudioViewModel(
     }
 
     fun selectWorkspace(workspace: Workspace?) {
-        viewModelScope.launch {
-            if (workspace == null) {
-                _uiState.update { it.copy(activeWorkspace = null, openFiles = emptyList(), selectedFileId = null) }
-                return@launch
-            }
+        if (workspace == null) {
+            workspaceCollectorOwner.cancel()
+            _uiState.update { StudioUiState(availableTeams = it.availableTeams) }
+            return
+        }
 
-            val userId = requireAuthenticatedUserId() ?: return@launch
-            _uiState.update { it.copy(isLoading = true, activeWorkspace = workspace, error = null) }
+        workspaceCollectorOwner.start {
+            val userId = requireAuthenticatedUserId() ?: return@start
+            val availableTeams = _uiState.value.availableTeams
+            _uiState.value = StudioUiState(
+                activeWorkspace = workspace,
+                isLoading = true,
+                availableTeams = availableTeams
+            )
             repository.updateWorkspaceAccess(workspace.id)
             
             // Collect files
