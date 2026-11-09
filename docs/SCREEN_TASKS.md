@@ -1012,3 +1012,29 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The Priority 0 identity prerequisite remains open. SeedData.kt still contains developer-owned demo fixtures tied to usr_dev_master; do not silently reassign or delete these records until production/demo seeding behavior is reviewed. The repository-wide fallback-identity audit and all other cloud authorization tests are not complete.
 - VibeStudio and CrashDetail remain open under the screen design gate until Gradle tests/build, backend authorization behavior, rendered device review, RTL/LTR, compact layout and accessibility checks are evidenced.
 - No Supabase runtime connectivity or production RLS behavior is inferred from these source changes.
+
+
+## 2026-11-10 — Vibe Studio workspace collector lifecycle hardening (source + regression tests; Android execution blocked)
+
+### Independent review of the preceding agent batch
+- Compared 7dffb9db8e4fdd94923e9bfbf2ab19dcb9502374 with d4e3719e061f132646b2b95a4d9a8454c6508282: 8 commits, 6 changed paths (VibeStudioViewModel, VibeStudioScreen, CrashDetailViewModel, CrashDetailScreen, VibeStudioIdentityGuardTest, and this task register).
+- Re-fetched and reviewed all five source/test paths. Confirmed AppNavigation injects provideAuthRepository(context) into CrashDetailViewModel; the new auth guard is not left on its nullable default in the app route. The Vibe Studio and Crash Detail error panels are present. No AGENTS.md / agents.md file exists in the repository tree; the only paths containing the word agent are application source directories/files.
+- The push-triggered workflows for the preceding batch's final docs commit d4e3719e061f132646b2b95a4d9a8454c6508282 were found through the repository Actions runs collection: Android CI/CD 42705938638, Code Quality 42705938569, and APK 42705938229. All concluded failure. Each run exposed one job with an empty steps array; all three job-log downloads returned BlobNotFound. This confirms no evidence that Gradle, compilation, tests, lint, or APK packaging ran. It corrects the earlier limitation note that relied only on the PR-filtered commit-workflow-run wrapper.
+
+### Confirmed defect and correction
+- loadAccountData() cleared the Vibe Studio UI state on sign-out/account switch, but selectWorkspace() launched multiple long-lived child collectors for files, logs, checkpoints, runtime state, terminal history, builds, Git state, reviews, activity logs, approvals and model status without retaining a cancellable owner for the workspace subscription tree.
+- Those child collectors were not cancelled when the account changed, when the user left a workspace, or when another workspace was selected. A late emission from the previous workspace could therefore repopulate the shared UI state after it had been cleared or after another workspace/account became active.
+- Leaving a workspace previously cleared only activeWorkspace, openFiles, and selectedFileId; the rest of the workspace-scoped UI state could remain populated.
+- Added WorkspaceCollectorOwner, which owns the parent coroutine for a selected workspace. Starting a different workspace cancels the previous parent and all nested collectors. Sign-out/account changes and selectWorkspace(null) now cancel the owner. Leaving/switching workspace resets workspace UI state while preserving the currently available team list.
+- This is a lifecycle/security correction inside the existing Vibe Studio slice, not a screen-completion claim. The preceding batch's dismissible error/status panel remains in place; no additional visual redesign was made in this narrow fix. Vibe Studio remains open pending rendered UI review.
+
+### Commits
+- ViewModel lifecycle correction: 495449d57e7fe73cd8d0a9f330a2a4bbb7be47c0
+- Regression tests: dba7e4ef21713560fa1b11563096dbefceb952e5
+
+### Verification and limitations
+- Re-fetched the updated ViewModel from main (blob SHA 3092c0d5aa3897923288a4ba3b9c0f403e7b0ac2) and the new test file (blob SHA 8fe968a212eede55bfe8f922202ed2208feef9ab); verified the owner is used for workspace replacement, sign-out/account change, and workspace exit.
+- Added two coroutine regression tests: replacing a workspace cancels the previous workspace's child collectors; leaving a workspace cancels the active collectors. The JUnit/coroutines-test file was added but has not been run under Gradle.
+- Local isolated kotlinc check compiled the collector-owner logic and a coroutine harness; the harness passed replacement and explicit-cancellation assertions. A separate compile check confirmed the return@start early-exit label compiles. These are isolated Kotlin checks, not Android/Compose compilation or the project's JUnit task.
+- No Gradle executable or Android SDK is available in the local runtime. No app build, JUnit/Robolectric test, lint, APK build, emulator/device run, screenshot, rendered RTL/LTR review, or Supabase runtime request was performed.
+- No Android screen is marked complete. The Vibe Studio design gate remains open until the combined screen is rendered and reviewed on device/emulator, including RTL/LTR, compact layout and accessibility.
