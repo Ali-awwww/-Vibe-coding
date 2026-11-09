@@ -127,16 +127,49 @@ fun VibeStudioScreen(
                 viewModel.selectWorkspace(null)
             }
         }
-        if (uiState.activeWorkspace == null) {
-            WorkspaceSelectionView(
-                workspaces = workspaces,
-                onSelect = { viewModel.selectWorkspace(it) },
-                onNew = { showNewProjectDialog = true },
-                onBuildWithAi = { viewModel.openAppBuilder() },
-                modifier = Modifier.padding(innerPadding)
-            )
-        } else {
-            Row(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            uiState.error?.let { message ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.45f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ErrorOutline,
+                            contentDescription = "خطأ",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = message,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        IconButton(onClick = { viewModel.clearError() }) {
+                            Icon(Icons.Default.Close, contentDescription = "إغلاق رسالة الخطأ")
+                        }
+                    }
+                }
+            }
+            if (uiState.activeWorkspace == null) {
+                WorkspaceSelectionView(
+                    workspaces = workspaces,
+                    onSelect = { viewModel.selectWorkspace(it) },
+                    onNew = { showNewProjectDialog = true },
+                    onBuildWithAi = { viewModel.openAppBuilder() },
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 // Side Bar (Explorer): on tablet 240.dp docked, on mobile 170.dp
                 if (uiState.isExplorerOpen) {
                     Surface(
@@ -403,6 +436,7 @@ fun VibeStudioScreen(
                     )
                 }
             }
+        }
         }
     }
 
