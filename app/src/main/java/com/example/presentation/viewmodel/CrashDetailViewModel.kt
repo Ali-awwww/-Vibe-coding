@@ -108,7 +108,7 @@ class CrashDetailViewModel(
             _uiState.update {
                 it.copy(isInvestigatingWithTeam = true, showTeamDialog = true, error = null)
             }
-            val prompt = "crashId: ${crash.id}\\n${crash.exceptionType}: ${crash.message}\\n${crash.stackTrace}"
+            val prompt = "crashId: ${crash.id}\n${crash.exceptionType}: ${crash.message}\n${crash.stackTrace}"
 
             try {
                 orch.executeTask(userId, TeamTemplates.CRASH_INVESTIGATION_TEAM, prompt).collect { exec ->
