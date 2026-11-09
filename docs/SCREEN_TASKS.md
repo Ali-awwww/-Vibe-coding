@@ -974,3 +974,41 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### CI recheck after the task-register commit
 - Workflows for documentation commit `116961d1`: APK run `42532434257`, Android CI/CD run `42532434316`, and Code Quality run `42532434231` all concluded failure. Each job returned an empty step array and its job-log download returned `BlobNotFound`. The docs-only run does not validate app compilation or tests; the runner/log availability blocker remains unresolved.
+
+
+## 2026-11-09 — Fail-closed Vibe Studio and Crash Detail identity paths (source + regression tests; Android execution blocked)
+
+### Selected prerequisite and scope
+- Continued the Priority 0 shared identity-hardening prerequisite. The latest main, task register, recent commits, and relevant repository instructions were checked before editing. No AGENTS.md / agents.md was present at the repository root or in .github/, docs/, or app/.
+- The preceding batch addressed Fix Assistant error precedence. This batch selected independent Vibe Studio and Crash Detail identity paths; it did not edit the preceding agent's Fix History or Fix Assistant files.
+
+### Changes
+- VibeStudioViewModel.kt:
+  - Added authenticatedUserIdOrNull, which rejects missing, empty, or whitespace-only identities.
+  - Removed the "anonymous" and "local_user" fallbacks from workspace selection/model lookup, workspace creation and generation, agent chat execution, plan execution, app requirement analysis/build, and GitHub push/pull/PR operations. Each operation now stops before the repository call and records an explicit sign-in error when no authenticated ID exists.
+  - Replaced separate nested account collectors with one flatMapLatest account-scoped workspace/team stream. Account changes and sign-out clear the prior account's workspace/team UI state and cancel the previous account's combined stream.
+- VibeStudioScreen.kt: added a dismissible Vibe-styled error/status panel so authentication failures and other ViewModel errors are visible in the workspace selector and editor.
+- CrashDetailViewModel.kt: removed the "user_default" investigation identity. Team investigation now derives the ID from AuthRepository, fails closed when authentication or the team orchestrator is unavailable, and rethrows coroutine cancellation instead of treating it as an ordinary failure.
+- CrashDetailScreen.kt: replaced the plain error line with an accessible error-status panel.
+- Added app/src/test/java/com/example/VibeStudioIdentityGuardTest.kt with three cases: missing user, blank/whitespace ID, and preservation of a valid authenticated ID.
+
+### Commits
+- Vibe Studio identity guard: 095e1e76589f8c7dc4dbdef847a8c72a7b700c71
+- Vibe Studio error panel: 4a41b3a5d9bdba5c0aff22f9528a9d82d8e152d5
+- Identity guard regression tests: e8a1323d2ee7526c565a706b5148b3b14f337484
+- Account-scoped stream synchronization: 512c0e0ec682290604e31309caa927f7d0d1dd07
+- Crash Detail authenticated investigation guard: 373b91f1b6286064b0fcb4e7d047604dd1cc183d
+- Crash investigation prompt newline correction: 8c1b1fadad7580473ba2506b0772f65e9a3f3f44
+- Crash Detail error panel: 0d58dabdb9dd69010ec786b4b9369f2966b17cde
+
+### Verification and limitations
+- Re-fetched the final ViewModel, screen, and test sources from main. Source checks confirmed: no "anonymous" / "local_user" literals remain in VibeStudioViewModel.kt; no "user_default" remains in CrashDetailViewModel.kt; the nine protected Vibe Studio operations call the authenticated-ID guard; the account-scoped stream uses flatMapLatest + combine; both screens expose the error state; and all three identity test cases are present.
+- The changed-file comparison from the pre-batch task-register commit shows five source/test paths changed in this slice (two ViewModels, two screens, one test file).
+- Ran an isolated kotlinc microcheck with minimal model/JUnit stubs: 3 identity-guard test methods passed. This checks the pure ID-validation helper and test contract only; it is not the project's Gradle/JUnit test task or an Android compilation.
+- The available runtime has kotlinc and Java but no Gradle executable or Android SDK. No Gradle unit tests, app compilation, lint, APK build, emulator/device run, screenshot inspection, or rendered RTL/LTR review was executed.
+- GitHub combined-status queries returned empty status arrays for the source commits. The available commit-workflow-run wrapper only exposes PR-triggered runs and returned no push runs for the latest task-register commit. The last documented Android CI/CD, APK and Code Quality runs failed before exposing job steps/logs; no successful CI evidence is available for this batch.
+
+### Remaining
+- The Priority 0 identity prerequisite remains open. SeedData.kt still contains developer-owned demo fixtures tied to usr_dev_master; do not silently reassign or delete these records until production/demo seeding behavior is reviewed. The repository-wide fallback-identity audit and all other cloud authorization tests are not complete.
+- VibeStudio and CrashDetail remain open under the screen design gate until Gradle tests/build, backend authorization behavior, rendered device review, RTL/LTR, compact layout and accessibility checks are evidenced.
+- No Supabase runtime connectivity or production RLS behavior is inferred from these source changes.
