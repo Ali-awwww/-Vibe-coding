@@ -1,6 +1,11 @@
 package com.example.data.repository
 
 import com.example.data.remote.supabase.SupabaseAuthApi
+import com.example.data.remote.supabase.SupabaseAuthUser
+import com.example.data.remote.supabase.SupabaseRecoveryRequest
+import com.example.data.remote.supabase.SupabaseUpdateUserRequest
+import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
+import com.example.data.remote.supabase.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
 import com.example.data.remote.supabase.SupabaseAuthResponse
 import com.example.data.remote.supabase.SupabasePasswordGrantRequest
 import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
@@ -10,6 +15,7 @@ import com.example.data.remote.supabase.SupabaseStoredSession
 import com.example.data.remote.supabase.SupabaseUserMetadata
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
+import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.domain.repository.EmailConfirmationRequiredException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -145,12 +151,123 @@ class AuthRepositoryImpl(
         }
     }
 
-    override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =
-        Result.failure(
-            UnsupportedOperationException(
-                "استعادة كلمة المرور لم تُفعّل بعد؛ يجب إكمال التحقق من رابط البريد وتدفق تعيين كلمة المرور الجديدة أولاً."
-            )
+    override suspend fun requestPasswordRecovery(email: String): Result<Unit> = authResult {
+        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        require(email.isNotBlank()) { "أدخل البريد الإلكتروني المرتبط بحسابك." }
+        val response = api.requestPasswordRecovery(
+            publishableKey = publishableKey,
+            redirectTo = SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI,
+            request = SupabaseRecoveryRequest(email = email.trim())
         )
+        if (!response.isSuccessful) {
+            throw IllegalStateException(
+                response.message().takeIf(String::isNotBlank)
+                    ?: "تعذر إرسال طلب استعادة كلمة المرور من Supabase."
+            )
+        }
+    }
+
+    override suspend fun completePasswordRecovery(
+        credentials: PasswordRecoveryCredentials,
+        newPassword: String
+    ): Result<UserAccount> = authResult {
+        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        require(newPassword.length >= 8) { "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل." }
+
+        sessionMutex.withLock {
+            val requestGeneration = synchronized(sessionStateLock) { sessionGeneration }
+            val verifiedSession = credentials.tokenHash?.takeIf(String::isNotBlank)?.let { tokenHash ->
+                val verification = api.verifyEmailOtp(
+                    publishableKey = publishableKey,
+                    request = SupabaseVerifyOtpRequest(type = "recovery", tokenHash = tokenHash)
+                )
+                requireSuccessfulBody(
+                    verification.isSuccessful,
+                    verification.body(),
+                    verification.message()
+                ).toStoredSession()
+                    ?: throw IllegalStateException("لم يُرجع رابط الاستعادة جلسة تحقق صالحة.")
+            }
+
+            val accessToken = verifiedSession?.accessToken
+                ?: credentials.accessToken?.takeIf(String::isNotBlank)
+                ?: throw IllegalArgumentException("رابط الاستعادة لا يحتوي بيانات تحقق صالحة.")
+            val refreshToken = verifiedSession?.refreshToken
+                ?: credentials.refreshToken?.takeIf(String::isNotBlank)
+                ?: throw IllegalArgumentException("رابط الاستعادة لا يحتوي رمز تحديث صالحًا.")
+            val expiresAt = verifiedSession?.expiresAtEpochSeconds
+                ?: credentials.expiresAtEpochSeconds
+                ?: throw IllegalArgumentException("انتهت صلاحية رابط الاستعادة.")
+            require(expiresAt > nowEpochSeconds()) { "انتهت صلاحية رابط الاستعادة. اطلب رابطًا جديدًا." }
+
+            val update = api.updatePassword(
+                publishableKey = publishableKey,
+                bearerToken = "Bearer $accessToken",
+                request = SupabaseUpdateUserRequest(password = newPassword)
+            )
+            if (!update.isSuccessful) {
+                throw IllegalStateException(
+                    update.message().takeIf(String::isNotBlank)
+                        ?: "رفض Supabase تحديث كلمة المرور. قد يكون رابط الاستعادة منتهيًا."
+                )
+            }
+            val updatedUser = update.body()
+                ?: throw IllegalStateException("لم يُرجع Supabase بيانات الحساب بعد تحديث كلمة المرور.")
+
+            val updatedSession = SupabaseStoredSession(
+                accessToken = accessToken,
+                refreshToken = refreshToken,
+                expiresAtEpochSeconds = expiresAt,
+                user = updatedUser
+            )
+            synchronized(sessionStateLock) {
+                check(sessionGeneration == requestGeneration) {
+                    "تم إلغاء استعادة كلمة المرور بسبب تغيير حالة الجلسة."
+                }
+                sessionStore.write(updatedSession)
+                updatedUser.toAccount().also { _currentUser.value = it }
+            }
+        }
+    }
+
+    override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> = authResult {
+        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        require(newPassword.length >= 8) { "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل." }
+        refreshStoredSessionIfNeeded()
+
+        sessionMutex.withLock {
+            val snapshot = synchronized(sessionStateLock) {
+                sessionGeneration to sessionStore.read()
+            }
+            val generation = snapshot.first
+            val session = snapshot.second
+                ?: throw IllegalStateException("انتهت الجلسة. سجّل الدخول مجددًا قبل تغيير كلمة المرور.")
+            require(session.user.email.equals(email.trim(), ignoreCase = true)) {
+                "البريد الإلكتروني لا يطابق الحساب الحالي."
+            }
+
+            val response = api.updatePassword(
+                publishableKey = publishableKey,
+                bearerToken = "Bearer ${session.accessToken}",
+                request = SupabaseUpdateUserRequest(password = newPassword)
+            )
+            if (!response.isSuccessful) {
+                throw IllegalStateException(
+                    response.message().takeIf(String::isNotBlank)
+                        ?: "تعذر تحديث كلمة المرور."
+                )
+            }
+            val updatedUser = response.body()
+                ?: throw IllegalStateException("لم يُرجع Supabase بيانات الحساب بعد تحديث كلمة المرور.")
+            synchronized(sessionStateLock) {
+                check(sessionGeneration == generation) {
+                    "تم إلغاء تغيير كلمة المرور بسبب تسجيل الخروج."
+                }
+                sessionStore.write(session.copy(user = updatedUser))
+                _currentUser.value = updatedUser.toAccount()
+            }
+        }
+    }
 
     override suspend fun signInWithGoogle(idToken: String): Result<Unit> =
         Result.failure(
