@@ -1014,6 +1014,47 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - No Supabase runtime connectivity or production RLS behavior is inferred from these source changes.
 
 
+## 2026-11-11 — Supabase password recovery flow (source + regression tests; project/device verification pending)
+
+### Selection and scope
+- Re-read the latest task register, recent main commits and repository instruction candidates before editing. The latest preceding implementation was Vibe Studio workspace-collector lifecycle hardening; this batch selected the still-open Priority 0 Identity and account recovery gap and did not edit the Vibe Studio files.
+- Checked `AGENTS.md` / `agents.md` at the repository root, `.github/`, `docs/` and `app/`; none were present.
+- The existing Login recovery mode was deliberately disabled, while SupabaseAuthApi already exposed `/recover`, `/verify` and `/user` endpoints. The repository contract did not orchestrate a verified recovery cycle.
+
+### Changes
+- `AuthRepository.kt`: introduced an explicit `PasswordRecoveryCredentials` value and separate request/completion operations. Default unsupported implementations preserve compatibility for existing test fakes and alternate repositories.
+- `AuthRepositoryImpl.kt`:
+  - `requestPasswordRecovery(email)` calls Supabase Auth `/recover` with the app redirect URI and does not create a local session.
+  - `completePasswordRecovery(...)` exchanges a `token_hash` through `/verify` when present, or accepts the already verified callback access/refresh-token pair with an unexpired expiry. It calls `/user` to set the new password and only then persists the resulting encrypted session and publishes the user.
+  - The existing Settings password-change operation now uses the current authenticated session, checks the email matches that session and rejects expired credentials before calling Supabase.
+  - Session writes remain guarded by the shared mutex/generation checks; cancellation continues to propagate.
+- Added `com.example.auth.AuthRedirects.kt` as the shared redirect contract so presentation and data layers do not depend on one another for the URI constant.
+- Added `PasswordRecoveryLinkParser.kt`: accepts only the exact app scheme/host/path and `type=recovery`; supports a `token_hash` query or a verified access/refresh pair in the URI fragment; rejects missing or expired credentials without including token values in error messages.
+- `MainActivity.kt`, `AndroidManifest.xml` and `AppNavigation.kt`: register the custom recovery callback, handle both cold-start and `onNewIntent` delivery, route the user to Login, and clear the consumed callback from the Activity intent to prevent replay after recreation.
+- `MainViewModel.kt` and `LoginScreen.kt`: add the email-only recovery request and verified new-password step with eight-character minimum and confirmation validation. The success response is generic to avoid account enumeration. The Login status rail no longer implies that a live auth connection has been verified.
+- Tests: added three parser cases, four repository cases (including email/session binding for Settings password changes), and updated Login form-validation coverage for the now-enabled recovery and new-password modes.
+
+### Commits
+- Domain/recovery contract and shared redirect/parser: `cd2e50e8596f4d3e543317147ba6b422058d5d41`, `d9e0927ae14137b68b5646ef126985454f1be28a`, `005b80e9ff798aefcc5a9b6f501bde5062688c2e`, `60b687aca584e7debe3f5b1f6e9929febba5cf67`, `4d2466d71bceea29c4d72ade0ba5fe924d26e645`, `422b6b66b23b86bd15e34be9c62d6322d3e94ffe`, `a3cdcd6c4852d44008c71f7838d99b4b3b4c8884`.
+- Repository/session handling: `eb1aa1c5ebf2de3807bdf072c2df12a543db64fb`, `7e1713cda09b18e4ea2ad51e63ba2cd1ee9462cb`, `10bbfe40fdc050ac1f380ffb88a5a029f65bf3ef`.
+- ViewModel, Login and callback wiring: `efaade5b23a96a3f850ad5710ece337c9a9d60d0`, `8f31325c774fde169439f323f073ff125b2b34e2`, `22ea2399d1b59e53e20c243cd32c0d3cfed43df8`, `949bdbf78ee0ad2c76be407e698412911816a3a4`, `21c367f8d1221436eb8591b1cba7720876fe3014`, `2126154186fe450badb371d204e4903f37f222fc`, `e63e441de1eb02dc8b076029272a6e8cab792fff`, `17716dd5a913c8812320255370cdb7c966875b15`.
+- Regression tests: `350c82d9139602071b86ac8969ba74bbb445a2b3`, `d7e8d14a70ddfde43b8a2670a9a1a241004ffb00`, `6bc00f20de6ec95883533be8aea96e5c06b4556d`, `5167b9860f0c3334385ef0a647ab1611a86258fd`, `0bfa2f38d21259ce064290e52822c365fb03d09a`, `9acfab00576e6f20fd8045d7456317367a184c70`.
+
+### Verification and limitations
+- Re-fetched the final source, manifest and test files from `main`. The compare from pre-batch `830da2d4` to code head `9acfab00` shows 24 commits and 12 changed paths in this slice; no Vibe Studio workspace files were changed.
+- An isolated `kotlinc` harness compiled the recovery-link parser logic with minimal domain/redirect constants and passed four assertions: token-hash query, encoded session fragment, wrong scheme and expired session. This is not the repository's Gradle/JUnit test task.
+- The local runtime has Java and `kotlinc`, but no Gradle executable or Android SDK (`ANDROID_HOME` absent). No Gradle unit tests, Android/Compose compilation, lint, APK build, emulator/device run, screenshot, RTL/LTR rendered review or live Supabase recovery request was executed.
+- GitHub combined-status lookup for code head `9acfab00576e6f20fd8045d7456317367a184c70` returned no status entries. The available commit-workflow-run lookup returned no runs and is limited to PR-triggered runs; this does not establish whether push workflows ran. No successful CI evidence is claimed.
+- Supabase project Auth Redirect URLs and the hosted recovery email template were not inspected or changed. Before live use, add exactly `com.aistudio.crashintelligence.vyfrip://auth/recovery` to the project's Authentication redirect allow-list and verify that the recovery email preserves Supabase's `ConfirmationURL` / `redirect_to` behavior. The project-level setting is a required external prerequisite, not something this source change proves.
+- Login remains [ ] under the design gate. This is a functional recovery-flow implementation and targeted Login interaction refinement, not visual sign-off or completion of the full Identity slice.
+
+### Remaining
+- Configure and verify the Supabase redirect allow-list and recovery email template; then send a real recovery email to a test account and verify the complete callback/update/session flow on Android.
+- Run the new and existing Robolectric/JUnit tests, Gradle compilation, lint and APK build in a functioning Android runner.
+- Render and review Login on a device/emulator in Arabic RTL and English LTR, including compact screens, keyboard/IME and accessibility.
+- Complete email confirmation, session restoration/refresh rotation, sign-out and account-switch runtime tests. Keep the shared Identity prerequisite and Login screen open until all acceptance evidence exists.
+
+
 ## 2026-11-10 — Vibe Studio workspace collector lifecycle hardening (source + regression tests; Android execution blocked)
 
 ### Independent review of the preceding agent batch
