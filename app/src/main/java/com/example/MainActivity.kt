@@ -26,7 +26,10 @@ class MainActivity : ComponentActivity() {
         Surface(modifier = Modifier.fillMaxSize()) {
           AppNavigation(
             passwordRecoveryLink = passwordRecoveryLink,
-            onPasswordRecoveryLinkConsumed = { passwordRecoveryLink.value = null }
+            onPasswordRecoveryLinkConsumed = {
+              passwordRecoveryLink.value = null
+              setIntent(Intent(intent).apply { data = null })
+            }
           )
         }
       }
