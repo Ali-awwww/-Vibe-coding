@@ -1,8 +1,8 @@
 package com.example.presentation.auth
 
 import com.example.domain.repository.PasswordRecoveryCredentials
-import com.example.data.remote.supabase.SUPABASE_AUTH_REDIRECT_SCHEME
-import com.example.data.remote.supabase.SUPABASE_AUTH_REDIRECT_HOST
+import com.example.auth.SUPABASE_AUTH_REDIRECT_SCHEME
+import com.example.auth.SUPABASE_AUTH_REDIRECT_HOST
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
