@@ -162,7 +162,7 @@ class MainViewModel(
             } else {
                 _actionState.value = AuthActionState(
                     isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.message ?: "فشلت استعادة كلمة المرور"
+                    errorMessage = result.exceptionOrNull()?.message ?: "تعذر تغيير كلمة المرور"
                 )
                 onComplete(false)
             }
