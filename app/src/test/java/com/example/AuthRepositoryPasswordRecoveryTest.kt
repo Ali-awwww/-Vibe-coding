@@ -9,6 +9,7 @@ import com.example.data.remote.supabase.SupabasePasswordGrantRequest
 import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
 import com.example.data.remote.supabase.SupabaseSessionStore
+import com.example.data.remote.supabase.SupabaseStoredSession
 import com.example.data.remote.supabase.SupabaseSignUpRequest
 import com.example.data.remote.supabase.SupabaseUpdateUserRequest
 import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
@@ -160,6 +161,44 @@ class AuthRepositoryPasswordRecoveryTest {
         assertTrue(!updateCalled)
         assertNull(sessionStore.read())
         assertNull(repository.getCurrentUserSync())
+    }
+
+    @Test
+    fun authenticatedPasswordChangeRequiresTheMatchingUnexpiredSession() = runTest {
+        sessionStore.write(
+            SupabaseStoredSession(
+                accessToken = "current-access",
+                refreshToken = "current-refresh",
+                expiresAtEpochSeconds = System.currentTimeMillis() / 1000L + 3_600L,
+                user = SupabaseAuthUser(id = "owner-user", email = "owner@example.com")
+            )
+        )
+        var updateCalls = 0
+        var bearerUsed: String? = null
+        val api = object : SupabaseAuthApi by unusedApi() {
+            override suspend fun updatePassword(
+                publishableKey: String,
+                bearerToken: String,
+                request: SupabaseUpdateUserRequest
+            ): Response<SupabaseAuthUser> {
+                updateCalls += 1
+                bearerUsed = bearerToken
+                return Response.success(
+                    SupabaseAuthUser(id = "owner-user", email = "owner@example.com")
+                )
+            }
+        }
+        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
+
+        val mismatchedEmail = repository.resetPassword("other@example.com", "new-secure-password")
+        assertTrue(mismatchedEmail.isFailure)
+        assertEquals(0, updateCalls)
+
+        val validChange = repository.resetPassword("owner@example.com", "new-secure-password")
+        assertTrue(validChange.isSuccess)
+        assertEquals(1, updateCalls)
+        assertEquals("Bearer current-access", bearerUsed)
+        assertEquals("owner-user", sessionStore.read()?.user?.id)
     }
 
     private fun unusedApi(): SupabaseAuthApi = object : SupabaseAuthApi {
