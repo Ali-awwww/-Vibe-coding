@@ -106,7 +106,7 @@ class LoginFormValidationTest {
     }
 
     @Test
-    fun recoveryModeReturnsAnExplicitUnavailableError() {
+    fun recoveryRequestRequiresOnlyAValidEmail() {
         val error = validateAuthForm(
             mode = AuthMode.RECOVER_PASSWORD,
             email = "dev@example.com",
@@ -115,10 +115,45 @@ class LoginFormValidationTest {
             confirmPassword = ""
         )
 
-        assertEquals(AuthFormField.FORM, error?.field)
-        assertEquals(
-            "استعادة كلمة المرور غير مفعّلة حتى اكتمال التحقق من رابط البريد.",
-            error?.message
+        assertNull(error)
+    }
+
+    @Test
+    fun newPasswordModeRejectsPasswordsShorterThanEightCharacters() {
+        val error = validateAuthForm(
+            mode = AuthMode.SET_NEW_PASSWORD,
+            email = "",
+            password = "short",
+            displayName = "",
+            confirmPassword = "short"
         )
+
+        assertEquals(AuthFormField.PASSWORD, error?.field)
+    }
+
+    @Test
+    fun newPasswordModeRequiresMatchingConfirmation() {
+        val error = validateAuthForm(
+            mode = AuthMode.SET_NEW_PASSWORD,
+            email = "",
+            password = "strong-password",
+            displayName = "",
+            confirmPassword = "different-password"
+        )
+
+        assertEquals(AuthFormField.CONFIRM_PASSWORD, error?.field)
+    }
+
+    @Test
+    fun validNewPasswordModeDoesNotRequireAnEmailField() {
+        val error = validateAuthForm(
+            mode = AuthMode.SET_NEW_PASSWORD,
+            email = "",
+            password = "strong-password",
+            displayName = "",
+            confirmPassword = "strong-password"
+        )
+
+        assertNull(error)
     }
 }
