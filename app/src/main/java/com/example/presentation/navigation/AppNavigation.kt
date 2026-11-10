@@ -1,6 +1,7 @@
 package com.example.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -9,12 +10,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import kotlinx.coroutines.flow.StateFlow
 import com.example.di.DependencyProvider
 import com.example.presentation.ui.screens.*
 import com.example.presentation.viewmodel.*
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    passwordRecoveryLink: StateFlow<String?>,
+    onPasswordRecoveryLinkConsumed: () -> Unit
+) {
     val context = LocalContext.current
     val mainViewModel: MainViewModel = viewModel {
         MainViewModel(DependencyProvider.provideAuthRepository(context))
@@ -22,6 +27,17 @@ fun AppNavigation() {
     
     val navController = rememberNavController()
     val currentUser by mainViewModel.currentUser.collectAsState()
+    val recoveryLink by passwordRecoveryLink.collectAsState()
+
+    LaunchedEffect(recoveryLink) {
+        val link = recoveryLink ?: return@LaunchedEffect
+        mainViewModel.acceptPasswordRecoveryLink(link)
+        navController.navigate(Screen.Login) {
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
+        }
+        onPasswordRecoveryLinkConsumed()
+    }
 
     val startDestination = if (currentUser == null) Screen.Login else Screen.Dashboard
 
