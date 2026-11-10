@@ -12,7 +12,7 @@ import com.example.data.remote.supabase.SupabaseSessionStore
 import com.example.data.remote.supabase.SupabaseSignUpRequest
 import com.example.data.remote.supabase.SupabaseUpdateUserRequest
 import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
-import com.example.data.remote.supabase.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
+import com.example.auth.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.domain.repository.PasswordRecoveryCredentials
 import kotlinx.coroutines.test.runTest
