@@ -44,7 +44,7 @@ private val CyberViolet = VibeDesignTokens.Color.Violet
 private val MutedText = VibeDesignTokens.Color.TextMuted
 
 enum class AuthMode {
-    SIGN_IN, SIGN_UP, RECOVER_PASSWORD
+    SIGN_IN, SIGN_UP, RECOVER_PASSWORD, SET_NEW_PASSWORD
 }
 
 internal enum class AuthFormField {
@@ -64,10 +64,22 @@ internal fun validateAuthForm(
     confirmPassword: String
 ): AuthFormValidationError? {
     if (mode == AuthMode.RECOVER_PASSWORD) {
-        return AuthFormValidationError(
-            AuthFormField.FORM,
-            "استعادة كلمة المرور غير مفعّلة حتى اكتمال التحقق من رابط البريد."
-        )
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+            return AuthFormValidationError(AuthFormField.EMAIL, "أدخل بريدًا إلكترونيًا صحيحًا.")
+        }
+        return null
+    }
+    if (mode == AuthMode.SET_NEW_PASSWORD) {
+        if (password.length < 8) {
+            return AuthFormValidationError(
+                AuthFormField.PASSWORD,
+                "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل."
+            )
+        }
+        if (password != confirmPassword) {
+            return AuthFormValidationError(AuthFormField.CONFIRM_PASSWORD, "كلمتا المرور غير متطابقتين.")
+        }
+        return null
     }
     if (mode == AuthMode.SIGN_UP && displayName.isBlank()) {
         return AuthFormValidationError(AuthFormField.DISPLAY_NAME, "أدخل اسم المطور.")
@@ -96,6 +108,7 @@ fun LoginScreen(
     onAuthSuccess: () -> Unit
 ) {
     val actionState by viewModel.actionState.collectAsState()
+    val passwordRecoveryState by viewModel.passwordRecoveryState.collectAsState()
     var mode by remember { mutableStateOf(AuthMode.SIGN_IN) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -112,9 +125,18 @@ fun LoginScreen(
     val passwordFocusRequester = remember { FocusRequester() }
     val confirmPasswordFocusRequester = remember { FocusRequester() }
 
-    // Keep the primary action tappable so the form can explain validation failures.
-    // Recovery stays disabled until its verified deep-link flow is implemented.
-    val canSubmit = !actionState.isLoading && mode != AuthMode.RECOVER_PASSWORD
+    LaunchedEffect(passwordRecoveryState.isReadyForNewPassword) {
+        if (passwordRecoveryState.isReadyForNewPassword) {
+            mode = AuthMode.SET_NEW_PASSWORD
+            email = ""
+            password = ""
+            confirmPassword = ""
+            validationError = null
+            viewModel.clearMessages()
+        }
+    }
+
+    val canSubmit = !actionState.isLoading
 
     val emailError = validationError?.takeIf { it.field == AuthFormField.EMAIL }?.message
     val passwordError = validationError?.takeIf { it.field == AuthFormField.PASSWORD }?.message
@@ -136,7 +158,10 @@ fun LoginScreen(
                     ) { success ->
                         if (success) onAuthSuccess()
                     }
-                    AuthMode.RECOVER_PASSWORD -> Unit
+                    AuthMode.RECOVER_PASSWORD -> viewModel.requestPasswordRecovery(email.trim())
+                    AuthMode.SET_NEW_PASSWORD -> viewModel.completePasswordRecovery(password) { success ->
+                        if (success) onAuthSuccess()
+                    }
                 }
             } else {
                 when (error.field) {
@@ -233,7 +258,7 @@ fun LoginScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(VibeDesignTokens.Color.Success))
-                        Text("AUTH SYSTEM ONLINE", color = CyberCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text("SECURE AUTH FLOW", color = CyberCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
                     Text("IDENTITY / 01", color = MutedText, style = MaterialTheme.typography.labelSmall)
                 }
@@ -267,6 +292,7 @@ fun LoginScreen(
                                     AuthMode.SIGN_IN -> "تسجيل دخول المطور"
                                     AuthMode.SIGN_UP -> "إنشاء حساب جديد"
                                     AuthMode.RECOVER_PASSWORD -> "استعادة الوصول"
+                                    AuthMode.SET_NEW_PASSWORD -> "تعيين كلمة مرور جديدة"
                                 },
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
@@ -367,7 +393,7 @@ fun LoginScreen(
                         )
                     }
 
-                    CyberTextField(
+                    if (mode != AuthMode.SET_NEW_PASSWORD) CyberTextField(
                         value = email,
                         onValueChange = {
                             email = it
@@ -388,7 +414,7 @@ fun LoginScreen(
 
                     if (mode == AuthMode.RECOVER_PASSWORD) {
                         Text(
-                            text = "استعادة كلمة المرور غير مفعّلة بعد. لن نطلب كلمة مرور جديدة قبل إتمام التحقق من ملكية البريد الإلكتروني وربط رابط الاستعادة بالتطبيق.",
+                            text = "أدخل بريدك الإلكتروني. إذا كان مرتبطًا بحساب، فسيصلك رابط آمن لفتح شاشة تعيين كلمة مرور جديدة.",
                             color = MutedText,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -403,7 +429,7 @@ fun LoginScreen(
                             enabled = !actionState.isLoading,
                             isError = passwordError != null,
                             supportingText = passwordError?.let { message -> { Text(message) } },
-                            label = { Text("كلمة المرور") },
+                            label = { Text(if (mode == AuthMode.SET_NEW_PASSWORD) "كلمة المرور الجديدة" else "كلمة المرور") },
                             leadingIcon = { Icon(Icons.Default.Lock, null, tint = CyberCyan) },
                             trailingIcon = {
                                 IconButton(
@@ -420,7 +446,7 @@ fun LoginScreen(
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Password,
-                                imeAction = if (mode == AuthMode.SIGN_UP) ImeAction.Next else ImeAction.Done
+                                imeAction = if (mode == AuthMode.SIGN_UP || mode == AuthMode.SET_NEW_PASSWORD) ImeAction.Next else ImeAction.Done
                             ),
                             keyboardActions = KeyboardActions(
                                 onNext = { confirmPasswordFocusRequester.requestFocus() },
@@ -435,7 +461,7 @@ fun LoginScreen(
                         )
                     }
 
-                    if (mode == AuthMode.SIGN_UP) {
+                    if (mode == AuthMode.SIGN_UP || mode == AuthMode.SET_NEW_PASSWORD) {
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = {
@@ -446,7 +472,7 @@ fun LoginScreen(
                             enabled = !actionState.isLoading,
                             isError = confirmPasswordError != null,
                             supportingText = confirmPasswordError?.let { message -> { Text(message) } },
-                            label = { Text("تأكيد كلمة المرور") },
+                            label = { Text("تأكيد كلمة المرور الجديدة".takeIf { mode == AuthMode.SET_NEW_PASSWORD } ?: "تأكيد كلمة المرور") },
                             leadingIcon = { Icon(Icons.Default.LockReset, null, tint = CyberCyan) },
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
@@ -491,7 +517,8 @@ fun LoginScreen(
                                 when (mode) {
                                     AuthMode.SIGN_IN -> "دخول إلى مساحة العمل"
                                     AuthMode.SIGN_UP -> "إنشاء الحساب"
-                                    AuthMode.RECOVER_PASSWORD -> "استعادة كلمة المرور غير متاحة حاليًا"
+                                    AuthMode.RECOVER_PASSWORD -> "إرسال رابط الاستعادة"
+                                    AuthMode.SET_NEW_PASSWORD -> "حفظ كلمة المرور الجديدة"
                                 },
                                 fontWeight = FontWeight.Bold
                             )
