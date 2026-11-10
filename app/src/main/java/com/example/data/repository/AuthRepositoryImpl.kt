@@ -1,7 +1,6 @@
 package com.example.data.repository
 
 import com.example.data.remote.supabase.SupabaseAuthApi
-import com.example.data.remote.supabase.SupabaseAuthUser
 import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseUpdateUserRequest
 import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
@@ -242,6 +241,9 @@ class AuthRepositoryImpl(
             val generation = snapshot.first
             val session = snapshot.second
                 ?: throw IllegalStateException("انتهت الجلسة. سجّل الدخول مجددًا قبل تغيير كلمة المرور.")
+            require(session.expiresAtEpochSeconds > nowEpochSeconds() + 60L) {
+                "انتهت الجلسة. سجّل الدخول مجددًا قبل تغيير كلمة المرور."
+            }
             require(session.user.email.equals(email.trim(), ignoreCase = true)) {
                 "البريد الإلكتروني لا يطابق الحساب الحالي."
             }
