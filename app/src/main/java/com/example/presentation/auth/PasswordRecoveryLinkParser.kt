@@ -1,6 +1,8 @@
 package com.example.presentation.auth
 
 import com.example.domain.repository.PasswordRecoveryCredentials
+import com.example.data.remote.supabase.SUPABASE_AUTH_REDIRECT_SCHEME
+import com.example.data.remote.supabase.SUPABASE_AUTH_REDIRECT_HOST
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -25,8 +27,8 @@ internal fun parsePasswordRecoveryLink(
         return PasswordRecoveryLinkResult.Rejected("رابط الاستعادة غير صالح أو منتهي الصلاحية.")
     }
 
-    if (!uri.scheme.equals(PASSWORD_RECOVERY_SCHEME, ignoreCase = true) ||
-        !uri.host.equals(PASSWORD_RECOVERY_HOST, ignoreCase = true) ||
+    if (!uri.scheme.equals(SUPABASE_AUTH_REDIRECT_SCHEME, ignoreCase = true) ||
+        !uri.host.equals(SUPABASE_AUTH_REDIRECT_HOST, ignoreCase = true) ||
         uri.path != PASSWORD_RECOVERY_PATH
     ) {
         return PasswordRecoveryLinkResult.Rejected("وجهة رابط الاستعادة لا تطابق التطبيق.")
@@ -85,8 +87,4 @@ private fun decodeParameter(value: String): String = try {
     ""
 }
 
-internal const val PASSWORD_RECOVERY_SCHEME = "com.aistudio.crashintelligence.vyfrip"
-internal const val PASSWORD_RECOVERY_HOST = "auth"
-internal const val PASSWORD_RECOVERY_PATH = "/recovery"
-internal const val PASSWORD_RECOVERY_REDIRECT_URI =
-    "$PASSWORD_RECOVERY_SCHEME://$PASSWORD_RECOVERY_HOST$PASSWORD_RECOVERY_PATH"
+private const val PASSWORD_RECOVERY_PATH = "/recovery"
