@@ -4,7 +4,7 @@ import com.example.data.remote.supabase.SupabaseAuthApi
 import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseUpdateUserRequest
 import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
-import com.example.data.remote.supabase.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
+import com.example.auth.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
 import com.example.data.remote.supabase.SupabaseAuthResponse
 import com.example.data.remote.supabase.SupabasePasswordGrantRequest
 import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
