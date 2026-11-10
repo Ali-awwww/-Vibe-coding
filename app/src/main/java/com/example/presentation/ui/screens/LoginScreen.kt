@@ -257,7 +257,7 @@ fun LoginScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(VibeDesignTokens.Color.Success))
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(CyberCyan))
                         Text("SECURE AUTH FLOW", color = CyberCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
                     Text("IDENTITY / 01", color = MutedText, style = MaterialTheme.typography.labelSmall)
