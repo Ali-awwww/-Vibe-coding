@@ -5,12 +5,19 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
+import com.example.domain.repository.PasswordRecoveryCredentials
+import com.example.presentation.auth.PasswordRecoveryLinkResult
+import com.example.presentation.auth.parsePasswordRecoveryLink
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+data class PasswordRecoveryUiState(
+    val isReadyForNewPassword: Boolean = false
+)
 
 data class AuthActionState(
     val isLoading: Boolean = false,
@@ -31,6 +38,69 @@ class MainViewModel(
 
     private val _actionState = MutableStateFlow(AuthActionState())
     val actionState: StateFlow<AuthActionState> = _actionState.asStateFlow()
+
+    private val _passwordRecoveryState = MutableStateFlow(PasswordRecoveryUiState())
+    val passwordRecoveryState: StateFlow<PasswordRecoveryUiState> = _passwordRecoveryState.asStateFlow()
+    private var pendingPasswordRecovery: PasswordRecoveryCredentials? = null
+
+    fun acceptPasswordRecoveryLink(rawLink: String) {
+        when (val parsed = parsePasswordRecoveryLink(rawLink)) {
+            is PasswordRecoveryLinkResult.Ready -> {
+                pendingPasswordRecovery = parsed.credentials
+                _passwordRecoveryState.value = PasswordRecoveryUiState(isReadyForNewPassword = true)
+                _actionState.value = AuthActionState()
+            }
+            is PasswordRecoveryLinkResult.Rejected -> {
+                pendingPasswordRecovery = null
+                _passwordRecoveryState.value = PasswordRecoveryUiState()
+                _actionState.value = AuthActionState(errorMessage = parsed.message)
+            }
+        }
+    }
+
+    fun requestPasswordRecovery(email: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            _actionState.value = AuthActionState(isLoading = true)
+            val result = authRepository.requestPasswordRecovery(email.trim())
+            if (result.isSuccess) {
+                _actionState.value = AuthActionState(
+                    successMessage = "إذا كان البريد مرتبطًا بحساب، فسيصلك رابط آمن لاستعادة كلمة المرور."
+                )
+                onComplete(true)
+            } else {
+                _actionState.value = AuthActionState(
+                    errorMessage = result.exceptionOrNull()?.message ?: "تعذر طلب استعادة كلمة المرور."
+                )
+                onComplete(false)
+            }
+        }
+    }
+
+    fun completePasswordRecovery(newPassword: String, onComplete: (Boolean) -> Unit = {}) {
+        val credentials = pendingPasswordRecovery
+        if (credentials == null) {
+            _actionState.value = AuthActionState(errorMessage = "رابط الاستعادة غير متاح. اطلب رابطًا جديدًا.")
+            onComplete(false)
+            return
+        }
+        viewModelScope.launch {
+            _actionState.value = AuthActionState(isLoading = true)
+            val result = authRepository.completePasswordRecovery(credentials, newPassword)
+            if (result.isSuccess) {
+                pendingPasswordRecovery = null
+                _passwordRecoveryState.value = PasswordRecoveryUiState()
+                _actionState.value = AuthActionState(
+                    successMessage = "تم تحديث كلمة المرور والتحقق من الحساب بنجاح."
+                )
+                onComplete(true)
+            } else {
+                _actionState.value = AuthActionState(
+                    errorMessage = result.exceptionOrNull()?.message ?: "تعذر تحديث كلمة المرور."
+                )
+                onComplete(false)
+            }
+        }
+    }
 
     fun signIn(email: String, password: String, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
@@ -87,7 +157,7 @@ class MainViewModel(
             _actionState.value = AuthActionState(isLoading = true)
             val result = authRepository.resetPassword(email, newPass)
             if (result.isSuccess) {
-                _actionState.value = AuthActionState(isLoading = false, successMessage = "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.")
+                _actionState.value = AuthActionState(isLoading = false, successMessage = "تم تحديث كلمة المرور للحساب الحالي.")
                 onComplete(true)
             } else {
                 _actionState.value = AuthActionState(
