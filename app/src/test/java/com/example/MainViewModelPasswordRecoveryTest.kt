@@ -1,0 +1,91 @@
+package com.example
+
+import com.example.domain.model.UserAccount
+import com.example.domain.repository.AuthRepository
+import com.example.domain.repository.PasswordRecoveryCredentials
+import com.example.presentation.viewmodel.MainViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class MainViewModelPasswordRecoveryTest {
+
+    @Test
+    fun cancellingPasswordSetupClearsOldCredentialsAndAllowsANewRecoveryLink() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val repository = RecordingAuthRepository()
+            val viewModel = MainViewModel(repository)
+
+            viewModel.acceptPasswordRecoveryLink(recoveryLink("first-one-time-hash"))
+            assertTrue(viewModel.passwordRecoveryState.value.isReadyForNewPassword)
+
+            viewModel.cancelPasswordRecovery()
+            assertFalse(viewModel.passwordRecoveryState.value.isReadyForNewPassword)
+
+            // A cancelled recovery must not submit the old one-time credential.
+            viewModel.completePasswordRecovery("new-secure-password")
+            assertNull(repository.lastCompletedCredentials)
+
+            // The false -> true transition must be observable for a subsequent link.
+            viewModel.acceptPasswordRecoveryLink(recoveryLink("second-one-time-hash"))
+            assertTrue(viewModel.passwordRecoveryState.value.isReadyForNewPassword)
+            viewModel.completePasswordRecovery("another-secure-password")
+            advanceUntilIdle()
+
+            assertEquals("second-one-time-hash", repository.lastCompletedCredentials?.tokenHash)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    private fun recoveryLink(tokenHash: String) =
+        "com.aistudio.crashintelligence.vyfrip://auth/recovery?type=recovery&token_hash=$tokenHash"
+
+    private class RecordingAuthRepository : AuthRepository {
+        override val currentUser: Flow<UserAccount?> = flowOf(null)
+        var lastCompletedCredentials: PasswordRecoveryCredentials? = null
+
+        override fun getCurrentUserSync(): UserAccount? = null
+
+        override suspend fun signUp(
+            email: String,
+            password: String,
+            displayName: String,
+            organization: String
+        ): Result<UserAccount> = Result.failure(UnsupportedOperationException())
+
+        override suspend fun signIn(email: String, password: String): Result<UserAccount> =
+            Result.failure(UnsupportedOperationException())
+
+        override suspend fun signOut() = Unit
+
+        override suspend fun requestPasswordRecovery(email: String): Result<Unit> = Result.success(Unit)
+
+        override suspend fun completePasswordRecovery(
+            credentials: PasswordRecoveryCredentials,
+            newPassword: String
+        ): Result<UserAccount> {
+            lastCompletedCredentials = credentials
+            return Result.failure(UnsupportedOperationException("Test capture only"))
+        }
+
+        override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+
+        override suspend fun signInWithGoogle(idToken: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+    }
+}
