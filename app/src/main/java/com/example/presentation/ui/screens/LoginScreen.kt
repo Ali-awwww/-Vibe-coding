@@ -554,6 +554,9 @@ fun LoginScreen(
                     } else {
                         TextButton(
                             onClick = {
+                                if (mode == AuthMode.SET_NEW_PASSWORD) {
+                                    viewModel.cancelPasswordRecovery()
+                                }
                                 mode = AuthMode.SIGN_IN
                                 confirmPassword = ""
                                 validationError = null
