@@ -58,6 +58,12 @@ class MainViewModel(
         }
     }
 
+    fun cancelPasswordRecovery() {
+        pendingPasswordRecovery = null
+        _passwordRecoveryState.value = PasswordRecoveryUiState()
+        _actionState.value = AuthActionState()
+    }
+
     fun requestPasswordRecovery(email: String, onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             _actionState.value = AuthActionState(isLoading = true)
