@@ -1086,3 +1086,41 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Test commit dba7e4ef21713560fa1b11563096dbefceb952e5: Android CI/CD run 42714631616, Code Quality run 42714631568, and APK run 42714631443 all concluded failure. Their jobs exposed empty step arrays; log downloads returned BlobNotFound.
 - This task-register commit 93e6c5a6a4aa5ed4b2bd23861ae3e3032912ef22: Android CI/CD run 42714785788, Code Quality run 42714785758, and APK run 42714785502 all concluded failure. Their jobs exposed empty step arrays; log downloads returned BlobNotFound.
 - These runs provide no evidence that a runner executed checkout, Gradle, compilation, tests, lint or APK packaging. Do not interpret the failure as a source compilation failure; the actual job steps/logs are unavailable.
+
+
+## 2026-11-11 — Password recovery cancellation and repeated-link state fix
+
+### Independent review of the preceding agent batch
+- Re-read the current task register and recent main history. The preceding password-recovery implementation spans 24 commits and 12 changed paths from baseline `830da2d4` to code head `9acfab00`; the final documentation commit was `fccb8aff`.
+- Re-fetched and inspected the current `AuthRepository.kt`, `AuthRepositoryImpl.kt`, `AuthRedirects.kt`, `PasswordRecoveryLinkParser.kt`, `MainActivity.kt`, `AndroidManifest.xml`, `AppNavigation.kt`, `MainViewModel.kt`, `LoginScreen.kt`, and the parser/repository/Login tests. Confirmed the app callback is restricted to the declared scheme/host/path, cold-start and `onNewIntent` delivery are handled, the consumed Activity data is cleared, and recovery credentials are passed to Supabase rather than treated as a local success.
+- Checked repository-root, `.github/`, `docs/`, `app/`, and relevant source/test instruction paths for `AGENTS.md` / `agents.md`; none were present.
+- No repository source changes from that preceding recovery batch were overwritten.
+
+### Confirmed defect
+- After accepting a recovery link, `MainViewModel` stored the one-time credentials and emitted `PasswordRecoveryUiState(isReadyForNewPassword = true)`.
+- The Login back action changed only its local Compose mode. It did not clear the pending credentials or reset the ViewModel state.
+- If the user later opened another recovery link, the ViewModel assigned the same `true` state. `MutableStateFlow` suppresses equal values, so the Login screen's `LaunchedEffect(passwordRecoveryState.isReadyForNewPassword)` did not run again. The second link could therefore leave the user in sign-in mode even though new credentials had arrived. The previous one-time credential also remained in memory after the user cancelled.
+
+### Changes
+- `MainViewModel.kt`: added `cancelPasswordRecovery()` to clear the pending one-time credential, reset the recovery state to false, and clear recovery messages.
+- `LoginScreen.kt`: the back action from `SET_NEW_PASSWORD` now invokes the cancellation method before returning to sign-in. This produces a false → true state transition for the next recovery link and discards the abandoned credential.
+- Added `MainViewModelPasswordRecoveryTest.kt`: verifies cancellation clears the old credential, a completion attempt after cancellation does not call the repository, and a second distinct recovery link is accepted and passed to the repository.
+
+### Commits
+- ViewModel cancellation state: `0e52fa07eba387c5870e326d238f833053433c99`
+- Login back-action wiring: `64359d63d7999e811d5aa1d95b9d726005d03783`
+- Regression test: `3560227c72c72d9f8b0a46e8f37e5e7d05137e95`
+
+### Verification and limitations
+- Re-fetched from `main` after the code/test writes: `MainViewModel.kt` blob `40be10c121ab36d6178e913837dff003dae925d4`; `LoginScreen.kt` blob `1e7450971ab6dcf88a5c2e091aad730d50e1ea7d`; regression test blob `d2b90314333ac4b4bb75dca86272c5d222ac8536`.
+- Compared `fccb8aff` to the test commit: exactly three changed paths (ViewModel, Login screen, new test). No files from the preceding agent's recovery implementation were changed.
+- Added one coroutine/StateFlow regression test covering the cancel → new-link sequence. It has **not** been executed with Gradle/JUnit. The available runtime has Java and `kotlinc`, but no Gradle executable, no Android SDK (`ANDROID_HOME` unset), and no local repository checkout. No app compilation, Robolectric/JUnit task, lint, APK build, emulator/device test or rendered RTL/LTR review is claimed.
+- Push workflows for the ViewModel commit `0e52fa07`: Android CI/CD `42913659001`, Code Quality `42913659125`, APK `42913658995`; for Login commit `64359d63`: Code Quality `42913672134`, Android CI/CD `42913673187`, APK `42913672246`; for test commit `3560227c`: Code Quality `42913724516`, Android CI/CD `42913724527`, APK `42913724643`. All concluded failure. The latest jobs expose empty `steps` arrays, runner ID 0 / no runner name, and log downloads return `BlobNotFound`; this is no evidence that Gradle or lint started and must not be described as a source compilation failure.
+- Re-ran the three preceding recovery-batch failed workflows (run IDs `42907697534`, `42907697277`, `42907697385`). The reruns were accepted but all ended in failure again with no usable step logs.
+- Supabase project `vibe-coding` remains `ACTIVE_HEALTHY`; Security Advisor returned zero lints. Performance Advisor reports informational unused-index findings only; no database or Auth configuration was changed. The available Supabase connector did not expose the Auth redirect allow-list or hosted recovery email-template settings, so the required redirect `com.aistudio.crashintelligence.vyfrip://auth/recovery` and email-template behavior remain externally unverified. No live recovery email or Android callback was tested.
+- Login remains open under the mandatory visual-design gate. This fixes recovery-state lifecycle behavior only; it is not a visual sign-off or completion of the Identity slice.
+
+### Remaining
+- Configure and verify the Supabase Auth redirect allow-list and recovery email template; then test a real recovery email and callback on Android.
+- Run the new ViewModel regression test plus the existing repository/parser/Login tests in a functioning Android runner.
+- Complete session restoration/refresh, email confirmation, sign-out/account-switch tests and Login's rendered RTL/LTR, compact-screen, IME and accessibility review.
