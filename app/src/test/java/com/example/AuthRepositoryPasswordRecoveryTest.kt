@@ -51,7 +51,7 @@ class AuthRepositoryPasswordRecoveryTest {
     fun recoveryRequestUsesTheRegisteredAppRedirectAndDoesNotCreateASession() = runTest {
         var requestedEmail: String? = null
         var redirectUri: String? = null
-        val api = object : unusedApi() {
+        val api = object : SupabaseAuthApi by unusedApi() {
             override suspend fun requestPasswordRecovery(
                 publishableKey: String,
                 redirectTo: String?,
@@ -79,7 +79,7 @@ class AuthRepositoryPasswordRecoveryTest {
         var verifiedTokenHash: String? = null
         var updateBearer: String? = null
         var updatedPassword: String? = null
-        val api = object : unusedApi() {
+        val api = object : SupabaseAuthApi by unusedApi() {
             override suspend fun verifyEmailOtp(
                 publishableKey: String,
                 request: SupabaseVerifyOtpRequest
@@ -135,7 +135,7 @@ class AuthRepositoryPasswordRecoveryTest {
     @Test
     fun expiredDirectRecoverySessionIsRejectedBeforePasswordUpdate() = runTest {
         var updateCalled = false
-        val api = object : unusedApi() {
+        val api = object : SupabaseAuthApi by unusedApi() {
             override suspend fun updatePassword(
                 publishableKey: String,
                 bearerToken: String,
