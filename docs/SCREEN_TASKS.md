@@ -1124,3 +1124,32 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Configure and verify the Supabase Auth redirect allow-list and recovery email template; then test a real recovery email and callback on Android.
 - Run the new ViewModel regression test plus the existing repository/parser/Login tests in a functioning Android runner.
 - Complete session restoration/refresh, email confirmation, sign-out/account-switch tests and Login's rendered RTL/LTR, compact-screen, IME and accessibility review.
+
+## 2026-11-12 — Password recovery in-flight cancellation and stale-result isolation
+
+### Selection and scope
+- Re-read the ordered shared Identity prerequisite and recent main history. The previous batch already handled cancellation after the user leaves password setup; this follow-up addresses a different race: a second recovery deep link can arrive while the first password-update request is still in flight.
+- Checked the complete repository tree for AGENTS.md / agents.md; no such instruction file exists in the current tree. No newer agent commit was present when this batch began.
+
+### Changes
+- MainViewModel.kt: each accepted recovery link invalidates and cancels the previous recovery job. Each completion attempt has a generation number; results and callbacks from superseded attempts are ignored, so an older completion cannot clear a newer one-time credential or navigate the user using a stale callback. Explicit cancellation also invalidates the active attempt.
+- AuthRepositoryImpl.kt: the verified recovery coroutine now checks cancellation after OTP verification, after the password-update request, and immediately before persisting the resulting session. A cancelled/superseded attempt therefore cannot proceed to local session persistence once cancellation is observed.
+- AuthRepositoryPasswordRecoveryTest.kt: added a regression test where the update endpoint cancels the current coroutine before returning a successful response; the repository must propagate cancellation and leave the local session empty.
+- MainViewModelPasswordRecoveryTest.kt: added a regression test proving that arrival of a second recovery link cancels the first in-flight completion, suppresses its stale callback, and preserves the second link for the next attempt.
+
+### Commits
+- Repository cancellation guard: ea404b5bd18868656ec53f42a85dd269f96b5199
+- Repository cancellation regression test: e5d516d206ff4232cfb0b5df33c11e5ef1120191
+- ViewModel attempt-generation and cancellation: 71c39c3db1d39edf65ca832850990869f3a3d257
+- Superseded-attempt regression test: 2d741fd43514d9f1377bc391f8d27f1c08a708eb
+
+### Verification and limitations
+- Re-fetched all four changed source/test files from main after the writes. Compared base 40071f9b5e9320b8ad991f6fe42c2b6630c7111e to code/test head 2d741fd43514d9f1377bc391f8d27f1c08a708eb: exactly four changed paths, four commits, no unrelated files.
+- The new regression tests were added but not executed. The environment has Kotlin compiler 1.9.0 and Java 21, but no Gradle executable, no Android SDK (ANDROID_HOME unset), and no local checkout. No repository Gradle/JUnit/Robolectric test, Android compilation, lint, APK build, emulator/device run, or rendered RTL/LTR review is claimed.
+- Push workflows for code/test head 2d741fd43514d9f1377bc391f8d27f1c08a708eb: Android CI/CD run 43110200525, APK run 43110200489, and Code Quality run 43110200419 all concluded failure. Each job reports runner_id=0 and an empty steps array; the Android CI job-log request returned BlobNotFound. This is runner/Actions infrastructure evidence, not a Gradle or source compilation failure. No successful CI evidence exists.
+- No Supabase Auth settings, redirect allow-list, email template, database schema, RLS policy, Firebase dependency or production data were changed. No live recovery email or Android callback was tested.
+
+### Remaining
+- Run the new and existing recovery/parser/repository/ViewModel tests in a functioning Android runner; resolve the GitHub Actions runner allocation/availability problem before treating CI as a verification source.
+- Verify the Supabase redirect allow-list and recovery email template, then test a real recovery email, callback and password update on Android.
+- Complete session restoration/refresh-token rotation, email confirmation, sign-out/account-switch runtime tests, and Login's rendered RTL/LTR, compact-screen, IME and accessibility review. Login and the shared Identity prerequisite remain open.
