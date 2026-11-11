@@ -17,6 +17,8 @@ import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.domain.repository.EmailConfirmationRequiredException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -175,11 +177,13 @@ class AuthRepositoryImpl(
 
         sessionMutex.withLock {
             val requestGeneration = synchronized(sessionStateLock) { sessionGeneration }
+            val operationContext = currentCoroutineContext()
             val verifiedSession = credentials.tokenHash?.takeIf(String::isNotBlank)?.let { tokenHash ->
                 val verification = api.verifyEmailOtp(
                     publishableKey = publishableKey,
                     request = SupabaseVerifyOtpRequest(type = "recovery", tokenHash = tokenHash)
                 )
+                operationContext.ensureActive()
                 requireSuccessfulBody(
                     verification.isSuccessful,
                     verification.body(),
@@ -188,6 +192,7 @@ class AuthRepositoryImpl(
                     ?: throw IllegalStateException("لم يُرجع رابط الاستعادة جلسة تحقق صالحة.")
             }
 
+            operationContext.ensureActive()
             val accessToken = verifiedSession?.accessToken
                 ?: credentials.accessToken?.takeIf(String::isNotBlank)
                 ?: throw IllegalArgumentException("رابط الاستعادة لا يحتوي بيانات تحقق صالحة.")
@@ -204,6 +209,7 @@ class AuthRepositoryImpl(
                 bearerToken = "Bearer $accessToken",
                 request = SupabaseUpdateUserRequest(password = newPassword)
             )
+            operationContext.ensureActive()
             if (!update.isSuccessful) {
                 throw IllegalStateException(
                     update.message().takeIf(String::isNotBlank)
@@ -220,6 +226,7 @@ class AuthRepositoryImpl(
                 user = updatedUser
             )
             synchronized(sessionStateLock) {
+                operationContext.ensureActive()
                 check(sessionGeneration == requestGeneration) {
                     "تم إلغاء استعادة كلمة المرور بسبب تغيير حالة الجلسة."
                 }
