@@ -8,6 +8,8 @@ import com.example.domain.repository.EmailConfirmationRequiredException
 import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.presentation.auth.PasswordRecoveryLinkResult
 import com.example.presentation.auth.parsePasswordRecoveryLink
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,8 +44,11 @@ class MainViewModel(
     private val _passwordRecoveryState = MutableStateFlow(PasswordRecoveryUiState())
     val passwordRecoveryState: StateFlow<PasswordRecoveryUiState> = _passwordRecoveryState.asStateFlow()
     private var pendingPasswordRecovery: PasswordRecoveryCredentials? = null
+    private var passwordRecoveryGeneration = 0L
+    private var passwordRecoveryJob: Job? = null
 
     fun acceptPasswordRecoveryLink(rawLink: String) {
+        invalidatePasswordRecoveryAttempt()
         when (val parsed = parsePasswordRecoveryLink(rawLink)) {
             is PasswordRecoveryLinkResult.Ready -> {
                 pendingPasswordRecovery = parsed.credentials
@@ -59,9 +64,16 @@ class MainViewModel(
     }
 
     fun cancelPasswordRecovery() {
+        invalidatePasswordRecoveryAttempt()
         pendingPasswordRecovery = null
         _passwordRecoveryState.value = PasswordRecoveryUiState()
         _actionState.value = AuthActionState()
+    }
+
+    private fun invalidatePasswordRecoveryAttempt() {
+        passwordRecoveryGeneration += 1L
+        passwordRecoveryJob?.cancel()
+        passwordRecoveryJob = null
     }
 
     fun requestPasswordRecovery(email: String, onComplete: (Boolean) -> Unit = {}) {
@@ -89,23 +101,42 @@ class MainViewModel(
             onComplete(false)
             return
         }
-        viewModelScope.launch {
+
+        passwordRecoveryJob?.cancel()
+        val attemptGeneration = ++passwordRecoveryGeneration
+        val attempt = viewModelScope.launch(start = CoroutineStart.LAZY) {
             _actionState.value = AuthActionState(isLoading = true)
-            val result = authRepository.completePasswordRecovery(credentials, newPassword)
-            if (result.isSuccess) {
-                pendingPasswordRecovery = null
-                _passwordRecoveryState.value = PasswordRecoveryUiState()
-                _actionState.value = AuthActionState(
-                    successMessage = "تم تحديث كلمة المرور والتحقق من الحساب بنجاح."
-                )
-                onComplete(true)
-            } else {
-                _actionState.value = AuthActionState(
-                    errorMessage = result.exceptionOrNull()?.message ?: "تعذر تحديث كلمة المرور."
-                )
-                onComplete(false)
+            try {
+                val result = authRepository.completePasswordRecovery(credentials, newPassword)
+                if (attemptGeneration != passwordRecoveryGeneration ||
+                    pendingPasswordRecovery != credentials
+                ) {
+                    return@launch
+                }
+
+                if (result.isSuccess) {
+                    pendingPasswordRecovery = null
+                    passwordRecoveryGeneration += 1L
+                    passwordRecoveryJob = null
+                    _passwordRecoveryState.value = PasswordRecoveryUiState()
+                    _actionState.value = AuthActionState(
+                        successMessage = "تم تحديث كلمة المرور والتحقق من الحساب بنجاح."
+                    )
+                    onComplete(true)
+                } else {
+                    _actionState.value = AuthActionState(
+                        errorMessage = result.exceptionOrNull()?.message ?: "تعذر تحديث كلمة المرور."
+                    )
+                    onComplete(false)
+                }
+            } finally {
+                if (attemptGeneration == passwordRecoveryGeneration) {
+                    passwordRecoveryJob = null
+                }
             }
         }
+        passwordRecoveryJob = attempt
+        attempt.start()
     }
 
     fun signIn(email: String, password: String, onComplete: (Boolean) -> Unit) {
