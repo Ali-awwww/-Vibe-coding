@@ -56,6 +56,15 @@ internal data class AuthFormValidationError(
     val message: String
 )
 
+internal fun resolvePasswordRecoveryMode(
+    currentMode: AuthMode,
+    isReadyForNewPassword: Boolean
+): AuthMode = when {
+    isReadyForNewPassword -> AuthMode.SET_NEW_PASSWORD
+    currentMode == AuthMode.SET_NEW_PASSWORD -> AuthMode.SIGN_IN
+    else -> currentMode
+}
+
 internal fun validateAuthForm(
     mode: AuthMode,
     email: String,
@@ -126,13 +135,25 @@ fun LoginScreen(
     val confirmPasswordFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(passwordRecoveryState.isReadyForNewPassword) {
+        val nextMode = resolvePasswordRecoveryMode(
+            currentMode = mode,
+            isReadyForNewPassword = passwordRecoveryState.isReadyForNewPassword
+        )
         if (passwordRecoveryState.isReadyForNewPassword) {
-            mode = AuthMode.SET_NEW_PASSWORD
+            mode = nextMode
             email = ""
             password = ""
             confirmPassword = ""
             validationError = null
             viewModel.clearMessages()
+        } else if (mode == AuthMode.SET_NEW_PASSWORD) {
+            // A rejected/expired replacement link must not leave the form in a
+            // password-update mode after its one-time credentials were discarded.
+            mode = nextMode
+            password = ""
+            confirmPassword = ""
+            passwordVisible = false
+            validationError = null
         }
     }
 
@@ -556,6 +577,8 @@ fun LoginScreen(
                             onClick = {
                                 if (mode == AuthMode.SET_NEW_PASSWORD) {
                                     viewModel.cancelPasswordRecovery()
+                                    password = ""
+                                    passwordVisible = false
                                 }
                                 mode = AuthMode.SIGN_IN
                                 confirmPassword = ""
