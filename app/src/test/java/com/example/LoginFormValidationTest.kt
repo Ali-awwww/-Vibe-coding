@@ -2,6 +2,7 @@ package com.example
 
 import com.example.presentation.ui.screens.AuthFormField
 import com.example.presentation.ui.screens.AuthMode
+import com.example.presentation.ui.screens.resolvePasswordRecoveryMode
 import com.example.presentation.ui.screens.validateAuthForm
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -13,6 +14,38 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class LoginFormValidationTest {
+
+    @Test
+    fun acceptedRecoveryLinkOpensNewPasswordMode() {
+        assertEquals(
+            AuthMode.SET_NEW_PASSWORD,
+            resolvePasswordRecoveryMode(AuthMode.RECOVER_PASSWORD, isReadyForNewPassword = true)
+        )
+    }
+
+    @Test
+    fun rejectedRecoveryLinkReturnsToSignInAndDiscardsPasswordMode() {
+        assertEquals(
+            AuthMode.SIGN_IN,
+            resolvePasswordRecoveryMode(AuthMode.SET_NEW_PASSWORD, isReadyForNewPassword = false)
+        )
+    }
+
+    @Test
+    fun rejectedRecoveryLinkKeepsTheRecoveryRequestFormOpen() {
+        assertEquals(
+            AuthMode.RECOVER_PASSWORD,
+            resolvePasswordRecoveryMode(AuthMode.RECOVER_PASSWORD, isReadyForNewPassword = false)
+        )
+    }
+
+    @Test
+    fun inactiveRecoveryStateDoesNotChangeSignInMode() {
+        assertEquals(
+            AuthMode.SIGN_IN,
+            resolvePasswordRecoveryMode(AuthMode.SIGN_IN, isReadyForNewPassword = false)
+        )
+    }
 
     @Test
     fun invalidEmailTargetsEmailField() {
