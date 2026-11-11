@@ -16,6 +16,10 @@ import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
 import com.example.auth.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.domain.repository.PasswordRecoveryCredentials
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -199,6 +203,46 @@ class AuthRepositoryPasswordRecoveryTest {
         assertEquals(1, updateCalls)
         assertEquals("Bearer current-access", bearerUsed)
         assertEquals("owner-user", sessionStore.read()?.user?.id)
+    }
+
+    @Test
+    fun cancelledPasswordUpdateDoesNotPersistRecoverySession() = runTest {
+        var updateCalled = false
+        val api = object : SupabaseAuthApi by unusedApi() {
+            override suspend fun updatePassword(
+                publishableKey: String,
+                bearerToken: String,
+                request: SupabaseUpdateUserRequest
+            ): Response<SupabaseAuthUser> {
+                updateCalled = true
+                currentCoroutineContext().cancel(CancellationException("Recovery attempt superseded"))
+                return Response.success(
+                    SupabaseAuthUser(id = "recovery-user", email = "owner@example.com")
+                )
+            }
+        }
+        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
+        val attempt = async {
+            repository.completePasswordRecovery(
+                credentials = PasswordRecoveryCredentials(
+                    accessToken = "recovery-access",
+                    refreshToken = "recovery-refresh",
+                    expiresAtEpochSeconds = System.currentTimeMillis() / 1000L + 3_600L
+                ),
+                newPassword = "new-secure-password"
+            )
+        }
+
+        try {
+            attempt.await()
+            throw AssertionError("Expected cancellation to propagate")
+        } catch (_: CancellationException) {
+            // Cancellation is control flow and must not be converted to Result.failure.
+        }
+
+        assertTrue(updateCalled)
+        assertNull(sessionStore.read())
+        assertNull(repository.getCurrentUserSync())
     }
 
     private fun unusedApi(): SupabaseAuthApi = object : SupabaseAuthApi {
