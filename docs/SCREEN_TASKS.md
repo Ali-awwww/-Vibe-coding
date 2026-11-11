@@ -1153,3 +1153,40 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Run the new and existing recovery/parser/repository/ViewModel tests in a functioning Android runner; resolve the GitHub Actions runner allocation/availability problem before treating CI as a verification source.
 - Verify the Supabase redirect allow-list and recovery email template, then test a real recovery email, callback and password update on Android.
 - Complete session restoration/refresh-token rotation, email confirmation, sign-out/account-switch runtime tests, and Login's rendered RTL/LTR, compact-screen, IME and accessibility review. Login and the shared Identity prerequisite remain open.
+
+
+## 2026-11-12 — Rejected password-recovery link resets Login form state
+
+### Independent review of the preceding agent batch
+- Re-read the current task register and recent main history. The preceding code batch from `40071f9b` to `2d741fd4` contains four commits and exactly four changed paths: `AuthRepositoryImpl.kt`, `MainViewModel.kt`, `AuthRepositoryPasswordRecoveryTest.kt`, and `MainViewModelPasswordRecoveryTest.kt`. The subsequent commits `4c7c8b1d` and `406c9ad6` only updated this register.
+- Re-fetched the four changed source/test files. Confirmed cancellation is rethrown by the repository's `authResult`, the recovery request checks cancellation after OTP verification and password update, and the session write is guarded by both coroutine activity and the session generation.
+- Re-fetched the ViewModel and repository regression tests. They cover superseded in-flight recovery attempts and prevent a cancelled password-update response from persisting a local session. These tests were added but not executed by Gradle.
+- Checked root, `.github/`, `docs/`, `app/`, `app/src/`, and the main/test instruction paths for `AGENTS.md` / `agents.md`; each candidate returned 404. No repository agent-instruction file is available.
+- The preceding batch's Actions jobs for runs `43110200525`, `43110200489`, and `43110200419` each exposed an empty steps array. No job execution or Gradle result is evidenced. Combined-status lookup for the preceding code head returned no status entries.
+
+### Confirmed Login UI state defect
+- `LoginScreen.kt` observed `passwordRecoveryState.isReadyForNewPassword` but only handled the `true` transition.
+- When a rejected or expired replacement link arrived while the screen was in `SET_NEW_PASSWORD`, `MainViewModel` correctly cleared its one-time credentials and emitted `false`, but the Compose form remained in `SET_NEW_PASSWORD`. The user could still see a password-update form even though its recovery credential no longer existed; submitting then produced a second, confusing “recovery link unavailable” error.
+- The back action also cleared the confirmation field but retained the typed new password in Compose state.
+
+### Changes
+- `LoginScreen.kt`: added `resolvePasswordRecoveryMode` to map an accepted link to `SET_NEW_PASSWORD` and a rejected/expired link from that mode back to `SIGN_IN`, while keeping the recovery-request form open when appropriate.
+- On invalidation, clear the new-password and confirmation fields, hide the password, and preserve the ViewModel's rejected-link error message so it remains visible in the sign-in form.
+- The explicit back action now also clears the new-password value and visibility state after cancelling the one-time recovery credential.
+- `LoginFormValidationTest.kt`: added four state-transition regression tests for accepted links, rejected links from password setup, rejected links while requesting recovery, and the idle sign-in state.
+
+### Commits
+- Login state correction: `35be256d5806b47e9ffd93c66b93cdac2f7db4b8`
+- Regression tests: `2f61f346b8ace23610190161b789df047ce842d7`
+
+### Verification and limitations
+- Re-fetched both changed files from `main` after the writes. Final blob SHAs: LoginScreen `23e3950e08d180170806df56789a7197f943d77e`; LoginFormValidationTest `0004b8e1409f6bca0920b077434693baea09550a`.
+- Compared `406c9ad6` to the test commit: exactly two changed paths (LoginScreen and LoginFormValidationTest), with no overlap with the preceding agent's four changed source/test paths.
+- An isolated `kotlinc` harness using the same pure mode-transition function passed four assertions. This is a narrow Kotlin logic check only; it does not compile the Android/Compose source or execute the Robolectric/JUnit test class.
+- The environment has Java 21 and `kotlinc`, but no Gradle executable and no Android SDK (`ANDROID_HOME` unset). No Gradle test, Android compilation, lint, APK build, emulator/device run, screenshot, or rendered RTL/LTR review was executed. GitHub combined-status lookup for both new commits returned no status entries; no successful CI evidence is available.
+- No Supabase settings, Auth configuration, RLS policy, database, Firebase dependency, or production data were changed. Login remains open under the visual-design gate; this is a recovery-state/secret-clearing correction, not rendered visual sign-off or completion of the Identity slice.
+
+### Remaining
+- Run `LoginFormValidationTest` and the existing recovery/parser/repository/ViewModel tests in a functioning Android runner.
+- Verify the Supabase recovery redirect allow-list and email template, then test a real recovery email and callback on Android.
+- Complete session restoration/refresh rotation, email confirmation, sign-out/account-switch runtime tests, and Login's rendered RTL/LTR, compact-screen, IME and accessibility review.
