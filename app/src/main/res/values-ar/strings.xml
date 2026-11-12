@@ -218,4 +218,43 @@
     <string name="fix_assistant_no_fix_title">لا توجد مقترحات إصلاح بعد</string>
     <string name="fix_assistant_no_fix_desc">اطلب مقترحًا بعد توفر التشخيص والمصدر المرتبط به.</string>
     <string name="verification_history_untrusted_details">نطاق الاختبار والقياسات وStack Trace الجديد في السجلات القديمة غير موثقة؛ المعروض فقط هو Stack Trace الأصلي للسياق.</string>
+
+    <!-- مصادقة Vibe Coding -->
+    <string name="auth_security_logo">رمز الأمان</string>
+    <string name="auth_brand_eyebrow">بوابة الوصول الهندسية</string>
+    <string name="auth_tagline">مساحة لإدارة المشاريع والتحقيق في أعطالها</string>
+    <string name="auth_flow_label">مسار المصادقة</string>
+    <string name="auth_identity_step">الهوية / 01</string>
+    <string name="auth_sign_in_title">تسجيل دخول المطور</string>
+    <string name="auth_sign_up_title">إنشاء حسابك</string>
+    <string name="auth_recovery_title">استعادة الوصول إلى الحساب</string>
+    <string name="auth_new_password_title">تعيين كلمة مرور جديدة</string>
+    <string name="auth_identity_verification">التحقق من الهوية</string>
+    <string name="auth_account_badge">الحساب</string>
+    <string name="auth_developer_name">اسم المطور</string>
+    <string name="auth_organization_optional">الفريق أو المؤسسة (اختياري)</string>
+    <string name="auth_email">البريد الإلكتروني</string>
+    <string name="auth_recovery_instructions">أدخل بريدك الإلكتروني. إذا كان مرتبطًا بحساب، فسيصلك رابط للاستعادة.</string>
+    <string name="auth_new_password">كلمة المرور الجديدة</string>
+    <string name="auth_password">كلمة المرور</string>
+    <string name="auth_hide_password">إخفاء كلمة المرور</string>
+    <string name="auth_show_password">إظهار كلمة المرور</string>
+    <string name="auth_confirm_new_password">تأكيد كلمة المرور الجديدة</string>
+    <string name="auth_confirm_password">تأكيد كلمة المرور</string>
+    <string name="auth_password_requirements">استخدم 8 أحرف على الأقل، وتأكد من تطابق حقلي كلمة المرور.</string>
+    <string name="auth_submit_sign_in">المتابعة إلى مساحة العمل</string>
+    <string name="auth_submit_sign_up">إنشاء الحساب</string>
+    <string name="auth_submit_recovery">إرسال رابط الاستعادة</string>
+    <string name="auth_submit_new_password">حفظ كلمة المرور الجديدة</string>
+    <string name="auth_loading">جارٍ التواصل مع خدمة المصادقة…</string>
+    <string name="auth_forgot_password">نسيت كلمة المرور؟</string>
+    <string name="auth_create_account">إنشاء حساب</string>
+    <string name="auth_back_to_sign_in">العودة لتسجيل الدخول</string>
+    <string name="auth_provider_label">مزود المصادقة • SUPABASE</string>
+    <string name="auth_validation_email">أدخل بريدًا إلكترونيًا صحيحًا.</string>
+    <string name="auth_validation_password_min">يجب ألا تقل كلمة المرور عن 8 أحرف.</string>
+    <string name="auth_validation_password_mismatch">كلمتا المرور غير متطابقتين.</string>
+    <string name="auth_validation_name">أدخل اسم المطور.</string>
+    <string name="auth_validation_password_required">أدخل كلمة المرور.</string>
+
 </resources>
