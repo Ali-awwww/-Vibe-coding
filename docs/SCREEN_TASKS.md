@@ -1190,3 +1190,47 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Run `LoginFormValidationTest` and the existing recovery/parser/repository/ViewModel tests in a functioning Android runner.
 - Verify the Supabase recovery redirect allow-list and email template, then test a real recovery email and callback on Android.
 - Complete session restoration/refresh rotation, email confirmation, sign-out/account-switch runtime tests, and Login's rendered RTL/LTR, compact-screen, IME and accessibility review.
+
+## 2026-11-13 — Login localization, compact layout and keyboard flow
+
+### Selection and review
+- Re-read the shared Identity prerequisite and the latest Login recovery-state correction (`8bfa77c8`). The preceding agent fixed rejected/expired recovery-link state and password-field clearing; this batch does not modify that state-transition behavior.
+- Checked the repository tree and the root, `.github/`, `docs/`, and `app/` instruction paths for `AGENTS.md` / `agents.md`; no agent-instruction file exists in the current tree.
+- Reviewed the current Login source, shared `VibeDesignTokens`, both string-resource sets, and `LoginFormValidationTest`.
+
+### Observed Login UX issues
+- Most Login copy and all local validation messages were hard-coded in Arabic, despite the app having a default English resource set. This prevented the Login screen from following the selected English locale.
+- The recovery email field advertised the IME action `Done`, but its callback only dismissed focus; users still had to tap the primary action.
+- The form used fixed logo/spacing dimensions and an uncapped content width, making the long identity form less adaptable to compact phones and wide screens.
+- Error/success banners were not explicitly exposed as polite live regions to accessibility services.
+- The footer said “secure connection” without checking a live connection. The replacement identifies the configured auth provider without claiming that a request is currently online.
+
+### Changes
+- `LoginScreen.kt`: moved visible Login labels, instructions, action labels, password visibility descriptions and local validation messages to Android string resources; validation now carries a resource ID instead of Arabic display text.
+- Added matching English (`values/strings.xml`) and Arabic (`values-ar/strings.xml`) resources for the complete Login copy and local validation messages.
+- Added a responsive 520dp content-width cap, narrower horizontal gutters on compact widths, and reduced header/logo spacing on compact heights while preserving the existing scroll and IME handling.
+- The recovery email field now submits the recovery request when the user presses the keyboard Done action; sign-in and sign-up keep their Next/focus behavior.
+- Error and success banners now expose polite live-region semantics.
+- Clear the password and visibility state when switching between sign-in, sign-up and recovery modes, reducing the lifetime of stale credentials in Compose state.
+- Replaced the unverified “secure connection” footer wording with a static Supabase provider label; it does not claim live API connectivity.
+- `LoginFormValidationTest.kt`: added four regression tests for the email IME action across sign-in, sign-up, recovery and new-password modes.
+
+### Commits
+- Login localization, responsive layout and interaction: `d021a296475876d6bf90c529d586177bf9a36f56`
+- English Login resources: `7b02dbf3a632fb32a52d3d4d57b4bdad09864add`
+- Arabic Login resources: `526ec808f74fe59aa943b85280e76f31f5cc12a0`
+- Localized accessibility label: `1f746286acd66390e434f1ba5f2d913754d823ae`
+- Email IME regression tests: `95f5b1e192ab35e1ce7a18a730f569cfd822fee7`
+
+### Verification and limitations
+- Re-fetched the final Login source, both resource files and test file from `main`. All 35 distinct `R.string` references used by Login have matching English and Arabic entries; no duplicate auth resource names or remaining Arabic string literals were found in the Login source.
+- Compared base `8bfa77c8` to code/test head `95f5b1e1`: five commits, four changed paths only (LoginScreen, the two locale resource files, and LoginFormValidationTest).
+- Added four Robolectric/JUnit regression tests, but did **not** execute them. No Gradle executable or Android SDK is available in the current execution environment. No Android compilation, lint, APK build, emulator/device run, screenshot, or rendered RTL/LTR/IME/accessibility review is claimed.
+- GitHub Actions did trigger for the code/test head. Android CI run `43313070851`, APK run `43313070857`, and Code Quality run `43313070861` all concluded failure. Their corresponding jobs reported `runner_id=0`, an empty runner name, and `steps=[]`; this provides no evidence that checkout, Gradle, compilation, tests or lint started. Combined commit status returned no status entries.
+- No Supabase Auth settings, redirect allow-list, email template, database schema, RLS policy, Firebase dependency, production data or secrets were changed. The Supabase redirect allow-list and live recovery flow remain unverified.
+
+### Remaining
+- Run `LoginFormValidationTest` and the existing recovery/parser/repository/ViewModel tests in a functioning Android runner; resolve the GitHub Actions runner-allocation failure before using CI as verification.
+- Inspect Login on a real emulator/device in Arabic RTL and English LTR, including compact widths/heights, keyboard/IME, accessibility announcements and contrast. Login remains open under the mandatory visual-design gate.
+- Localize auth error/success messages originating from repository/ViewModel/backend paths where they are still hard-coded in Arabic.
+- Verify the Supabase recovery redirect allow-list and email template, then exercise a real recovery email, callback, password update, session refresh and account switch.
