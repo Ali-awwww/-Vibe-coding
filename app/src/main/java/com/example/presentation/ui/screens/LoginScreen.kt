@@ -247,7 +247,7 @@ fun LoginScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Security,
-                    contentDescription = "شعار الأمان",
+                    contentDescription = stringResource(R.string.auth_security_logo),
                     tint = CyberCyan,
                     modifier = Modifier.size(if (compactHeight) 38.dp else 46.dp)
                 )
