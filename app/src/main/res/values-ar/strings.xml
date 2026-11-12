@@ -256,5 +256,18 @@
     <string name="auth_validation_password_mismatch">كلمتا المرور غير متطابقتين.</string>
     <string name="auth_validation_name">أدخل اسم المطور.</string>
     <string name="auth_validation_password_required">أدخل كلمة المرور.</string>
+    <string name="auth_error_sign_in">تعذر تسجيل الدخول. تحقق من البريد الإلكتروني وكلمة المرور ثم حاول مجددًا.</string>
+    <string name="auth_error_sign_up">تعذر إنشاء الحساب. راجع البيانات المدخلة ثم حاول مجددًا.</string>
+    <string name="auth_error_recovery_request">تعذر طلب رابط استعادة كلمة المرور. حاول مجددًا.</string>
+    <string name="auth_error_password_recovery">تعذر تحديث كلمة المرور باستخدام رابط الاستعادة. قد يكون منتهي الصلاحية؛ اطلب رابطًا جديدًا.</string>
+    <string name="auth_error_password_update">تعذر تحديث كلمة المرور. سجّل الدخول مجددًا ثم حاول.</string>
+    <string name="auth_error_network">لا يتوفر اتصال بالشبكة. تحقق من اتصالك ثم حاول مجددًا.</string>
+    <string name="auth_error_recovery_link_invalid">رابط استعادة كلمة المرور غير صالح أو منتهي الصلاحية. اطلب رابطًا جديدًا.</string>
+    <string name="auth_error_recovery_link_unavailable">بيانات استعادة كلمة المرور غير متاحة. اطلب رابط استعادة جديدًا.</string>
+    <string name="auth_success_sign_in">تم تسجيل الدخول بنجاح.</string>
+    <string name="auth_success_sign_up">تم إنشاء الحساب بنجاح.</string>
+    <string name="auth_success_email_confirmation">تم قبول طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول.</string>
+    <string name="auth_success_recovery_request">إذا كان هذا البريد مرتبطًا بحساب، فسيصلك رابط لاستعادة كلمة المرور.</string>
+    <string name="auth_success_password_updated">تم تحديث كلمة المرور بنجاح.</string>
 
 </resources>
