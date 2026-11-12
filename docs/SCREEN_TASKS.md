@@ -1234,3 +1234,44 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Inspect Login on a real emulator/device in Arabic RTL and English LTR, including compact widths/heights, keyboard/IME, accessibility announcements and contrast. Login remains open under the mandatory visual-design gate.
 - Localize auth error/success messages originating from repository/ViewModel/backend paths where they are still hard-coded in Arabic.
 - Verify the Supabase recovery redirect allow-list and email template, then exercise a real recovery email, callback, password update, session refresh and account switch.
+
+
+## 2026-11-13 — Localized authentication result and failure messages
+
+### Independent review of the preceding agent batch
+- Re-read the current Identity prerequisite and the latest Login localization/responsive-UX batch. Compared `8bfa77c8` to `95f5b1e1`: five commits, four changed paths (`LoginScreen.kt`, English and Arabic string resources, and `LoginFormValidationTest.kt`). The Login copy migration, responsive width/height handling, recovery-email IME submission, live-region semantics and regression coverage are present in the current tree. I did not alter the preceding batch's layout or recovery-mode transition logic.
+- Re-fetched the current Login screen, both locale resource files, ViewModel, parser and related tests. The preceding batch's resource references were checked against both locale sets.
+- Checked root, `.github/`, `docs/`, `app/`, and relevant source/test instruction paths for `AGENTS.md` / `agents.md`; no contributor instruction file was found. The repository search result for those terms only matched historical documentation, not an instruction file.
+- Inspected the preceding batch's three Actions runs: APK `43317656807`, Android CI/CD `43317656816`, and Code Quality `43317656961`. All concluded failure; each returned `steps: null`, and each job-log fetch returned `BlobNotFound`. No Gradle, compilation, test or lint execution is evidenced.
+
+### Confirmed localization gap
+- Login's visible labels and local field validation had moved to Android resources, but `MainViewModel.kt` still put Arabic literals into `AuthActionState` for sign-in, signup, recovery, password update and invalid recovery-link paths.
+- For failed repository operations, the ViewModel also forwarded arbitrary `Throwable.message` values from the Supabase/data layer. That could display untranslated provider/transport text in the English locale and expose low-level response details in the UI.
+- The current screen reads only the ViewModel's `AuthActionState`; this gap could be addressed without changing Supabase Auth configuration, schema, RLS or production data.
+
+### Changes
+- `MainViewModel.kt`: introduced the typed `AuthUiMessage` enum and changed `AuthActionState.errorMessage/successMessage` from raw strings to stable message keys. Sign-in, signup, email-confirmation-required signup, recovery request, recovery completion, reset-password and rejected/missing recovery-link outcomes now emit typed keys.
+- Network `IOException` failures map to a shared network message; other failures map to operation-specific generic messages. Raw provider exception text is no longer forwarded to Login. A `CancellationException` inside a failed `Result` is rethrown rather than converted into a user-facing error.
+- `LoginScreen.kt`: maps every `AuthUiMessage` to a localized Android string resource before rendering error/success banners.
+- Added 13 matching authentication result resources to both `values/strings.xml` and `values-ar/strings.xml`, including a non-enumerating recovery-request success message.
+- Added `MainViewModelAuthMessageTest.kt` with nine regression cases for generic and network sign-in failures, signup email confirmation, recovery request success/failure, rejected/missing recovery credentials, password-recovery failure and reset-password failure.
+
+### Commits
+- Typed ViewModel outcomes: `72a1d6340c1f0b262ff8c922f565b2243396641f`
+- Localized Login rendering: `a59a3e395635f3ac35ed8b7ef0f699c242579fd1`
+- English result resources: `09f4e4398cbabb9be3bb78b0c65e848cac294ba1`
+- Arabic result resources: `18e42ccd674abf74890dd91488dbb790d5bbb8ee`
+- Regression tests: `adf6e393e726b6b758be9666f954af06238972c5`
+- Test import cleanup: `4c9582075d8e4ded0a5dde39f2710419434a40fd`
+
+### Verification and limitations
+- Compared the feature base `f199a175` to test head `adf6e393`: five commits, five changed paths (ViewModel, Login screen, both locale resources and the new test file). The later import cleanup changes only the test file.
+- Static consistency check on the re-fetched final source: all 13 enum values have exactly one UI resource mapping; all 13 referenced resource IDs exist in both English and Arabic; no duplicate auth-result resource names were found; no direct `exception.message` / parser-message forwarding remains in `MainViewModel.kt`.
+- The new nine JUnit tests were added but not executed. The environment has Java 21 and Kotlin 1.9.0, but no Gradle executable, no Android SDK (`ANDROID_HOME` unset), no Gradle dependency cache and no local project checkout. Therefore no Android compilation, Gradle test, lint, APK build, emulator/device run or rendered RTL/LTR review was executed.
+- Actions for code/test head `adf6e393`: APK `43317656807`, Android CI/CD `43317656816`, and Code Quality `43317656961` all failed before exposing steps; `steps` was null and log retrieval returned `BlobNotFound`. This is not evidence of a source compilation failure, but it is also not a successful verification.
+- No Supabase Auth settings, redirect allow-list, email template, database schema, RLS policy, Firebase dependency, production data or secrets were changed.
+
+### Remaining
+- Run the new ViewModel tests and existing Login/recovery/parser/repository tests in a functioning Android runner; restore GitHub Actions runner/log availability before treating CI as verification.
+- Inspect Login on an emulator/device in Arabic RTL and English LTR, including compact layouts, IME, accessibility announcements and contrast. Login remains open under the mandatory visual-design gate.
+- Verify the Supabase recovery redirect allow-list and email template, then exercise a real recovery email/callback/password update, session restoration/refresh rotation, email confirmation, sign-out and account switching.
