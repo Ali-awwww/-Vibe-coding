@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.presentation.viewmodel.AuthUiMessage
 import com.example.presentation.viewmodel.MainViewModel
 import com.example.ui.theme.VibeDesignTokens
 
@@ -70,6 +71,22 @@ internal fun resolvePasswordRecoveryMode(
 }
 
 internal fun shouldSubmitOnEmailIme(mode: AuthMode): Boolean = mode == AuthMode.RECOVER_PASSWORD
+
+private fun authMessageResource(message: AuthUiMessage): Int = when (message) {
+    AuthUiMessage.SIGN_IN_FAILED -> R.string.auth_error_sign_in
+    AuthUiMessage.SIGN_UP_FAILED -> R.string.auth_error_sign_up
+    AuthUiMessage.PASSWORD_RECOVERY_REQUEST_FAILED -> R.string.auth_error_recovery_request
+    AuthUiMessage.PASSWORD_RECOVERY_FAILED -> R.string.auth_error_password_recovery
+    AuthUiMessage.PASSWORD_UPDATE_FAILED -> R.string.auth_error_password_update
+    AuthUiMessage.NETWORK_UNAVAILABLE -> R.string.auth_error_network
+    AuthUiMessage.RECOVERY_LINK_INVALID -> R.string.auth_error_recovery_link_invalid
+    AuthUiMessage.RECOVERY_LINK_UNAVAILABLE -> R.string.auth_error_recovery_link_unavailable
+    AuthUiMessage.SIGN_IN_SUCCEEDED -> R.string.auth_success_sign_in
+    AuthUiMessage.SIGN_UP_SUCCEEDED -> R.string.auth_success_sign_up
+    AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED -> R.string.auth_success_email_confirmation
+    AuthUiMessage.PASSWORD_RECOVERY_REQUEST_ACCEPTED -> R.string.auth_success_recovery_request
+    AuthUiMessage.PASSWORD_UPDATED -> R.string.auth_success_password_updated
+}
 
 internal fun validateAuthForm(
     mode: AuthMode,
@@ -170,6 +187,8 @@ fun LoginScreen(
     val passwordError = validationError?.takeIf { it.field == AuthFormField.PASSWORD }?.let { stringResource(it.messageRes) }
     val displayNameError = validationError?.takeIf { it.field == AuthFormField.DISPLAY_NAME }?.let { stringResource(it.messageRes) }
     val confirmPasswordError = validationError?.takeIf { it.field == AuthFormField.CONFIRM_PASSWORD }?.let { stringResource(it.messageRes) }
+    val actionErrorMessage = actionState.errorMessage?.let(::authMessageResource)?.let { stringResource(it) }
+    val actionSuccessMessage = actionState.successMessage?.let(::authMessageResource)?.let { stringResource(it) }
 
     val submit: () -> Unit = {
         if (!actionState.isLoading) {
@@ -357,8 +376,8 @@ fun LoginScreen(
                         }
                     }
 
-                    AnimatedVisibility(visible = validationError != null || actionState.errorMessage != null) {
-                        val message = validationError?.let { stringResource(it.messageRes) } ?: actionState.errorMessage.orEmpty()
+                    AnimatedVisibility(visible = validationError != null || actionErrorMessage != null) {
+                        val message = validationError?.let { stringResource(it.messageRes) } ?: actionErrorMessage.orEmpty()
                         Surface(
                             color = Color(0x33FF4565),
                             shape = RoundedCornerShape(10.dp),
@@ -378,7 +397,7 @@ fun LoginScreen(
                         }
                     }
 
-                    AnimatedVisibility(visible = actionState.successMessage != null) {
+                    AnimatedVisibility(visible = actionSuccessMessage != null) {
                         Surface(
                             color = Color(0x2236E6A0),
                             shape = RoundedCornerShape(10.dp),
@@ -394,7 +413,7 @@ fun LoginScreen(
                             ) {
                                 Icon(Icons.Default.CheckCircle, null, tint = VibeDesignTokens.Color.Success)
                                 Text(
-                                    actionState.successMessage.orEmpty(),
+                                    actionSuccessMessage.orEmpty(),
                                     color = Color(0xFFB8F8D9),
                                     style = MaterialTheme.typography.bodySmall
                                 )
