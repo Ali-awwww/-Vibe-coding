@@ -8,6 +8,8 @@ import com.example.domain.repository.EmailConfirmationRequiredException
 import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.presentation.auth.PasswordRecoveryLinkResult
 import com.example.presentation.auth.parsePasswordRecoveryLink
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,10 +23,26 @@ data class PasswordRecoveryUiState(
     val isReadyForNewPassword: Boolean = false
 )
 
+enum class AuthUiMessage {
+    SIGN_IN_FAILED,
+    SIGN_UP_FAILED,
+    PASSWORD_RECOVERY_REQUEST_FAILED,
+    PASSWORD_RECOVERY_FAILED,
+    PASSWORD_UPDATE_FAILED,
+    NETWORK_UNAVAILABLE,
+    RECOVERY_LINK_INVALID,
+    RECOVERY_LINK_UNAVAILABLE,
+    SIGN_IN_SUCCEEDED,
+    SIGN_UP_SUCCEEDED,
+    EMAIL_CONFIRMATION_REQUIRED,
+    PASSWORD_RECOVERY_REQUEST_ACCEPTED,
+    PASSWORD_UPDATED
+}
+
 data class AuthActionState(
     val isLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val successMessage: String? = null
+    val errorMessage: AuthUiMessage? = null,
+    val successMessage: AuthUiMessage? = null
 )
 
 class MainViewModel(
@@ -47,6 +65,11 @@ class MainViewModel(
     private var passwordRecoveryGeneration = 0L
     private var passwordRecoveryJob: Job? = null
 
+    private fun resolveFailureMessage(error: Throwable?, fallback: AuthUiMessage): AuthUiMessage {
+        if (error is CancellationException) throw error
+        return if (error is IOException) AuthUiMessage.NETWORK_UNAVAILABLE else fallback
+    }
+
     fun acceptPasswordRecoveryLink(rawLink: String) {
         invalidatePasswordRecoveryAttempt()
         when (val parsed = parsePasswordRecoveryLink(rawLink)) {
@@ -58,7 +81,7 @@ class MainViewModel(
             is PasswordRecoveryLinkResult.Rejected -> {
                 pendingPasswordRecovery = null
                 _passwordRecoveryState.value = PasswordRecoveryUiState()
-                _actionState.value = AuthActionState(errorMessage = parsed.message)
+                _actionState.value = AuthActionState(errorMessage = AuthUiMessage.RECOVERY_LINK_INVALID)
             }
         }
     }
@@ -82,12 +105,15 @@ class MainViewModel(
             val result = authRepository.requestPasswordRecovery(email.trim())
             if (result.isSuccess) {
                 _actionState.value = AuthActionState(
-                    successMessage = "إذا كان البريد مرتبطًا بحساب، فسيصلك رابط آمن لاستعادة كلمة المرور."
+                    successMessage = AuthUiMessage.PASSWORD_RECOVERY_REQUEST_ACCEPTED
                 )
                 onComplete(true)
             } else {
                 _actionState.value = AuthActionState(
-                    errorMessage = result.exceptionOrNull()?.message ?: "تعذر طلب استعادة كلمة المرور."
+                    errorMessage = resolveFailureMessage(
+                        result.exceptionOrNull(),
+                        AuthUiMessage.PASSWORD_RECOVERY_REQUEST_FAILED
+                    )
                 )
                 onComplete(false)
             }
@@ -97,7 +123,7 @@ class MainViewModel(
     fun completePasswordRecovery(newPassword: String, onComplete: (Boolean) -> Unit = {}) {
         val credentials = pendingPasswordRecovery
         if (credentials == null) {
-            _actionState.value = AuthActionState(errorMessage = "رابط الاستعادة غير متاح. اطلب رابطًا جديدًا.")
+            _actionState.value = AuthActionState(errorMessage = AuthUiMessage.RECOVERY_LINK_UNAVAILABLE)
             onComplete(false)
             return
         }
@@ -120,12 +146,15 @@ class MainViewModel(
                     passwordRecoveryJob = null
                     _passwordRecoveryState.value = PasswordRecoveryUiState()
                     _actionState.value = AuthActionState(
-                        successMessage = "تم تحديث كلمة المرور والتحقق من الحساب بنجاح."
+                        successMessage = AuthUiMessage.PASSWORD_UPDATED
                     )
                     onComplete(true)
                 } else {
                     _actionState.value = AuthActionState(
-                        errorMessage = result.exceptionOrNull()?.message ?: "تعذر تحديث كلمة المرور."
+                        errorMessage = resolveFailureMessage(
+                            result.exceptionOrNull(),
+                            AuthUiMessage.PASSWORD_RECOVERY_FAILED
+                        )
                     )
                     onComplete(false)
                 }
@@ -144,12 +173,18 @@ class MainViewModel(
             _actionState.value = AuthActionState(isLoading = true)
             val result = authRepository.signIn(email, password)
             if (result.isSuccess) {
-                _actionState.value = AuthActionState(isLoading = false, successMessage = "تم تسجيل الدخول بنجاح")
+                _actionState.value = AuthActionState(
+                    isLoading = false,
+                    successMessage = AuthUiMessage.SIGN_IN_SUCCEEDED
+                )
                 onComplete(true)
             } else {
                 _actionState.value = AuthActionState(
                     isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.message ?: "فشل تسجيل الدخول"
+                    errorMessage = resolveFailureMessage(
+                        result.exceptionOrNull(),
+                        AuthUiMessage.SIGN_IN_FAILED
+                    )
                 )
                 onComplete(false)
             }
@@ -167,7 +202,10 @@ class MainViewModel(
             _actionState.value = AuthActionState(isLoading = true)
             val result = authRepository.signUp(email, password, displayName, organization)
             if (result.isSuccess) {
-                _actionState.value = AuthActionState(isLoading = false, successMessage = "تم إنشاء الحساب بنجاح")
+                _actionState.value = AuthActionState(
+                    isLoading = false,
+                    successMessage = AuthUiMessage.SIGN_UP_SUCCEEDED
+                )
                 onComplete(true)
             } else {
                 val failure = result.exceptionOrNull()
@@ -175,13 +213,15 @@ class MainViewModel(
                     // Supabase accepted signup but did not issue a session; stay on auth screen.
                     _actionState.value = AuthActionState(
                         isLoading = false,
-                        successMessage = failure.message
-                            ?: "تم قبول طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده."
+                        successMessage = AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED
                     )
                 } else {
                     _actionState.value = AuthActionState(
                         isLoading = false,
-                        errorMessage = failure?.message ?: "فشل إنشاء الحساب"
+                        errorMessage = resolveFailureMessage(
+                            failure,
+                            AuthUiMessage.SIGN_UP_FAILED
+                        )
                     )
                 }
                 onComplete(false)
@@ -194,12 +234,18 @@ class MainViewModel(
             _actionState.value = AuthActionState(isLoading = true)
             val result = authRepository.resetPassword(email, newPass)
             if (result.isSuccess) {
-                _actionState.value = AuthActionState(isLoading = false, successMessage = "تم تحديث كلمة المرور للحساب الحالي.")
+                _actionState.value = AuthActionState(
+                    isLoading = false,
+                    successMessage = AuthUiMessage.PASSWORD_UPDATED
+                )
                 onComplete(true)
             } else {
                 _actionState.value = AuthActionState(
                     isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.message ?: "تعذر تغيير كلمة المرور"
+                    errorMessage = resolveFailureMessage(
+                        result.exceptionOrNull(),
+                        AuthUiMessage.PASSWORD_UPDATE_FAILED
+                    )
                 )
                 onComplete(false)
             }
