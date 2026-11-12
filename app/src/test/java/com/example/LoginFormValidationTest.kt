@@ -3,9 +3,12 @@ package com.example
 import com.example.presentation.ui.screens.AuthFormField
 import com.example.presentation.ui.screens.AuthMode
 import com.example.presentation.ui.screens.resolvePasswordRecoveryMode
+import com.example.presentation.ui.screens.shouldSubmitOnEmailIme
 import com.example.presentation.ui.screens.validateAuthForm
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -14,6 +17,26 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class LoginFormValidationTest {
+
+    @Test
+    fun recoveryEmailImeSubmitsTheRecoveryRequest() {
+        assertTrue(shouldSubmitOnEmailIme(AuthMode.RECOVER_PASSWORD))
+    }
+
+    @Test
+    fun signInEmailImeMovesFocusInsteadOfSubmitting() {
+        assertFalse(shouldSubmitOnEmailIme(AuthMode.SIGN_IN))
+    }
+
+    @Test
+    fun signUpEmailImeMovesFocusInsteadOfSubmitting() {
+        assertFalse(shouldSubmitOnEmailIme(AuthMode.SIGN_UP))
+    }
+
+    @Test
+    fun newPasswordModeDoesNotUseTheEmailImeSubmitBehavior() {
+        assertFalse(shouldSubmitOnEmailIme(AuthMode.SET_NEW_PASSWORD))
+    }
 
     @Test
     fun acceptedRecoveryLinkOpensNewPasswordMode() {
