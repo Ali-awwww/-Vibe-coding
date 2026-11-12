@@ -26,14 +26,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.presentation.viewmodel.MainViewModel
 import com.example.ui.theme.VibeDesignTokens
 
@@ -53,7 +57,7 @@ internal enum class AuthFormField {
 
 internal data class AuthFormValidationError(
     val field: AuthFormField,
-    val message: String
+    val messageRes: Int
 )
 
 internal fun resolvePasswordRecoveryMode(
@@ -65,6 +69,8 @@ internal fun resolvePasswordRecoveryMode(
     else -> currentMode
 }
 
+internal fun shouldSubmitOnEmailIme(mode: AuthMode): Boolean = mode == AuthMode.RECOVER_PASSWORD
+
 internal fun validateAuthForm(
     mode: AuthMode,
     email: String,
@@ -74,7 +80,7 @@ internal fun validateAuthForm(
 ): AuthFormValidationError? {
     if (mode == AuthMode.RECOVER_PASSWORD) {
         if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
-            return AuthFormValidationError(AuthFormField.EMAIL, "أدخل بريدًا إلكترونيًا صحيحًا.")
+            return AuthFormValidationError(AuthFormField.EMAIL, R.string.auth_validation_email)
         }
         return null
     }
@@ -82,31 +88,31 @@ internal fun validateAuthForm(
         if (password.length < 8) {
             return AuthFormValidationError(
                 AuthFormField.PASSWORD,
-                "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل."
+                R.string.auth_validation_password_min
             )
         }
         if (password != confirmPassword) {
-            return AuthFormValidationError(AuthFormField.CONFIRM_PASSWORD, "كلمتا المرور غير متطابقتين.")
+            return AuthFormValidationError(AuthFormField.CONFIRM_PASSWORD, R.string.auth_validation_password_mismatch)
         }
         return null
     }
     if (mode == AuthMode.SIGN_UP && displayName.isBlank()) {
-        return AuthFormValidationError(AuthFormField.DISPLAY_NAME, "أدخل اسم المطور.")
+        return AuthFormValidationError(AuthFormField.DISPLAY_NAME, R.string.auth_validation_name)
     }
     if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
-        return AuthFormValidationError(AuthFormField.EMAIL, "أدخل بريدًا إلكترونيًا صحيحًا.")
+        return AuthFormValidationError(AuthFormField.EMAIL, R.string.auth_validation_email)
     }
     if (password.isBlank()) {
-        return AuthFormValidationError(AuthFormField.PASSWORD, "أدخل كلمة المرور.")
+        return AuthFormValidationError(AuthFormField.PASSWORD, R.string.auth_validation_password_required)
     }
     if (mode == AuthMode.SIGN_UP && password.length < 8) {
         return AuthFormValidationError(
             AuthFormField.PASSWORD,
-            "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل."
+            R.string.auth_validation_password_min
         )
     }
     if (mode == AuthMode.SIGN_UP && password != confirmPassword) {
-        return AuthFormValidationError(AuthFormField.CONFIRM_PASSWORD, "كلمتا المرور غير متطابقتين.")
+        return AuthFormValidationError(AuthFormField.CONFIRM_PASSWORD, R.string.auth_validation_password_mismatch)
     }
     return null
 }
@@ -144,6 +150,7 @@ fun LoginScreen(
             email = ""
             password = ""
             confirmPassword = ""
+            passwordVisible = false
             validationError = null
             viewModel.clearMessages()
         } else if (mode == AuthMode.SET_NEW_PASSWORD) {
@@ -159,10 +166,10 @@ fun LoginScreen(
 
     val canSubmit = !actionState.isLoading
 
-    val emailError = validationError?.takeIf { it.field == AuthFormField.EMAIL }?.message
-    val passwordError = validationError?.takeIf { it.field == AuthFormField.PASSWORD }?.message
-    val displayNameError = validationError?.takeIf { it.field == AuthFormField.DISPLAY_NAME }?.message
-    val confirmPasswordError = validationError?.takeIf { it.field == AuthFormField.CONFIRM_PASSWORD }?.message
+    val emailError = validationError?.takeIf { it.field == AuthFormField.EMAIL }?.let { stringResource(it.messageRes) }
+    val passwordError = validationError?.takeIf { it.field == AuthFormField.PASSWORD }?.let { stringResource(it.messageRes) }
+    val displayNameError = validationError?.takeIf { it.field == AuthFormField.DISPLAY_NAME }?.let { stringResource(it.messageRes) }
+    val confirmPasswordError = validationError?.takeIf { it.field == AuthFormField.CONFIRM_PASSWORD }?.let { stringResource(it.messageRes) }
 
     val submit: () -> Unit = {
         if (!actionState.isLoading) {
@@ -196,7 +203,7 @@ fun LoginScreen(
         }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -205,22 +212,30 @@ fun LoginScreen(
                 )
             )
     ) {
+        val compactHeight = maxHeight < 760.dp
+        val compactWidth = maxWidth < 360.dp
         SpaceGridBackground(Modifier.fillMaxSize())
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .align(Alignment.TopCenter)
+                .fillMaxHeight()
+                .widthIn(max = 520.dp)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(horizontal = 22.dp, vertical = 30.dp),
+                .padding(
+                    horizontal = if (compactWidth) 16.dp else 22.dp,
+                    vertical = if (compactHeight) 16.dp else 30.dp
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = if (compactHeight) Arrangement.Top else Arrangement.Center
         ) {
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(if (compactHeight) 4.dp else 18.dp))
 
             Box(
                 modifier = Modifier
-                    .size(94.dp)
+                    .size(if (compactHeight) 76.dp else 94.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
@@ -234,11 +249,11 @@ fun LoginScreen(
                     imageVector = Icons.Default.Security,
                     contentDescription = "شعار الأمان",
                     tint = CyberCyan,
-                    modifier = Modifier.size(46.dp)
+                    modifier = Modifier.size(if (compactHeight) 38.dp else 46.dp)
                 )
             }
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(if (compactHeight) 12.dp else 18.dp))
             Text(
                 text = "VIBE CODING",
                 style = MaterialTheme.typography.headlineMedium,
@@ -246,20 +261,20 @@ fun LoginScreen(
                 color = VibeDesignTokens.Color.TextPrimary
             )
             Text(
-                text = "ENGINEERING ACCESS GATE",
+                text = stringResource(R.string.auth_brand_eyebrow),
                 style = MaterialTheme.typography.labelSmall,
                 color = CyberCyan,
                 letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "بوابة آمنة لإدارة مشاريعك وتحليل أعطالها",
+                text = stringResource(R.string.auth_tagline),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MutedText,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(if (compactHeight) 16.dp else 28.dp))
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -279,9 +294,9 @@ fun LoginScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         Box(Modifier.size(7.dp).clip(CircleShape).background(CyberCyan))
-                        Text("SECURE AUTH FLOW", color = CyberCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.auth_flow_label), color = CyberCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
-                    Text("IDENTITY / 01", color = MutedText, style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.auth_identity_step), color = MutedText, style = MaterialTheme.typography.labelSmall)
                 }
             }
 
@@ -309,18 +324,20 @@ fun LoginScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = when (mode) {
-                                    AuthMode.SIGN_IN -> "تسجيل دخول المطور"
-                                    AuthMode.SIGN_UP -> "إنشاء حساب جديد"
-                                    AuthMode.RECOVER_PASSWORD -> "استعادة الوصول"
-                                    AuthMode.SET_NEW_PASSWORD -> "تعيين كلمة مرور جديدة"
-                                },
+                                text = stringResource(
+                                    when (mode) {
+                                        AuthMode.SIGN_IN -> R.string.auth_sign_in_title
+                                        AuthMode.SIGN_UP -> R.string.auth_sign_up_title
+                                        AuthMode.RECOVER_PASSWORD -> R.string.auth_recovery_title
+                                        AuthMode.SET_NEW_PASSWORD -> R.string.auth_new_password_title
+                                    }
+                                ),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = VibeDesignTokens.Color.TextPrimary
                             )
                             Text(
-                                text = "IDENTITY VERIFICATION",
+                                text = stringResource(R.string.auth_identity_verification),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = CyberCyan.copy(alpha = 0.85f)
                             )
@@ -331,7 +348,7 @@ fun LoginScreen(
                             border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.5f))
                         ) {
                             Text(
-                                "SECURE",
+                                stringResource(R.string.auth_account_badge),
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                                 color = CyberCyan,
                                 style = MaterialTheme.typography.labelSmall,
@@ -341,12 +358,14 @@ fun LoginScreen(
                     }
 
                     AnimatedVisibility(visible = validationError != null || actionState.errorMessage != null) {
-                        val message = validationError?.message ?: actionState.errorMessage.orEmpty()
+                        val message = validationError?.let { stringResource(it.messageRes) } ?: actionState.errorMessage.orEmpty()
                         Surface(
                             color = Color(0x33FF4565),
                             shape = RoundedCornerShape(10.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, VibeDesignTokens.Color.Error),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            }
                         ) {
                             Row(
                                 Modifier.padding(12.dp),
@@ -364,7 +383,9 @@ fun LoginScreen(
                             color = Color(0x2236E6A0),
                             shape = RoundedCornerShape(10.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, VibeDesignTokens.Color.Success),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            }
                         ) {
                             Row(
                                 Modifier.padding(12.dp),
@@ -389,7 +410,7 @@ fun LoginScreen(
                                 validationError = null
                                 viewModel.clearMessages()
                             },
-                            label = "اسم المطور",
+                            label = stringResource(R.string.auth_developer_name),
                             icon = Icons.Default.Person,
                             focusRequester = displayNameFocusRequester,
                             imeAction = ImeAction.Next,
@@ -405,7 +426,7 @@ fun LoginScreen(
                                 validationError = null
                                 viewModel.clearMessages()
                             },
-                            label = "الفريق أو المؤسسة (اختياري)",
+                            label = stringResource(R.string.auth_organization_optional),
                             icon = Icons.Default.Business,
                             focusRequester = organizationFocusRequester,
                             imeAction = ImeAction.Next,
@@ -421,13 +442,15 @@ fun LoginScreen(
                             validationError = null
                             viewModel.clearMessages()
                         },
-                        label = "البريد الإلكتروني",
+                        label = stringResource(R.string.auth_email),
                         icon = Icons.Default.Email,
                         focusRequester = emailFocusRequester,
                         keyboardType = KeyboardType.Email,
                         imeAction = if (mode == AuthMode.RECOVER_PASSWORD) ImeAction.Done else ImeAction.Next,
                         onNext = { passwordFocusRequester.requestFocus() },
-                        onDone = { focusManager.clearFocus() },
+                        onDone = {
+                            if (shouldSubmitOnEmailIme(mode)) submit() else focusManager.clearFocus()
+                        },
                         enabled = !actionState.isLoading,
                         isError = emailError != null,
                         errorMessage = emailError
@@ -435,7 +458,7 @@ fun LoginScreen(
 
                     if (mode == AuthMode.RECOVER_PASSWORD) {
                         Text(
-                            text = "أدخل بريدك الإلكتروني. إذا كان مرتبطًا بحساب، فسيصلك رابط آمن لفتح شاشة تعيين كلمة مرور جديدة.",
+                            text = stringResource(R.string.auth_recovery_instructions),
                             color = MutedText,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -450,7 +473,17 @@ fun LoginScreen(
                             enabled = !actionState.isLoading,
                             isError = passwordError != null,
                             supportingText = passwordError?.let { message -> { Text(message) } },
-                            label = { Text(if (mode == AuthMode.SET_NEW_PASSWORD) "كلمة المرور الجديدة" else "كلمة المرور") },
+                            label = {
+                                Text(
+                                    stringResource(
+                                        if (mode == AuthMode.SET_NEW_PASSWORD) {
+                                            R.string.auth_new_password
+                                        } else {
+                                            R.string.auth_password
+                                        }
+                                    )
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Default.Lock, null, tint = CyberCyan) },
                             trailingIcon = {
                                 IconButton(
@@ -459,7 +492,9 @@ fun LoginScreen(
                                 ) {
                                     Icon(
                                         if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور",
+                                        contentDescription = stringResource(
+                                            if (passwordVisible) R.string.auth_hide_password else R.string.auth_show_password
+                                        ),
                                         tint = MutedText
                                     )
                                 }
@@ -493,7 +528,17 @@ fun LoginScreen(
                             enabled = !actionState.isLoading,
                             isError = confirmPasswordError != null,
                             supportingText = confirmPasswordError?.let { message -> { Text(message) } },
-                            label = { Text("تأكيد كلمة المرور الجديدة".takeIf { mode == AuthMode.SET_NEW_PASSWORD } ?: "تأكيد كلمة المرور") },
+                            label = {
+                                Text(
+                                    stringResource(
+                                        if (mode == AuthMode.SET_NEW_PASSWORD) {
+                                            R.string.auth_confirm_new_password
+                                        } else {
+                                            R.string.auth_confirm_password
+                                        }
+                                    )
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Default.LockReset, null, tint = CyberCyan) },
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(
@@ -509,7 +554,7 @@ fun LoginScreen(
                             colors = cyberFieldColors()
                         )
                         Text(
-                            text = "يجب ألا تقل كلمة المرور عن 8 أحرف وأن تتطابق حقول التأكيد.",
+                            text = stringResource(R.string.auth_password_requirements),
                             color = MutedText,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -528,19 +573,30 @@ fun LoginScreen(
                         )
                     ) {
                         if (actionState.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                                Text(
+                                    stringResource(R.string.auth_loading),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         } else {
                             Text(
-                                when (mode) {
-                                    AuthMode.SIGN_IN -> "دخول إلى مساحة العمل"
-                                    AuthMode.SIGN_UP -> "إنشاء الحساب"
-                                    AuthMode.RECOVER_PASSWORD -> "إرسال رابط الاستعادة"
-                                    AuthMode.SET_NEW_PASSWORD -> "حفظ كلمة المرور الجديدة"
-                                },
+                                stringResource(
+                                    when (mode) {
+                                        AuthMode.SIGN_IN -> R.string.auth_submit_sign_in
+                                        AuthMode.SIGN_UP -> R.string.auth_submit_sign_up
+                                        AuthMode.RECOVER_PASSWORD -> R.string.auth_submit_recovery
+                                        AuthMode.SET_NEW_PASSWORD -> R.string.auth_submit_new_password
+                                    }
+                                ),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -555,22 +611,26 @@ fun LoginScreen(
                             TextButton(
                                 onClick = {
                                     mode = AuthMode.RECOVER_PASSWORD
+                                    password = ""
                                     confirmPassword = ""
+                                    passwordVisible = false
                                     validationError = null
                                     viewModel.clearMessages()
                                 },
                                 enabled = !actionState.isLoading
-                            ) { Text("نسيت كلمة المرور؟", color = CyberCyan) }
+                            ) { Text(stringResource(R.string.auth_forgot_password), color = CyberCyan) }
 
                             TextButton(
                                 onClick = {
                                     mode = AuthMode.SIGN_UP
+                                    password = ""
                                     confirmPassword = ""
+                                    passwordVisible = false
                                     validationError = null
                                     viewModel.clearMessages()
                                 },
                                 enabled = !actionState.isLoading
-                            ) { Text("إنشاء حساب", color = CyberCyan, fontWeight = FontWeight.Bold) }
+                            ) { Text(stringResource(R.string.auth_create_account), color = CyberCyan, fontWeight = FontWeight.Bold) }
                         }
                     } else {
                         TextButton(
@@ -581,13 +641,15 @@ fun LoginScreen(
                                     passwordVisible = false
                                 }
                                 mode = AuthMode.SIGN_IN
+                                password = ""
                                 confirmPassword = ""
+                                passwordVisible = false
                                 validationError = null
                                 viewModel.clearMessages()
                             },
                             enabled = !actionState.isLoading,
                             modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) { Text("العودة لتسجيل الدخول", color = CyberCyan) }
+                        ) { Text(stringResource(R.string.auth_back_to_sign_in), color = CyberCyan) }
                     }
                 }
             }
@@ -598,7 +660,7 @@ fun LoginScreen(
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 Box(Modifier.size(7.dp).clip(CircleShape).background(CyberCyan))
-                Text("بوابة المصادقة • اتصال آمن", color = MutedText, style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.auth_provider_label), color = MutedText, style = MaterialTheme.typography.labelSmall)
             }
             Spacer(Modifier.height(20.dp))
         }
