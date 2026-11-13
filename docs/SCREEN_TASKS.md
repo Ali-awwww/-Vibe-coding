@@ -1315,3 +1315,38 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Decide whether to add and validate a complete Gradle Wrapper (scripts, JAR and pinned distribution) or continue using the explicitly pinned non-wrapper Gradle installation. Do not invoke `./gradlew` until the wrapper actually exists.
 - Run configuration, compilation, unit tests, lint, debug APK generation and artifact inspection on a runner with Android SDK 36 available.
 - Investigate any actual Gradle/Kotlin/AGP/compiler error only after obtaining readable job logs.
+
+
+## 2026-11-14 — Firebase migration inventory (source/configuration audit; runtime unverified)
+
+### Selection and non-repetition
+- Re-read the Priority 0 shared prerequisites and inspected the latest 20 commits. The preceding run was confined to Android build/CI reproducibility and pinned Gradle 9.3.1 in workflows; this run deliberately moved to the independent first shared prerequisite: inventory and classification of remaining Firebase usage.
+- Current code head before this inventory: `53031e383a53b5851b7673fd78b69822e221c4f4`; latest `main` documentation head was `53f3d55e5e05d3d5dbd1c9995eedbc0e136cfb1c`. The 20-commit review showed the latter was documentation-only.
+- Checked root `AGENTS.md`, `.github/AGENTS.md`, and `app/AGENTS.md`; each returned 404. No repository agent-instruction file was available.
+
+### Confirmed inventory findings
+- Added `docs/FIREBASE_INVENTORY.md` with file-level evidence, classification and a safe migration/retirement sequence.
+- Confirmed active Firestore usage in `CrashRepositoryImpl.kt` for project/application/crash/integration/issue/audit/notification data, with nullable Firestore injection from `DependencyProvider.kt`.
+- Confirmed the CrashRepository FirebaseAuth parameter is optional and currently not supplied by `DependencyProvider.provideCrashRepository`; therefore cloud methods that require the Firebase UID cannot be assumed to work. The application Auth repository is separately wired to Supabase. Identity must be unified before migrating the repository.
+- Confirmed `AIModelTeamRepositoryImpl.kt` directly obtains `Firebase.auth`, reads/writes Firestore team, execution and usage collections, and contains in-memory fallback maps. Several writes suppress Firestore exceptions after mutating local state, which can misrepresent persistence success.
+- Confirmed `CrashIntelligenceApp.kt` invokes Firebase initialization; `FirebaseUtil.kt` contains hard-coded placeholder FirebaseOptions (`remixedappid`, `remixed-api-key`, `remixed-project-id`). These are not evidence of a live Firebase project and should be retired only after consumers are migrated.
+- Confirmed Firebase BOM, Firestore, Auth and Firebase Vertex AI dependencies in `gradle/libs.versions.toml` and `app/build.gradle.kts`. Targeted source search did not find production imports of Firebase Vertex AI; treat its dependency as a removal candidate pending complete dependency/build verification.
+- Crashlytics integration is exposed as an integration type/UI option, but `CrashRepositoryImpl.syncCrashes` explicitly rejects it pending a backend proxy. Targeted search found no Firebase Crashlytics SDK usage.
+- Targeted searches found no production source references to Firebase Storage, Messaging or Functions. This search is not a proof of absence across generated code, reflection, transitive dependencies or provider configuration.
+
+### Files and commits
+- Created `docs/FIREBASE_INVENTORY.md` with classification, known evidence, safety constraints and the ordered migration sequence.
+- Inventory document commit: `606437a38194254556d0e0a5e590ba4fa3ddc7ae`.
+- This register update records the same evidence and the next independent task. No application source, Firebase configuration, production data, Firestore rules, Supabase schema/RLS, Auth settings or secrets were changed.
+
+### Verification and limitations
+- Re-fetched the listed production source/configuration files and recorded their blob SHAs during inspection.
+- Ran targeted GitHub code searches for Firebase Auth, Firestore, Storage, Messaging, Functions, Crashlytics, FirebaseApp and the `com.google.firebase` package.
+- Read the latest commit metadata/diff and checked combined commit status for `53f3d55e5e05d3d5dbd1c9995eedbc0e136cfb1c`; the status response contained no status entries. The available connector does not expose a repository-wide Actions run-list operation in this execution, so no new workflow run IDs or logs could be independently enumerated.
+- This was source/configuration inspection only. No Gradle dependency report, build, unit test, emulator/device test, live Firebase request, Supabase request or RLS test was run. No runtime connectivity or migration completion is claimed.
+
+### Remaining and next task
+- The Firebase inventory prerequisite is now documented, not completed as a migration. Next, resolve the shared identity boundary for CrashRepository and AIModelTeamRepository and confirm schema/ownership conventions before migrating any cloud feature slice.
+- Then migrate Projects/Applications/Crash data and Teams in dependency order with versioned Supabase migrations and negative RLS tests.
+- Keep Firebase SDKs and initialization until all confirmed consumers have tested replacements. Do not remove Firebase or migrate production data as part of this inventory-only pass.
+- Last domain worked: Firebase usage inventory. Next domain: Supabase identity boundary + project/crash repository migration planning/implementation (not Login UI).
