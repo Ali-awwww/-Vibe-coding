@@ -1350,3 +1350,36 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Then migrate Projects/Applications/Crash data and Teams in dependency order with versioned Supabase migrations and negative RLS tests.
 - Keep Firebase SDKs and initialization until all confirmed consumers have tested replacements. Do not remove Firebase or migrate production data as part of this inventory-only pass.
 - Last domain worked: Firebase usage inventory. Next domain: Supabase identity boundary + project/crash repository migration planning/implementation (not Login UI).
+
+
+## 2026-11-14 — Android CI runner allocation recheck (build execution blocked)
+
+### Repository and non-overlap
+- Re-fetched `main` at HEAD `1c4705c89899279814d27c506d4d3c637b4d581e` and reviewed the latest 20 commits.
+- Compared the current HEAD with the preceding Android build investigation commit `53f3d55e5e05d3d5dbd1c9995eedbc0e136cfb1c`: the only two intervening commits are `606437a38194254556d0e0a5e590ba4fa3ddc7ae` and `1c4705c89899279814d27c506d4d3c637b4d581e`. They add/update only `docs/FIREBASE_INVENTORY.md` and `docs/SCREEN_TASKS.md`; no Android source or workflow file changed. This is the other agent's Firebase inventory batch and does not overlap the build workflow files.
+- Read the task register and checked the repository tree for `AGENTS.md`; no such file exists in the tree (the root path also returns 404). No agent-specific instruction file was present.
+
+### Confirmed GitHub Actions result
+- For HEAD `1c4705c89899279814d27c506d4d3c637b4d581e`, Android CI run [43512746113](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43512746113), APK run [43512746170](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43512746170), and Code Quality run [43512746570](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43512746570) all concluded `failure`.
+- Re-ran the failed jobs for all three workflows. Attempt 2 also failed before any step executed: each job completed in approximately two seconds with `runner_id=0`, an empty `runner_name`, and `steps=[]`.
+- The job-log download returned `BlobNotFound` for all three attempt-2 jobs. The three runs contain no artifacts; in particular, no debug APK or lint report was produced.
+- This confirms a runner-allocation/startup failure, not a Gradle, Kotlin, resource, test, or lint failure. The exact upstream reason (hosted-runner entitlement/billing, repository/organization policy, or GitHub service-side allocation) is not exposed by the available job response and cannot be stated as fact.
+
+### Build configuration audit
+- All five workflows now use `gradle/actions/setup-gradle@v4` with explicit `gradle-version: '9.3.1'` and invoke the provisioned `gradle` command. The final Android CI and APK YAML indentation is valid on source inspection. The setup action documents `gradle-version` as the supported way to provision a fixed Gradle version for a project without a wrapper.
+- `gradle/wrapper/gradle-wrapper.properties` still pins Gradle `9.3.1`, but `gradlew`, `gradlew.bat`, and `gradle/wrapper/gradle-wrapper.jar` are absent. The current CI does not call `./gradlew`, so the missing wrapper does not explain the observed CI failure. Retain the explicit non-wrapper Gradle provisioning for now rather than add an ungenerated/unverified wrapper.
+- Static version review: AGP `9.1.1`, Gradle `9.3.1`, Kotlin `2.2.10`, `compileSdk 36`, and the workflow JDK 17/21 selections align with the AGP 9.1.1 compatibility table. The app uses Compose compiler plugin `2.2.10` and Compose BOM `2024.09.00`; no concrete incompatibility is established from source inspection. Android SDK/build-tools availability remains unverified because no runner reached the setup steps.
+- Manifest-referenced XML/string/theme resources are present in the current resource tree. Unit and instrumented test source sets are present, but none ran.
+
+### Local execution and exact limitations
+- `java -version` — exit code `0`; OpenJDK `21.0.12.1`.
+- `gradle --version` — exit code `127`; `gradle: command not found`.
+- `adb version` — exit code `127`; `adb: command not found`.
+- `ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset. No local checkout of this repository and no Gradle wrapper script were found.
+- `./gradlew --version`, `./gradlew clean`, `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`, and `./gradlew lintDebug` were not run: there is no local repository checkout, wrapper, Gradle installation, or Android SDK. No exit code is claimed for commands that were not invoked.
+- `./gradlew assembleRelease` was not run. No functioning Android runner or verified release-signing environment was available; no release APK/AAB is claimed.
+- No application source or workflow was changed in this recheck. This register entry is documentation-only; its introduction commit SHA is recorded in the follow-up metadata update.
+
+### Remaining blocker and next action
+- Highest blocker: GitHub Actions does not assign a runner to these jobs. A repository owner/admin must inspect Actions availability, hosted-runner access/usage limits, billing and organization/repository runner policies, then restore runner allocation.
+- After a runner is available, rerun configuration/version, clean, debug assembly, unit tests, lint and APK artifact checks. Obtain readable logs before diagnosing any application/compiler failure. Do not treat the current failures as evidence of an Android source defect.
