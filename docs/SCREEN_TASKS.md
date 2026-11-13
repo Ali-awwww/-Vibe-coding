@@ -1275,3 +1275,43 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Run the new ViewModel tests and existing Login/recovery/parser/repository tests in a functioning Android runner; restore GitHub Actions runner/log availability before treating CI as verification.
 - Inspect Login on an emulator/device in Arabic RTL and English LTR, including compact layouts, IME, accessibility announcements and contrast. Login remains open under the mandatory visual-design gate.
 - Verify the Supabase recovery redirect allow-list and email template, then exercise a real recovery email/callback/password update, session restoration/refresh rotation, email confirmation, sign-out and account switching.
+
+## 2026-11-14 — Android Build & CI reproducibility investigation
+
+### Repository and agent review
+- Inspected `main` at initial HEAD `53031e383a53b5851b7673fd78b69822e221c4f4`, including the latest 20 commits and the existing build-related register entries.
+- Read this complete task register. Checked root `AGENTS.md` and `agents.md`; both paths return 404. No repository agent-instruction file was available to read.
+- Reviewed the previous agent's latest Login/authentication batch and its recorded CI outcomes. The latest feature/test commits are followed by documentation-only corrections; no Android build or JUnit execution is recorded as successful.
+
+### Confirmed build/CI configuration findings
+- `gradle/wrapper/gradle-wrapper.properties` pins Gradle `9.3.1`, but the repository does not contain `gradlew`, `gradlew.bat`, or `gradle/wrapper/gradle-wrapper.jar`. Therefore the documented wrapper commands cannot run from this repository as currently checked in.
+- The Android CI, APK, Code Quality, PR Validation and Release workflows invoked the system `gradle` command. Several used `gradle/actions/setup-gradle` without specifying `gradle-version`; the Code Quality, PR Validation and Release workflows did not configure a Gradle version at all. This made Gradle provisioning dependent on the runner's preinstalled toolchain rather than the repository's declared version.
+- The last previously documented Actions runs (`43313070851`, `43313070857`, `43313070861`) concluded failure. Fetching their job steps returned empty arrays and their log downloads returned `BlobNotFound`; this does not identify a Gradle/source root cause.
+- Combined status lookup for the initial HEAD returned no status entries. The available GitHub integration does not expose a repository-wide workflow-run listing action in this execution, so new run IDs/job logs could not be independently enumerated.
+- Local execution environment: Java 21 is installed; `gradle` and `adb` executables are absent; `ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset; there is no local repository checkout. No Gradle build or Android test could be run locally.
+
+### Changes made on main
+- Pinned Gradle `9.3.1` through `gradle/actions/setup-gradle@v4` in all five workflows: `.github/workflows/android.yml`, `build-apk.yml`, `code_quality.yml`, `pr_validation.yml`, and `release.yml`.
+- Removed the duplicate Gradle cache option from `actions/setup-java` in workflows using setup-gradle, and removed misleading optional `chmod gradlew` steps from workflows that do not have a wrapper.
+- Corrected YAML indentation in the Android CI and APK workflow setup steps in follow-up commits after re-fetching the current files.
+- Commits (all on `main`):
+  - `f27147d6993f0523a0acfe3ebc9f5fad84b8b466` — initial Android CI Gradle pin
+  - `8ba8d56635669f02d94a68852baa0b4d2b81469b` — APK workflow Gradle pin
+  - `f1dceb8e50d3510fef638588552cfbc0deb42cdb` — Code Quality Gradle pin
+  - `0a055523f435021a72a703c1440fe5ae7fd1f940` — PR Validation Gradle pin
+  - `047d15ecda4410fcdbf19782a82d514aa9b24189` — Release workflow Gradle pin
+  - `7b45b1fcee614d6f8109420cdba5d44c979e093c` — correct Android CI YAML indentation
+  - `ab2b30915870522e8fefd8d2ddbdf68c2a6750d0` — correct APK workflow YAML indentation
+
+### Verification and limitations
+- Re-fetched the five workflow files from `main` after the changes and inspected their Gradle setup steps. The final Android CI and APK workflow indentation corrections are present.
+- Latest commit-status lookup returned no status entries. No current workflow run could be retrieved through the available run-list interface; therefore no CI success is claimed.
+- `./gradlew --version`, `./gradlew clean`, `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`, `./gradlew lintDebug`, and `./gradlew assembleRelease` were not run: wrapper scripts/JAR are absent and the local environment has no Gradle or Android SDK.
+- No APK artifact, Android compilation, JUnit result, lint report, or release build is verified.
+- This change improves deterministic Gradle provisioning in CI; it does **not** prove the cause of the previously failed runs or prove the Android project builds successfully.
+
+### Remaining build work
+- Restore a functioning GitHub Actions runner/log path and verify the next Android CI, APK and Code Quality runs to completion.
+- Decide whether to add and validate a complete Gradle Wrapper (scripts, JAR and pinned distribution) or continue using the explicitly pinned non-wrapper Gradle installation. Do not invoke `./gradlew` until the wrapper actually exists.
+- Run configuration, compilation, unit tests, lint, debug APK generation and artifact inspection on a runner with Android SDK 36 available.
+- Investigate any actual Gradle/Kotlin/AGP/compiler error only after obtaining readable job logs.
