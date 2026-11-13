@@ -1378,7 +1378,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - `ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset. No local checkout of this repository and no Gradle wrapper script were found.
 - `./gradlew --version`, `./gradlew clean`, `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`, and `./gradlew lintDebug` were not run: there is no local repository checkout, wrapper, Gradle installation, or Android SDK. No exit code is claimed for commands that were not invoked.
 - `./gradlew assembleRelease` was not run. No functioning Android runner or verified release-signing environment was available; no release APK/AAB is claimed.
-- No application source or workflow was changed in this recheck. This register entry is documentation-only; its introduction commit SHA is recorded in the follow-up metadata update.
+- No application source or workflow was changed in this recheck. This register entry was introduced by documentation-only commit `b40dcd113a3d7270cf6e190793c54a28fb7febb9`; no application source or workflow file changed.
 
 ### Remaining blocker and next action
 - Highest blocker: GitHub Actions does not assign a runner to these jobs. A repository owner/admin must inspect Actions availability, hosted-runner access/usage limits, billing and organization/repository runner policies, then restore runner allocation.
