@@ -1383,3 +1383,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Remaining blocker and next action
 - Highest blocker: GitHub Actions does not assign a runner to these jobs. A repository owner/admin must inspect Actions availability, hosted-runner access/usage limits, billing and organization/repository runner policies, then restore runner allocation.
 - After a runner is available, rerun configuration/version, clean, debug assembly, unit tests, lint and APK artifact checks. Obtain readable logs before diagnosing any application/compiler failure. Do not treat the current failures as evidence of an Android source defect.
+
+
+### CI after the register update
+- The final documentation-only register revision is on HEAD `3b28abd564b3722a2f22f2ba603ddc28cf7143ad`. Its push-triggered Android CI run [43523807965](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43523807965), APK run [43523808167](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43523808167), and Code Quality run [43523807966](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43523807966) all concluded `failure`.
+- Each final-HEAD job again completed with `runner_id=0`, no runner name, and an empty step list; all three runs have no artifacts. The documentation push therefore reproduced the same pre-step runner-allocation blocker and did not validate an Android build.
