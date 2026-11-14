@@ -145,13 +145,15 @@ object DependencyProvider {
     fun provideCrashRepository(context: Context): CrashRepository {
         val db = getDatabase(context)
         return crashRepository ?: CrashRepositoryImpl(
-            getFirestore(context),
-            db.crashDao(),
-            sentryApi,
-            bugsnagApi,
-            provideGitHubRepository(context),
-            provideSymbolicationRepository(context),
-            provideAIModelRepository(context)
+            firestore = getFirestore(context),
+            crashDao = db.crashDao(),
+            sentryApi = sentryApi,
+            bugsnagApi = bugsnagApi,
+            githubRepository = provideGitHubRepository(context),
+            symbolicationRepository = provideSymbolicationRepository(context),
+            aiModelRepository = provideAIModelRepository(context),
+            auth = getFirebaseAuth(context),
+            authRepository = provideAuthRepository(context)
         ).also { crashRepository = it }
     }
 
