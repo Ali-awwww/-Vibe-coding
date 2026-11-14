@@ -4,6 +4,7 @@ import com.example.BuildConfig
 import com.example.data.local.CrashDao
 import com.example.data.remote.*
 import com.example.domain.model.*
+import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.CrashRepository
 import com.example.util.SecurityUtils
 import com.google.ai.client.generativeai.GenerativeModel
@@ -38,7 +39,8 @@ class CrashRepositoryImpl(
     private val githubRepository: com.example.domain.repository.GitHubRepository,
     private val symbolicationRepository: com.example.domain.repository.SymbolicationRepository,
     private val aiModelRepository: com.example.domain.repository.AIModelRepository,
-    private val auth: FirebaseAuth? = null
+    private val auth: FirebaseAuth? = null,
+    private val authRepository: AuthRepository? = null
 ) : CrashRepository {
 
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
@@ -52,11 +54,32 @@ class CrashRepositoryImpl(
         throw IllegalStateException("Unable to verify the authenticated user.", error)
     }
 
+    private fun requireProjectUserId(requestedUserId: String? = null): String {
+        val uid = ProjectIdentityGuard.requireSupabaseUserId(
+            currentUserId = authRepository?.getCurrentUserSync()?.id,
+            requestedUserId = requestedUserId
+        )
+        if (firestore != null) {
+            ProjectIdentityGuard.requireLegacyFirebaseIdentityMatch(
+                supabaseUserId = uid,
+                firebaseUserId = auth?.currentUser?.uid
+            )
+        }
+        return uid
+    }
+
     // Project Operations
     override fun getProjects(): Flow<List<Project>> = flow {
+        val currentUserId = authRepository?.getCurrentUserSync()?.id
+            ?.takeIf { it.isNotBlank() }
+        if (currentUserId == null) {
+            emit(emptyList())
+            return@flow
+        }
+
+        val uid = requireProjectUserId(currentUserId)
         val fs = firestore
         if (fs != null) {
-            val uid = requireUserId()
             emitAll(
                 fs.collection("users").document(uid).collection("projects")
                     .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -64,39 +87,44 @@ class CrashRepositoryImpl(
                     .map { it.toObjects(Project::class.java) }
             )
         } else {
-            emitAll(crashDao.getProjects())
+            emitAll(crashDao.getProjectsForUser(uid))
         }
     }
 
     override fun getProjectsForUser(userId: String): Flow<List<Project>> = flow {
+        val uid = requireProjectUserId(userId)
         val fs = firestore
         if (fs != null) {
             emitAll(
-                fs.collection("users").document(userId).collection("projects")
+                fs.collection("users").document(uid).collection("projects")
                     .orderBy("createdAt", Query.Direction.DESCENDING)
                     .snapshots()
                     .map { it.toObjects(Project::class.java) }
             )
         } else {
-            emitAll(crashDao.getProjectsForUser(userId))
+            emitAll(crashDao.getProjectsForUser(uid))
         }
     }
 
     override suspend fun getProjectById(projectId: String): Project? {
+        val uid = requireProjectUserId()
         val fs = firestore
         if (fs != null) {
-            val uid = requireUserId()
-            return fs.collection("users").document(uid).collection("projects")
-                .document(projectId).get().await().toObject<Project>() ?: crashDao.getProjectById(projectId)
+            val remoteProject = fs.collection("users").document(uid).collection("projects")
+                .document(projectId).get().await().toObject<Project>()
+            if (remoteProject != null) return remoteProject
         }
-        return crashDao.getProjectById(projectId)
+        return crashDao.getProjectsForUser(uid).first().firstOrNull { it.id == projectId }
     }
 
     override suspend fun addProject(project: Project) {
-        val uid = requireUserId()
+        val uid = requireProjectUserId()
+        if (project.ownerId.isNotBlank() && project.ownerId != uid) {
+            throw SecurityException("A project cannot be created for another account.")
+        }
         val id = if (project.id.isEmpty()) UUID.randomUUID().toString() else project.id
-        val newProject = project.copy(id = id, ownerId = if (project.ownerId.isBlank()) uid else project.ownerId)
-        
+        val newProject = project.copy(id = id, ownerId = uid)
+
         firestore?.let { fs ->
             val projectRef = fs.collection("users").document(uid).collection("projects").document(id)
             projectRef.set(newProject).await()
@@ -117,7 +145,7 @@ class CrashRepositoryImpl(
 
 
     override suspend fun deleteProject(projectId: String, callerUserId: String): Result<Unit> = runCatching {
-        val uid = requireUserId()
+        val uid = requireProjectUserId(callerUserId)
         val project = getProjectById(projectId) ?: throw Exception("Project not found")
         // Note: Security rules enforce that only the owner can delete, but we check here too.
         if (project.ownerId != uid) throw SecurityException("غير مصرح لك بحذف هذا المشروع.")
@@ -140,9 +168,13 @@ class CrashRepositoryImpl(
 
     // Application Operations
     override fun getApplications(projectId: String): Flow<List<Application>> = flow {
+        val uid = requireProjectUserId()
+        if (getProjectById(projectId) == null) {
+            throw SecurityException("The selected project is not available to the active account.")
+        }
+
         val fs = firestore
         if (fs != null) {
-            val uid = requireUserId()
             emitAll(
                 fs.collection("users").document(uid).collection("projects").document(projectId)
                     .collection("applications")
@@ -156,9 +188,9 @@ class CrashRepositoryImpl(
     }
 
     override fun getAllApplications(): Flow<List<Application>> = flow {
+        val uid = requireProjectUserId()
         val fs = firestore
         if (fs != null) {
-            val uid = requireUserId()
             emitAll(
                 fs.collectionGroup("applications")
                     .whereEqualTo("ownerId", uid)
@@ -166,15 +198,27 @@ class CrashRepositoryImpl(
                     .map { it.toObjects(Application::class.java) }
             )
         } else {
-            emitAll(crashDao.getAllApplications())
+            val projectIds = crashDao.getProjectsForUser(uid).first().map { it.id }.toSet()
+            emitAll(
+                crashDao.getAllApplications().map { applications ->
+                    applications.filter { it.projectId in projectIds }
+                }
+            )
         }
     }
 
     override suspend fun addApplication(application: Application) {
-        val uid = requireUserId()
+        val uid = requireProjectUserId()
+        if (getProjectById(application.projectId) == null) {
+            throw SecurityException("The selected project is not available to the active account.")
+        }
+        if (application.ownerId.isNotBlank() && application.ownerId != uid) {
+            throw SecurityException("An application cannot be created for another account.")
+        }
+
         val id = if (application.id.isEmpty()) UUID.randomUUID().toString() else application.id
         val newApp = application.copy(id = id, ownerId = uid)
-        
+
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(application.projectId)
             ?.collection("applications")?.document(id)?.set(newApp)?.await()
 
@@ -182,16 +226,13 @@ class CrashRepositoryImpl(
     }
 
     override suspend fun deleteApplication(applicationId: String) {
-        val uid = requireUserId()
-        // We need projectId to delete from nested path. 
-        // This is a limitation of the nested structure.
-        // For simplicity, we search for it.
+        val uid = requireProjectUserId()
         val applications = getAllApplications().first()
         val app = applications.find { it.id == applicationId } ?: return
-        
+
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(app.projectId)
             ?.collection("applications")?.document(applicationId)?.delete()?.await()
-            
+
         crashDao.deleteApplication(applicationId)
     }
 
