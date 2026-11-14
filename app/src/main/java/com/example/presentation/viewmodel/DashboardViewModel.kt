@@ -29,8 +29,7 @@ class DashboardViewModel(
 ) : ViewModel() {
 
     val uiState: StateFlow<DashboardUiState> = authRepository.currentUser.flatMapLatest { user ->
-        val userId = user?.id ?: ""
-        val projectsFlow = if (userId.isNotBlank()) repository.getProjectsForUser(userId) else repository.getProjects()
+        val projectsFlow = projectsForAuthenticatedUser(user?.id, repository::getProjectsForUser)
         val notifsFlow = combine(repository.getNotifications(), repository.getUnreadNotificationCount()) { notifs, unread ->
             Pair(notifs, unread)
         }
