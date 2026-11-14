@@ -1388,3 +1388,48 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### CI after the register update
 - The final documentation-only register revision is on HEAD `3b28abd564b3722a2f22f2ba603ddc28cf7143ad`. Its push-triggered Android CI run [43523807965](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43523807965), APK run [43523808167](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43523808167), and Code Quality run [43523807966](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43523807966) all concluded `failure`.
 - Each final-HEAD job again completed with `runner_id=0`, no runner name, and an empty step list; all three runs have no artifacts. The documentation push therefore reproduced the same pre-step runner-allocation blocker and did not validate an Android build.
+
+
+## 2026-11-15 — Project/Application account-scope hardening (source changes; runtime unverified)
+
+### Selection and non-repetition
+- Reviewed the latest 20 commits, the previous Login/authentication result, and the latest documented Firebase inventory and CI runner investigation. The recent Login batch was not repeated; the Firebase inventory and Gradle workflow work were also left untouched.
+- Priority 0 shared Supabase schema/Auth/RLS foundations remain the prerequisite for cloud migration. The next ordered feature slices are Identity and account, then Projects and Applications. Identity was deliberately not repeated; this batch selected the Projects/Applications account boundary as the highest safe independent slice.
+- AGENTS.md, agents.md, and the repository tree were checked; no repository agent instruction file exists.
+- Starting main HEAD: 5347ee57bea727ca275b76acd6c3b15bdbc77b06. The eight implementation/test commits below are the only changes in this batch before this register update.
+
+### Evidence-backed issues addressed
+- ProjectsViewModel and DashboardViewModel fell back to getProjects() when there was no signed-in user. The local repository implementation of that method returned every Room project, without an account filter.
+- getProjectsForUser(userId) trusted the caller-supplied ID on the legacy Firestore path rather than checking it against the app's Supabase session.
+- Project lookup could fall back from a missing Firestore record to an unscoped Room lookup. Local application listing returned every application, and application creation did not verify that its parent project belonged to the active account.
+- The app's AuthRepository is Supabase-backed, while the remaining Firestore path uses Firebase Auth. Treating those provider identities as interchangeable would be unsafe.
+
+### Changes made on main
+- Added ProjectIdentityGuard.kt: require the current Supabase user, reject requested user IDs that differ from that principal, and permit legacy Firestore access only when the Firebase UID exactly matches the Supabase user ID.
+- Injected the Supabase AuthRepository and the optional configured Firebase Auth instance into CrashRepositoryImpl. No Firebase SDK or configuration was removed.
+- Scoped project list, per-user list, project lookup, project creation and deletion to the active Supabase account. Local project and application reads now use the account's accessible project IDs; project/application creation rejects foreign owner IDs and applications whose parent project is not accessible.
+- Removed signed-out fallback to the unscoped project query from Projects and Dashboard. The shared projectsForAuthenticatedUser flow returns an empty list without invoking the repository when the user ID is missing or blank.
+- Added 10 focused unit tests across ProjectIdentityGuardTest.kt and AuthenticatedProjectFlowTest.kt.
+
+### Files and commits
+- app/src/main/java/com/example/data/repository/ProjectIdentityGuard.kt — a5693689e8748dab17318f39b6d5120f7cbb8fab
+- app/src/main/java/com/example/presentation/viewmodel/AuthenticatedProjectFlow.kt — f475027f4ccbcc67867970b8e75a29317daa3a08
+- app/src/test/java/com/example/data/repository/ProjectIdentityGuardTest.kt — 3e34e78d9810840427d43c5d7853f233969646aa
+- app/src/test/java/com/example/presentation/viewmodel/AuthenticatedProjectFlowTest.kt — c5729fc99164e7492f99768c57c3888780ba92a7
+- app/src/main/java/com/example/data/repository/CrashRepositoryImpl.kt — 21df6675900b231d4e68dad9cd0a3b90a0407f67
+- app/src/main/java/com/example/di/DependencyProvider.kt — 2c4db5626c37cc506ec459fefd283833d7fbae80
+- app/src/main/java/com/example/presentation/viewmodel/ProjectsViewModel.kt — 2fb1ad1af2754cf1650342ce9a3c05ba8768e855
+- app/src/main/java/com/example/presentation/viewmodel/DashboardViewModel.kt — c0e44c7939b3970a0ba730fc85da5928f2e78606
+- Code HEAD before this register update: c0e44c7939b3970a0ba730fc85da5928f2e78606.
+
+### Verification and blockers
+- GitHub compare from starting HEAD to code HEAD reports 8 commits, 8 changed files, 0 behind, with the expected project/repository/DI/ViewModel/test scope. Re-fetched all changed files and reviewed the resulting source.
+- Added unit tests: 7 identity-guard cases and 3 authenticated-flow cases. They were not executed; no test pass is claimed.
+- Local environment check: Java 21 is present; gradle --version and adb version both return exit code 127 (command not found); ANDROID_HOME and ANDROID_SDK_ROOT are unset; there is no checkout of this repository or Gradle wrapper in the execution container. Gradle tests, Android compilation, APK build, emulator and device tests were not run.
+- Latest inspected GitHub Actions runs on the preceding HEAD 5347ee57 all failed before a runner started: Android CI, APK and Code Quality jobs each reported runner_id=0, empty steps, no artifacts, and job-log downloads returned BlobNotFound. This is a runner-allocation/log-availability blocker, not evidence of a Kotlin compilation failure. The new code still requires CI verification after runner allocation is restored.
+- The dedicated Supabase project hgfgbjomwhogpswpqusk currently reports INACTIVE. Read-only table inspection returned “Database is possibly not accessible at the moment”; migration listing timed out. No project restore, schema change, RLS change, production-data operation or credential change was attempted. This blocks verification and the actual Firestore-to-Supabase persistence migration.
+- This slice does not complete the Supabase migration. Team repository identity, project-member/security/audit operations, crash-data migration, negative RLS tests and end-to-end behavior remain open. Legacy Firestore access for the scoped project/application methods now fails closed if the Firebase principal is missing or differs from the Supabase account.
+
+### Next selection
+- Last domain worked: Projects/Applications account-scoped repository access.
+- Next domain: Priority 1 AI provider reliability — inspect the AIModels provider validation/state path and fix one independently evidenced issue. Do not return immediately to Projects/Applications or Login. Revisit the Supabase migration only after the dedicated project is active and its schema/ownership conventions can be verified safely.
