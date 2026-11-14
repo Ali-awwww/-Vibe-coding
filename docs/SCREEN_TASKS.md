@@ -1435,3 +1435,38 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Next selection
 - Last domain worked: Projects/Applications account-scoped repository access.
 - Next domain: Priority 1 AI provider reliability — inspect the AIModels provider validation/state path and fix one independently evidenced issue. Do not return immediately to Projects/Applications or Login. Revisit the Supabase migration only after the dedicated project is active and its schema/ownership conventions can be verified safely.
+
+## 2026-11-15 — Android CI recheck after Project/Application account-scope batch
+
+### Repository and non-overlap
+- Re-fetched `main` at HEAD `00656640f4b3bb03e846de32323d63d7ebc0cfa1` and reviewed the latest 20 commits.
+- Compared with the previous Android-build investigation HEAD `5347ee57bea727ca275b76acd6c3b15bdbc77b06`: 10 commits ahead, 0 behind, and 9 changed paths. The other agent's Project/Application account-scope batch consists of eight implementation/test commits: `a5693689`, `f475027f`, `3e34e78d`, `c5729fc9`, `21df6675`, `2c4db562`, `2fb1ad1a`, and `c0e44c79`; the other two commits update this register. The eight code/test paths are `CrashRepositoryImpl.kt`, `ProjectIdentityGuard.kt`, `DependencyProvider.kt`, `AuthenticatedProjectFlow.kt`, `ProjectsViewModel.kt`, `DashboardViewModel.kt`, `ProjectIdentityGuardTest.kt`, and `AuthenticatedProjectFlowTest.kt`.
+- Reviewed those diffs and re-fetched the current affected source/test files. No Gradle, version-catalog, manifest, resource, or workflow file changed in that batch. No file from the other agent's implementation was edited or overwritten.
+- Read this complete task register (1,438 lines) and scanned the current tracked tree (277 files) for `AGENTS.md`, `agents.md`, and agent-instruction documents. None are present in the repository tree.
+
+### GitHub Actions — current HEAD
+- Android CI/CD run [43647080636](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43647080636): attempt 1 failed; rerun attempt 2 also completed with failure.
+- APK run [43647080668](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43647080668): attempt 1 failed; rerun attempt 2 also completed with failure.
+- Code Quality run [43647080631](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43647080631): attempt 1 failed; rerun attempt 2 also completed with failure.
+- The final attempt-2 jobs (`132609643336`, `132609648609`, `132609657770`) each completed in the pre-step phase with `runner_id=0`, an empty `runner_name`, and `steps=[]`. All three job-log downloads returned `BlobNotFound` (HTTP 404); all three runs contain no artifacts.
+- These failures prove that no runner was assigned and no checkout, Gradle, Kotlin compilation, unit test, lint, or APK packaging step ran. They are not evidence of an Android source/compiler failure. The upstream reason for runner allocation failure (hosted-runner entitlement/usage, billing, repository/organization policy, or GitHub service allocation) remains unavailable from the returned job data.
+- The push-triggered Android CI, APK, and Code Quality workflows are the relevant runs for this HEAD. PR Validation and Release are not established as having run for this push. No workflow is reported as successful or still queued after the final poll.
+
+### Static Android build configuration review
+- `gradle/wrapper/gradle-wrapper.properties` pins Gradle `9.3.1`, but `gradlew`, `gradlew.bat`, and `gradle/wrapper/gradle-wrapper.jar` are absent. The five current workflows use `gradle/actions/setup-gradle@v4` with explicit Gradle `9.3.1` and invoke `gradle`, not `./gradlew`; the missing wrapper therefore prevents the requested wrapper commands locally but does not explain the observed pre-runner CI failures.
+- Current versions: AGP `9.1.1`, Gradle `9.3.1`, Kotlin/KGP `2.2.10`, Compose compiler plugin `2.2.10`, Compose BOM `2024.09.00`, KSP `2.3.5`, `compileSdk 36`, `targetSdk 36`, and `minSdk 24`. The workflows select JDK 17 or 21. Android's AGP 9.1.1 compatibility table specifies Gradle 9.3.1, Build Tools 36.0.0, JDK 17, and KGP 2.2.10; the declared core versions align with that table. This is static compatibility evidence, not a successful Gradle configuration/build.
+- Manifest-referenced resources are present. The tree contains 26 unit-test source files and one instrumented-test source file. Test execution, dependency resolution, SDK/build-tools availability on a runner, Compose compilation, R8/ProGuard execution, and lint remain unverified.
+- The current `app/build.gradle.kts`, version catalog, repositories, manifest, resource tree, ProGuard rules, and all five workflows were inspected. No concrete dependency-resolution, Kotlin/Java, manifest/resource, test, or lint error is established without an executed build log.
+
+### Local environment and exact command results
+- `java -version` — exit code `0`; OpenJDK `21.0.12.1`.
+- `gradle --version` — exit code `127`; `gradle: command not found`.
+- `adb version` — exit code `127`; `adb: command not found`.
+- `ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset. There is no local checkout of this repository in the execution container.
+- `./gradlew --version`, `./gradlew clean`, `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`, and `./gradlew lintDebug` were not run: there is no checkout, wrapper script/JAR, Gradle installation, or Android SDK. No exit code is claimed for commands that were not invoked.
+- `./gradlew assembleRelease` was not run. No release-signing environment was verified, and no signed release artifact is claimed.
+
+### Changes and remaining blocker
+- No Android source, Gradle configuration, dependency version, manifest/resource, or workflow change was made in this recheck. This entry records the inspected source HEAD `00656640f4b3bb03e846de32323d63d7ebc0cfa1`; the only intended change in this batch is this documentation update.
+- No APK artifact, successful Gradle configuration, compilation, unit-test run, lint result, or release build is available.
+- Highest blocker: GitHub Actions runner allocation. A repository/organization owner must inspect Actions usage/billing, hosted-runner access, and organization/repository runner policies, then restore runner allocation. Once a runner is assigned, rerun configuration, clean, debug assembly, unit tests, lint, and APK artifact inspection before diagnosing any application-level build failure.
