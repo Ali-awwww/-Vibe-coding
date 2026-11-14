@@ -37,11 +37,7 @@ class ProjectsViewModel(
         val userId = user?.id ?: ""
         val userEmail = user?.email ?: ""
 
-        val projectsFlow = if (userId.isNotBlank()) {
-            repository.getProjectsForUser(userId)
-        } else {
-            repository.getProjects()
-        }
+        val projectsFlow = projectsForAuthenticatedUser(user?.id, repository::getProjectsForUser)
 
         combine(
             projectsFlow,
