@@ -1563,3 +1563,25 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - This correction supersedes the earlier partial statement: both the primary action label and loading spinner now reference `OnCyan`.
 - The test and build workflows for the current source HEAD still require a completed result; pending/in-progress runs are not PASS.
 
+
+
+## 2026-11-15 — Login replacement recovery-link state reset
+
+### Confirmed defect
+- LoginScreen keyed its recovery-form effect only on isReadyForNewPassword.
+- If a second valid recovery deep link arrived while the first link's password form was already open, the ViewModel cancelled the old one-time credential and installed the new one, but MutableStateFlow suppressed the identical true state. Compose therefore did not rerun the effect, leaving the previous password and confirmation values visible in the form for the new credential.
+
+### Implemented correction
+- Added a monotonically increasing linkGeneration to PasswordRecoveryUiState, incremented for each incoming auth link.
+- Keyed Login's recovery-state effect on both readiness and link generation. A replacement link now retriggers the existing transition logic, clears password/confirmation values, hides password visibility, and updates the form even when readiness remains true.
+- Added a ViewModel regression test proving that a second link received while password setup is already open advances the observable generation without losing the ready state.
+
+### Files
+- app/src/main/java/com/example/presentation/viewmodel/MainViewModel.kt
+- app/src/main/java/com/example/presentation/ui/screens/LoginScreen.kt
+- app/src/test/java/com/example/MainViewModelPasswordRecoveryTest.kt
+
+### Verification
+- Regression test added; not yet executed locally in this environment.
+- Existing baseline CI on pre-change HEAD 83508a125971c955f51b3f6e7ad307072995f2a4 passed Android unit tests, Debug APK build, Release APK build, and Android lint. Those results do not validate this change.
+- Await CI on the resulting commit. Emulator/device validation and rendered RTL/LTR review remain outstanding; Login remains OPEN.

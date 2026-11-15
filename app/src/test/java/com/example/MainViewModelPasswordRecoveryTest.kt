@@ -55,6 +55,27 @@ class MainViewModelPasswordRecoveryTest {
     }
 
     @Test
+    fun replacingRecoveryLinkWhilePasswordSetupIsOpenAdvancesUiGeneration() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = MainViewModel(RecordingAuthRepository())
+
+            viewModel.acceptPasswordRecoveryLink(recoveryLink("first-one-time-hash"))
+            val firstGeneration = viewModel.passwordRecoveryState.value.linkGeneration
+            assertTrue(viewModel.passwordRecoveryState.value.isReadyForNewPassword)
+
+            // This simulates a second deep link arriving without leaving password setup.
+            viewModel.acceptPasswordRecoveryLink(recoveryLink("second-one-time-hash"))
+            val secondGeneration = viewModel.passwordRecoveryState.value.linkGeneration
+
+            assertTrue(secondGeneration > firstGeneration)
+            assertTrue(viewModel.passwordRecoveryState.value.isReadyForNewPassword)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun receivingANewRecoveryLinkCancelsThePreviousInFlightCompletion() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {

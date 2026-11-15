@@ -158,7 +158,10 @@ fun LoginScreen(
     val passwordFocusRequester = remember { FocusRequester() }
     val confirmPasswordFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(passwordRecoveryState.isReadyForNewPassword) {
+    LaunchedEffect(
+        passwordRecoveryState.isReadyForNewPassword,
+        passwordRecoveryState.linkGeneration
+    ) {
         val nextMode = resolvePasswordRecoveryMode(
             currentMode = mode,
             isReadyForNewPassword = passwordRecoveryState.isReadyForNewPassword

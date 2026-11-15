@@ -21,7 +21,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class PasswordRecoveryUiState(
-    val isReadyForNewPassword: Boolean = false
+    val isReadyForNewPassword: Boolean = false,
+    /** Changes for every incoming auth link, even when readiness remains true. */
+    val linkGeneration: Long = 0L
 )
 
 enum class AuthUiMessage {
@@ -65,6 +67,7 @@ class MainViewModel(
     val passwordRecoveryState: StateFlow<PasswordRecoveryUiState> = _passwordRecoveryState.asStateFlow()
     private var pendingPasswordRecovery: PasswordRecoveryCredentials? = null
     private var passwordRecoveryGeneration = 0L
+    private var passwordRecoveryLinkGeneration = 0L
     private var passwordRecoveryJob: Job? = null
 
     private fun resolveFailureMessage(error: Throwable?, fallback: AuthUiMessage): AuthUiMessage {
@@ -73,10 +76,13 @@ class MainViewModel(
     }
 
     fun acceptPasswordRecoveryLink(rawLink: String) {
+        // A second link can arrive while the form is already in password-setup mode.
+        // A distinct generation makes that replacement observable to Compose.
+        val linkGeneration = ++passwordRecoveryLinkGeneration
         if (isVerifiedEmailConfirmationLink(rawLink)) {
             invalidatePasswordRecoveryAttempt()
             pendingPasswordRecovery = null
-            _passwordRecoveryState.value = PasswordRecoveryUiState()
+            _passwordRecoveryState.value = PasswordRecoveryUiState(linkGeneration = linkGeneration)
             _actionState.value = AuthActionState(
                 successMessage = AuthUiMessage.EMAIL_CONFIRMED_SIGN_IN
             )
@@ -86,12 +92,15 @@ class MainViewModel(
         when (val parsed = parsePasswordRecoveryLink(rawLink)) {
             is PasswordRecoveryLinkResult.Ready -> {
                 pendingPasswordRecovery = parsed.credentials
-                _passwordRecoveryState.value = PasswordRecoveryUiState(isReadyForNewPassword = true)
+                _passwordRecoveryState.value = PasswordRecoveryUiState(
+                    isReadyForNewPassword = true,
+                    linkGeneration = linkGeneration
+                )
                 _actionState.value = AuthActionState()
             }
             is PasswordRecoveryLinkResult.Rejected -> {
                 pendingPasswordRecovery = null
-                _passwordRecoveryState.value = PasswordRecoveryUiState()
+                _passwordRecoveryState.value = PasswordRecoveryUiState(linkGeneration = linkGeneration)
                 _actionState.value = AuthActionState(errorMessage = AuthUiMessage.RECOVERY_LINK_INVALID)
             }
         }
@@ -100,7 +109,9 @@ class MainViewModel(
     fun cancelPasswordRecovery() {
         invalidatePasswordRecoveryAttempt()
         pendingPasswordRecovery = null
-        _passwordRecoveryState.value = PasswordRecoveryUiState()
+        _passwordRecoveryState.value = PasswordRecoveryUiState(
+            linkGeneration = passwordRecoveryLinkGeneration
+        )
         _actionState.value = AuthActionState()
     }
 
@@ -155,7 +166,9 @@ class MainViewModel(
                     pendingPasswordRecovery = null
                     passwordRecoveryGeneration += 1L
                     passwordRecoveryJob = null
-                    _passwordRecoveryState.value = PasswordRecoveryUiState()
+                    _passwordRecoveryState.value = PasswordRecoveryUiState(
+                        linkGeneration = passwordRecoveryLinkGeneration
+                    )
                     _actionState.value = AuthActionState(
                         successMessage = AuthUiMessage.PASSWORD_UPDATED
                     )
