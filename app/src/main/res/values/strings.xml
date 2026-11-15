@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Crash Intelligence</string>
+    <string name="app_name">Vibe Coding</string>
     <string name="crash_details">Crash Details</string>
     <string name="stack_trace">Stack Trace</string>
     <string name="ai_diagnosis">AI Diagnosis</string>

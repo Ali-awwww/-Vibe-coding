@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/app_icon_foreground_1793415332270"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Cyan code brackets: a compact, recognizable Vibe Coding mark. -->
+    <path
+        android:fillColor="#29D6F5"
+        android:fillType="evenOdd"
+        android:pathData="M35,25 L39,29 L25,54 L39,79 L35,83 L18,54 Z M73,25 L90,54 L73,83 L69,79 L83,54 L69,29 Z" />
+
+    <!-- Violet V-shaped spark for the product's creative coding identity. -->
+    <path
+        android:fillColor="#9B7BFF"
+        android:pathData="M41,36 L48,36 L54,65 L60,36 L67,36 L57,75 L51,75 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49,28 L54,18 L59,28 L54,25 Z" />
+</vector>
