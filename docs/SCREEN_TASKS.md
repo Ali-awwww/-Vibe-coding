@@ -1557,3 +1557,9 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **العائق/المتطلب الخارجي:** Android emulator or physical device with installable debug APK is required for visual and accessibility runtime evidence. If CI is not yet complete, wait for the workflow result; do not infer test success from workflow creation.
 - **Screen status:** OPEN — accessibility contrast source correction implemented; full Login visual redesign, functional end-to-end review, RTL/LTR visual evidence and device sign-off remain outstanding.
 
+### 2026-11-15 follow-up — loading indicator consistency
+- A post-update source re-fetch found the primary button label had switched to `OnCyan`, but its loading spinner still used white. Corrected the spinner to use the same shared `OnCyan` token.
+- Additional source commit: `4f277d7d3ddb59c72dc8f38810fae18f504233c9` (`fix(login): align loading indicator contrast`).
+- This correction supersedes the earlier partial statement: both the primary action label and loading spinner now reference `OnCyan`.
+- The test and build workflows for the current source HEAD still require a completed result; pending/in-progress runs are not PASS.
+
