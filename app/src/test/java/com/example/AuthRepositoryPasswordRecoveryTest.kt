@@ -43,7 +43,11 @@ class AuthRepositoryPasswordRecoveryTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        sessionStore = SupabaseSessionStore(context)
+        sessionStore = SupabaseSessionStore(
+            context = context,
+            encryptSecret = { "test-encrypted:$it" },
+            decryptSecret = { it.removePrefix("test-encrypted:") }
+        )
         sessionStore.clear()
     }
 
