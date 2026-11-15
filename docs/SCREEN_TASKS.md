@@ -82,7 +82,15 @@ Complete each slice end-to-end before marking it complete. Visual redesign and f
 - [ ] Re-run a repository-wide Firebase scan and confirm no unintended production dependency remains.
 - [ ] Update this register with file-level changes, commits, test evidence and remaining limitations.
 
-**Current state:** Supabase project, protected initial schema and partial Auth source wiring exist. Multiple Firebase-backed repositories and DI/runtime references remain. Feature-slice migration has not been completed; all checkboxes above remain open. No Gradle build or Android end-to-end verification is claimed.
+**Current state:** Supabase project, protected initial schema and partial Auth source wiring exist. The projects/applications repositories now have an initial authenticated PostgREST slice, but multiple Firebase-backed repositories and DI/runtime references remain. Feature-slice migration has not been completed; all checkboxes above remain open. Android Kotlin compilation and debug APK packaging were verified in the sandbox; unit-test suite completion and Android device/emulator end-to-end verification are not claimed.
+
+### 2026-11-15 — Projects/applications PostgREST slice and Android build verification
+- Added authenticated PostgREST DTO/API/data-source wiring for project and application reads/writes, using the stored Supabase user session and publishable key; existing identity checks and RLS remain in force.
+- Routed project/application listing, creation/deletion and project security-setting updates through the new source while retaining Room as the local cache. This is a first slice only; realtime updates, membership/audit/crash/issue/team data and legacy Firestore migration remain open.
+- Fixed cross-file visibility of `isGitHubPullRequestUrl` used by `FixHistoryScreen`.
+- Fixed Android resource parsing by escaping apostrophes in five English authentication error strings.
+- Added Gradle 9.3.1 wrapper scripts and JAR; CI continues to provision the matching Gradle version.
+- Verification on the current branch: `:app:compileDebugKotlin` succeeded. After the string-resource fix, `:app:assembleDebug` succeeded. The full unit-test suite was not rerun on this branch; a prior run on the earlier checkout timed out at the configured 2-minute test-task limit during `AICodingAgentTest`. No live app or RLS negative-authorization test is claimed.
 
 ---
 

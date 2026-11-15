@@ -1060,8 +1060,7 @@ fun TestItem(label: String, status: String, modifier: Modifier = Modifier) {
     }
 }
 
-private fun isGitHubPullRequestUrl(url: String): Boolean =
+internal fun isGitHubPullRequestUrl(url: String): Boolean =
     url.startsWith("https://github.com/") &&
         url.contains("/pull/") &&
         !url.contains(' ')
-

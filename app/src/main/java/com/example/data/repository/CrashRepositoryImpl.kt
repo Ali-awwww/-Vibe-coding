@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.BuildConfig
 import com.example.data.local.CrashDao
+import com.example.data.remote.supabase.SupabaseProjectDataSource
 import com.example.data.remote.*
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
@@ -40,7 +41,8 @@ class CrashRepositoryImpl(
     private val symbolicationRepository: com.example.domain.repository.SymbolicationRepository,
     private val aiModelRepository: com.example.domain.repository.AIModelRepository,
     private val auth: FirebaseAuth? = null,
-    private val authRepository: AuthRepository? = null
+    private val authRepository: AuthRepository? = null,
+    private val supabaseProjectDataSource: SupabaseProjectDataSource? = null
 ) : CrashRepository {
 
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
@@ -78,6 +80,10 @@ class CrashRepositoryImpl(
         }
 
         val uid = requireProjectUserId(currentUserId)
+        supabaseProjectDataSource?.let {
+            emit(it.getProjectsForUser(uid))
+            return@flow
+        }
         val fs = firestore
         if (fs != null) {
             emitAll(
@@ -93,6 +99,10 @@ class CrashRepositoryImpl(
 
     override fun getProjectsForUser(userId: String): Flow<List<Project>> = flow {
         val uid = requireProjectUserId(userId)
+        supabaseProjectDataSource?.let {
+            emit(it.getProjectsForUser(uid))
+            return@flow
+        }
         val fs = firestore
         if (fs != null) {
             emitAll(
@@ -108,6 +118,11 @@ class CrashRepositoryImpl(
 
     override suspend fun getProjectById(projectId: String): Project? {
         val uid = requireProjectUserId()
+        supabaseProjectDataSource?.let {
+            val project = it.getProjectById(projectId)
+            project?.let { row -> crashDao.insertProject(row) }
+            return project
+        }
         val fs = firestore
         if (fs != null) {
             val remoteProject = fs.collection("users").document(uid).collection("projects")
@@ -124,6 +139,10 @@ class CrashRepositoryImpl(
         }
         val id = if (project.id.isEmpty()) UUID.randomUUID().toString() else project.id
         val newProject = project.copy(id = id, ownerId = uid)
+        supabaseProjectDataSource?.let {
+            crashDao.insertProject(it.createProject(newProject))
+            return
+        }
 
         firestore?.let { fs ->
             val projectRef = fs.collection("users").document(uid).collection("projects").document(id)
@@ -149,6 +168,11 @@ class CrashRepositoryImpl(
         val project = getProjectById(projectId) ?: throw Exception("Project not found")
         // Note: Security rules enforce that only the owner can delete, but we check here too.
         if (project.ownerId != uid) throw SecurityException("غير مصرح لك بحذف هذا المشروع.")
+        supabaseProjectDataSource?.let {
+            it.deleteProject(projectId)
+            crashDao.deleteProject(projectId)
+            return@runCatching
+        }
 
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)?.delete()?.await()
         
@@ -172,6 +196,10 @@ class CrashRepositoryImpl(
         if (getProjectById(projectId) == null) {
             throw SecurityException("The selected project is not available to the active account.")
         }
+        supabaseProjectDataSource?.let {
+            emit(it.getApplications(projectId))
+            return@flow
+        }
 
         val fs = firestore
         if (fs != null) {
@@ -189,6 +217,10 @@ class CrashRepositoryImpl(
 
     override fun getAllApplications(): Flow<List<Application>> = flow {
         val uid = requireProjectUserId()
+        supabaseProjectDataSource?.let {
+            emit(it.getAllApplications())
+            return@flow
+        }
         val fs = firestore
         if (fs != null) {
             emitAll(
@@ -218,6 +250,10 @@ class CrashRepositoryImpl(
 
         val id = if (application.id.isEmpty()) UUID.randomUUID().toString() else application.id
         val newApp = application.copy(id = id, ownerId = uid)
+        supabaseProjectDataSource?.let {
+            crashDao.insertApplication(it.createApplication(newApp))
+            return
+        }
 
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(application.projectId)
             ?.collection("applications")?.document(id)?.set(newApp)?.await()
@@ -229,6 +265,11 @@ class CrashRepositoryImpl(
         val uid = requireProjectUserId()
         val applications = getAllApplications().first()
         val app = applications.find { it.id == applicationId } ?: return
+        supabaseProjectDataSource?.let {
+            it.deleteApplication(applicationId)
+            crashDao.deleteApplication(applicationId)
+            return
+        }
 
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(app.projectId)
             ?.collection("applications")?.document(applicationId)?.delete()?.await()
@@ -802,7 +843,12 @@ class CrashRepositoryImpl(
         piiScrubbing: Boolean,
         callerUserId: String
     ): Result<Unit> = runCatching {
-        val uid = requireUserId()
+        val uid = requireProjectUserId(callerUserId)
+        supabaseProjectDataSource?.let {
+            it.updateProjectSettings(projectId, retentionDays, piiScrubbing)
+            crashDao.updateProjectSecurityPolicy(projectId, retentionDays, piiScrubbing)
+            return@runCatching
+        }
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)
             ?.update(mapOf(
                 "dataRetentionDays" to retentionDays,

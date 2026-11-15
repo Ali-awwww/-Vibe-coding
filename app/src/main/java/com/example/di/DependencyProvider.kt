@@ -11,6 +11,8 @@ import com.example.domain.repository.CrashRepository
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.remote.supabase.SupabaseAuthApi
+import com.example.data.remote.supabase.SupabasePostgrestApi
+import com.example.data.remote.supabase.SupabaseProjectDataSource
 import com.example.data.remote.supabase.SupabaseSessionStore
 import com.example.data.remote.*
 import com.example.data.repository.*
@@ -34,6 +36,7 @@ object DependencyProvider {
     private var database: AppDatabase? = null
     private var firestore: FirebaseFirestore? = null
     private var firebaseAuth: FirebaseAuth? = null
+    private var supabaseProjectDataSource: SupabaseProjectDataSource? = null
 
     private fun getFirestore(context: Context): FirebaseFirestore? {
         return firestore ?: synchronized(this) {
@@ -101,6 +104,7 @@ object DependencyProvider {
         .build()
 
     private val supabaseAuthApi = supabaseRetrofit.create(SupabaseAuthApi::class.java)
+    private val supabasePostgrestApi = supabaseRetrofit.create(SupabasePostgrestApi::class.java)
 
     private val openRouterRetrofit = Retrofit.Builder()
         .baseUrl("https://openrouter.ai/api/v1/")
@@ -142,6 +146,17 @@ object DependencyProvider {
         }
     }
 
+    fun provideSupabaseProjectDataSource(context: Context): SupabaseProjectDataSource {
+        return supabaseProjectDataSource ?: synchronized(this) {
+            supabaseProjectDataSource ?: SupabaseProjectDataSource(
+                api = supabasePostgrestApi,
+                authRepository = provideAuthRepository(context),
+                sessionStore = SupabaseSessionStore(context.applicationContext),
+                publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
+            ).also { supabaseProjectDataSource = it }
+        }
+    }
+
     fun provideCrashRepository(context: Context): CrashRepository {
         val db = getDatabase(context)
         return crashRepository ?: CrashRepositoryImpl(
@@ -153,7 +168,8 @@ object DependencyProvider {
             symbolicationRepository = provideSymbolicationRepository(context),
             aiModelRepository = provideAIModelRepository(context),
             auth = getFirebaseAuth(context),
-            authRepository = provideAuthRepository(context)
+            authRepository = provideAuthRepository(context),
+            supabaseProjectDataSource = provideSupabaseProjectDataSource(context)
         ).also { crashRepository = it }
     }
 
@@ -349,5 +365,4 @@ object DependencyProvider {
         )
     }
 }
-
 
