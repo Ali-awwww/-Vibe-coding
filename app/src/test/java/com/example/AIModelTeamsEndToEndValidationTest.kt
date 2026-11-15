@@ -191,7 +191,13 @@ class AIModelTeamsEndToEndValidationTest {
 
         assertFalse("Progress should complete", lastProgress.isRunning)
         assertEquals("All 20 tests must be executed", 20, lastProgress.items.size)
-        assertTrue("All tests must pass", lastProgress.items.all { it.status == ValidationStatus.PASSED })
+        val nonPassingItems = lastProgress.items.filter { it.status != ValidationStatus.PASSED }
+        assertTrue(
+            "All tests must pass. Non-passing items: " + nonPassingItems.joinToString { item ->
+                "id=${item.id}, status=${item.status}, error=${item.errorMessage}, evidence=${item.evidence}"
+            },
+            nonPassingItems.isEmpty()
+        )
         assertNotNull(lastProgress.summaryReport)
         assertEquals(20, lastProgress.summaryReport?.passedCount)
         assertEquals(0, lastProgress.summaryReport?.failedCount)
