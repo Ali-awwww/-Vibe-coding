@@ -587,7 +587,7 @@ fun LoginScreen(
                         shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = VibeDesignTokens.Color.Cyan,
-                            contentColor = Color.White,
+                            contentColor = VibeDesignTokens.Color.OnCyan,
                             disabledContainerColor = Color(0xFF244052),
                             disabledContentColor = MutedText
                         )
