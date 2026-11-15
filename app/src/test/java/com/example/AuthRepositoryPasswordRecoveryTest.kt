@@ -119,7 +119,7 @@ class AuthRepositoryPasswordRecoveryTest {
                     SupabaseAuthUser(
                         id = "recovery-user",
                         email = "owner@example.com",
-                        userMetadata = mapOf("display_name" to "Owner")
+                        userMetadata = mapOf<String, Any?>("display_name" to "Owner")
                     )
                 )
             }

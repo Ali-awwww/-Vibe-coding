@@ -169,7 +169,7 @@ class ResilienceAndNegativePathTest {
                         id = "user-1",
                         email = "user@example.com",
                         createdAt = "2024-01-01T00:00:00Z",
-                        userMetadata = mapOf("display_name" to "Test User", "organization" to "Test Org")
+                        userMetadata = mapOf<String, Any?>("display_name" to "Test User", "organization" to "Test Org")
                     )
                 )
             )
