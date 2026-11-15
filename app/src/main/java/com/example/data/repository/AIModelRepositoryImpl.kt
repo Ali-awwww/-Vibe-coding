@@ -6,6 +6,7 @@ import com.example.data.remote.OpenRouterApi
 import com.example.data.remote.HuggingFaceApi
 import com.example.data.remote.OpenRouterChatRequest
 import com.example.data.remote.ChatMessage
+import com.example.data.remote.OpenRouterModelData
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
 import com.example.util.SecurityUtils
