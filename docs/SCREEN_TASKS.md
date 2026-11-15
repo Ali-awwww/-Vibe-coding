@@ -1701,3 +1701,37 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Last domain worked:** AIModels — account isolation and provider lifecycle.
 - **Next domain:** AIModels — provider catalog freshness, unsupported provider behavior and live-connection truthfulness.
 - **Screen status:** OPEN — source and regression coverage updated; new CI/device verification pending.
+
+
+## 2026-11-16 — AIModels catalog integrity and provider failure taxonomy
+
+### Confirmed defects and corrections
+- OpenRouter pricing was compared as literal strings, so equivalent zero values such as `0.000000` were not recognized as free; the category also depended only on prompt price, incorrectly labelling a model with paid completion as FREE.
+- Provider sync fetched the OpenRouter catalog twice (once inside `testConnection`, then again for persistence), increasing request volume and making verification and stored catalog potentially refer to different responses.
+- Model catalog refresh deleted cached rows and inserted replacements in separate DAO calls. The replacement is now a guarded Room `@Transaction`; empty lists and rows belonging to another provider are rejected before deletion.
+- Invalid or non-finite pricing rows are skipped rather than being cached with a zero-cost fallback. Free classification now parses numeric prices and requires both prompt and completion price to be zero.
+- Provider failures now use a typed, non-sensitive classification for invalid credentials, access denial, quota, rate limit, timeout, empty response, network, service outage and unsupported providers. Rate-limit failures set the existing RATE_LIMITED status; user-facing messages do not echo provider response bodies or exception details. Coroutine cancellation is rethrown rather than converted into an ordinary provider failure.
+
+### Files and commits
+- `app/src/main/java/com/example/data/local/AppDatabase.kt` — added guarded transactional model-catalog replacement.
+- `app/src/main/java/com/example/data/repository/AIModelRepositoryImpl.kt` — one-fetch sync, numeric pricing validation and typed provider failure mapping.
+- `app/src/main/java/com/example/domain/model/AIProviderFailure.kt` — provider failure contract.
+- `app/src/main/java/com/example/presentation/viewmodel/AIModelsViewModel.kt` — localized failure messages and RATE_LIMITED state.
+- `app/src/test/java/com/example/AIFreeSystemValidationTest.kt` and `AIModelsViewModelTest.kt` — catalog, account boundary, failure classification and UI-state regression coverage.
+- Catalog batch source commit: `b9c2e038139b761009c0c754f828e6aacf7739fc`.
+- Follow-up compile correction: `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08` (added the missing remote model import after CI identified the unresolved reference).
+
+### Verification evidence
+- PASS — pre-change HEAD `fbaa39fc1b5dc6f3789f862f896aad41974cd049`: Android CI, APK and Code Quality workflows all completed successfully, with debug APK, release APK and lint artifacts.
+- FAIL — first catalog commit `b9c2e038139b761009c0c754f828e6aacf7739fc`: Android CI and Code Quality exposed a compile error, `Unresolved reference: OpenRouterModelData`, in the new member-extension receiver. The import was added in `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08`.
+- PENDING — push-triggered Android CI, APK and Code Quality runs for `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08` were still running when this entry was prepared; do not count them as PASS until final conclusions and logs are checked.
+- NOT RUN locally — this execution environment has no repository checkout, Gradle installation, Android SDK or ADB. CI is the available compilation/test/lint evidence.
+- BLOCKED — no emulator/device is attached and no live OpenRouter/Gemini credentials are available in this run. Rendered RTL/LTR, TalkBack, device behavior and real user-provider connectivity remain unverified. AIModels remains OPEN.
+
+### Continuity
+- **Active screen:** AIModels / provider and model configuration.
+- **Last completed step:** catalog refresh now reuses one verified OpenRouter response, parses prices numerically, rejects malformed price rows and replaces Room catalog rows transactionally; provider failures are classified without exposing raw provider diagnostics.
+- **Exact next step:** inspect the final Android CI, APK and Code Quality runs for the latest HEAD, download/read the lint artifact if warnings are reported, fix any compile/test/lint failures, then continue AIModels model availability and UI verification. Do not mark the screen complete without real provider credentials and emulator/device RTL/LTR evidence.
+- **Last domain worked:** AIModels — provider catalog integrity and failure handling.
+- **Next domain:** AIModels — remaining model availability and screen interaction/accessibility verification.
+- **Screen status:** OPEN — source and regression tests updated; latest CI/device/provider-runtime verification pending.

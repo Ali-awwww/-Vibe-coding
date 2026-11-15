@@ -114,6 +114,38 @@ class AIModelsViewModelTest {
     }
 
     @Test
+    fun providerFailuresShowDistinctSafeMessagesAndRateLimitStatus() = runTest(mainDispatcher) {
+        val cases = listOf(
+            AIProviderFailureKind.INVALID_CREDENTIALS to "مفتاح API",
+            AIProviderFailureKind.QUOTA_EXCEEDED to "حصته",
+            AIProviderFailureKind.RATE_LIMITED to "حد الطلبات",
+            AIProviderFailureKind.TIMEOUT to "مهلة الاتصال",
+            AIProviderFailureKind.EMPTY_RESPONSE to "محتوى صالح"
+        )
+
+        cases.forEach { (kind, expectedMessage) ->
+            val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
+            val repository = FakeAIModelRepository().apply {
+                connectionResult = Result.failure(AIProviderOperationException(kind))
+            }
+            val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
+            advanceUntilIdle()
+
+            viewModel.testConnection("provider-a")
+            advanceUntilIdle()
+
+            assertTrue("Expected a safe message for $kind", viewModel.uiState.value.error.orEmpty().contains(expectedMessage))
+            val expectedStatus = if (kind == AIProviderFailureKind.RATE_LIMITED) {
+                AIProviderStatus.RATE_LIMITED
+            } else {
+                AIProviderStatus.ERROR
+            }
+            assertEquals(expectedStatus, repository.statusUpdates.single().status)
+            assertFalse(viewModel.uiState.value.error.orEmpty().contains(kind.name))
+        }
+    }
+
+    @Test
     fun providerLoadFailureCanBeRetried() = runTest(mainDispatcher) {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
         val repository = FakeAIModelRepository().apply { failProviderLoad = true }

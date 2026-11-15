@@ -13,7 +13,11 @@ import com.example.util.SecurityUtils
 import com.google.ai.client.generativeai.GenerativeModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.map
+import retrofit2.HttpException
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.UUID
 
 class AIModelRepositoryImpl(
@@ -54,11 +58,11 @@ class AIModelRepositoryImpl(
     override suspend fun getModelById(userId: String, id: String): AIModel? =
         aiProviderDao.getModelById(userId, id)
 
-    override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = runCatching {
+    override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = runProviderOperation {
         val provider = aiProviderDao.getProviderById(userId, providerId)
-            ?: throw IllegalArgumentException("Provider not found or not owned by user")
+            ?: throw AIProviderOperationException(AIProviderFailureKind.MISCONFIGURED)
         val apiKey = provider.apiKey?.let(decryptSecret)
-            ?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("API key is missing")
+            ?.takeIf { it.isNotBlank() } ?: throw AIProviderOperationException(AIProviderFailureKind.MISCONFIGURED)
 
         val openRouterModels = when (provider.type) {
             AIProviderType.OPEN_ROUTER -> openRouterApi.getModels("Bearer $apiKey").data.also {
@@ -69,7 +73,7 @@ class AIModelRepositoryImpl(
                 emptyList()
             }
             AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM ->
-                throw UnsupportedOperationException("This provider type is not supported for model sync.")
+                throw AIProviderOperationException(AIProviderFailureKind.UNSUPPORTED)
         }
 
         val models = when (provider.type) {
@@ -130,7 +134,7 @@ class AIModelRepositoryImpl(
             AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM -> emptyList()
         }
 
-        if (models.isEmpty()) throw IllegalStateException("Provider returned no supported models")
+        if (models.isEmpty()) throw AIProviderOperationException(AIProviderFailureKind.EMPTY_RESPONSE)
         aiProviderDao.replaceModelsForProvider(userId, providerId, models)
         aiProviderDao.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, System.currentTimeMillis())
     }
@@ -138,7 +142,7 @@ class AIModelRepositoryImpl(
     private suspend fun verifyOpenRouterConnection(apiKey: String, models: List<com.example.data.remote.OpenRouterModelData>) {
         val testModel = models.firstOrNull { it.isFreeModel() }
             ?: models.firstOrNull()
-            ?: throw IllegalStateException("OpenRouter returned no models")
+            ?: throw AIProviderOperationException(AIProviderFailureKind.EMPTY_RESPONSE)
         val response = openRouterApi.generateCompletion(
             "Bearer $apiKey",
             OpenRouterChatRequest(
@@ -147,7 +151,7 @@ class AIModelRepositoryImpl(
             )
         )
         if (response.choices.firstOrNull()?.message?.content.isNullOrBlank()) {
-            throw IllegalStateException("Provider returned an empty test response")
+            throw AIProviderOperationException(AIProviderFailureKind.EMPTY_RESPONSE)
         }
     }
 
@@ -165,6 +169,35 @@ class AIModelRepositoryImpl(
     private fun String.toValidPricePerToken(): Double? =
         toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
 
+    private suspend fun <T> runProviderOperation(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        Result.failure(failure.toAIProviderOperationException())
+    }
+
+    private fun Throwable.toAIProviderOperationException(): AIProviderOperationException {
+        if (this is AIProviderOperationException) return this
+        val causes = generateSequence(this) { it.cause }.toList()
+        val httpFailure = causes.filterIsInstance<HttpException>().firstOrNull()
+        val kind = when (httpFailure?.code()) {
+            401 -> AIProviderFailureKind.INVALID_CREDENTIALS
+            403 -> AIProviderFailureKind.ACCESS_DENIED
+            402 -> AIProviderFailureKind.QUOTA_EXCEEDED
+            429 -> AIProviderFailureKind.RATE_LIMITED
+            in 500..599 -> AIProviderFailureKind.SERVICE_UNAVAILABLE
+            else -> when {
+                causes.any { it is SocketTimeoutException } -> AIProviderFailureKind.TIMEOUT
+                causes.any { it is IOException } -> AIProviderFailureKind.NETWORK
+                this is UnsupportedOperationException -> AIProviderFailureKind.UNSUPPORTED
+                this is IllegalArgumentException -> AIProviderFailureKind.MISCONFIGURED
+                else -> AIProviderFailureKind.UNKNOWN
+            }
+        }
+        return AIProviderOperationException(kind, this)
+    }
+
     private fun inferCapabilities(data: com.example.data.remote.OpenRouterModelData): List<AICapability> {
         val list = mutableListOf<AICapability>()
         if (data.id.contains("code") || data.name.contains("coding", ignoreCase = true)) {
@@ -176,7 +209,7 @@ class AIModelRepositoryImpl(
         return list
     }
 
-    override suspend fun testConnection(userId: String, providerId: String): Result<Unit> = runCatching {
+    override suspend fun testConnection(userId: String, providerId: String): Result<Unit> = runProviderOperation {
         val provider = aiProviderDao.getProviderById(userId, providerId)
             ?: throw IllegalArgumentException("Provider not found or not owned by user")
         val apiKey = provider.apiKey?.let(decryptSecret)
@@ -187,7 +220,7 @@ class AIModelRepositoryImpl(
             AIProviderType.OPEN_ROUTER ->
                 verifyOpenRouterConnection(apiKey, openRouterApi.getModels("Bearer $apiKey").data)
             AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM ->
-                throw UnsupportedOperationException("Connection test is not implemented for this provider type.")
+                throw AIProviderOperationException(AIProviderFailureKind.UNSUPPORTED)
         }
     }
 

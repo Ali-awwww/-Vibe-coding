@@ -153,7 +153,7 @@ class AIModelsViewModel(
             runOperation(userId, "تم تحديث قائمة النماذج.", "تعذر تحديث النماذج. تحقق من اتصال المزود.") {
                 val result = aiModelRepository.syncModels(userId, providerId)
                 if (result.isFailure) {
-                    markProviderError(userId, providerId)
+                    markProviderFailure(userId, providerId, result.exceptionOrNull())
                     throw result.exceptionOrNull() ?: IllegalStateException()
                 }
             }
@@ -166,7 +166,7 @@ class AIModelsViewModel(
             runOperation(userId, "نجح اختبار الاتصال الفعلي بالمزود.", "تعذر اختبار اتصال المزود. تحقق من المفتاح والاتصال.") {
                 val result = aiModelRepository.testConnection(userId, providerId)
                 if (result.isFailure) {
-                    markProviderError(userId, providerId)
+                    markProviderFailure(userId, providerId, result.exceptionOrNull())
                     throw result.exceptionOrNull() ?: IllegalStateException()
                 }
                 aiModelRepository.updateProviderStatus(
@@ -224,11 +224,14 @@ class AIModelsViewModel(
     private fun currentUserId(): String? = currentUser.value?.id?.takeIf { it.isNotBlank() }
     private fun isCurrentUser(userId: String): Boolean = currentUserId() == userId
 
-    private suspend fun markProviderError(userId: String, providerId: String) {
+    private suspend fun markProviderFailure(userId: String, providerId: String, failure: Throwable?) {
+        val status = if ((failure as? AIProviderOperationException)?.kind == AIProviderFailureKind.RATE_LIMITED) {
+            AIProviderStatus.RATE_LIMITED
+        } else {
+            AIProviderStatus.ERROR
+        }
         try {
-            aiModelRepository.updateProviderStatus(
-                userId, providerId, AIProviderStatus.ERROR, System.currentTimeMillis()
-            )
+            aiModelRepository.updateProviderStatus(userId, providerId, status, System.currentTimeMillis())
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -250,14 +253,30 @@ class AIModelsViewModel(
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
             if (isCurrentUser(userId)) {
-                _uiState.update { it.copy(error = failureMessage, message = null) }
+                val safeMessage = failure.toProviderFailureMessage() ?: failureMessage
+                _uiState.update { it.copy(error = safeMessage, message = null) }
             }
         } finally {
             activeOperations.update { (it - 1).coerceAtLeast(0) }
         }
     }
+
+    private fun Throwable.toProviderFailureMessage(): String? =
+        when ((this as? AIProviderOperationException)?.kind) {
+            AIProviderFailureKind.MISCONFIGURED -> "بيانات المزود أو مفتاح API غير مكتملة."
+            AIProviderFailureKind.INVALID_CREDENTIALS -> "مفتاح API غير صالح أو منتهي الصلاحية."
+            AIProviderFailureKind.ACCESS_DENIED -> "المزود رفض صلاحيات مفتاح API."
+            AIProviderFailureKind.QUOTA_EXCEEDED -> "رصيد المزود أو حصته غير كافية."
+            AIProviderFailureKind.RATE_LIMITED -> "وصلت إلى حد الطلبات لدى المزود. انتظر ثم أعد المحاولة."
+            AIProviderFailureKind.TIMEOUT -> "انتهت مهلة الاتصال بالمزود."
+            AIProviderFailureKind.EMPTY_RESPONSE -> "استجاب المزود دون محتوى صالح."
+            AIProviderFailureKind.NETWORK -> "تعذر الوصول إلى المزود. تحقق من اتصال الشبكة."
+            AIProviderFailureKind.SERVICE_UNAVAILABLE -> "خدمة المزود غير متاحة حالياً."
+            AIProviderFailureKind.UNSUPPORTED -> "نوع المزود هذا غير مدعوم حالياً."
+            AIProviderFailureKind.UNKNOWN, null -> null
+        }
 
     private companion object {
         const val LOAD_ERROR = "تعذر تحميل إعدادات مزودي الذكاء الاصطناعي."

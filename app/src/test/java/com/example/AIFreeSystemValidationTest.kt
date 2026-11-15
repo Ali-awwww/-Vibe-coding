@@ -18,6 +18,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.net.SocketTimeoutException
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.HttpException
+import retrofit2.Response
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
@@ -147,6 +151,44 @@ class AIFreeSystemValidationTest {
     }
 
     @Test
+    fun testConnectionClassifiesProviderFailuresWithoutExposingRawDetails() = runTest {
+        val userId = "user-failures"
+        aiProviderDao.insertProvider(
+            AIProvider(id = "provider-failures", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, apiKey = "key")
+        )
+
+        val httpCases = listOf(
+            401 to AIProviderFailureKind.INVALID_CREDENTIALS,
+            402 to AIProviderFailureKind.QUOTA_EXCEEDED,
+            429 to AIProviderFailureKind.RATE_LIMITED
+        )
+        httpCases.forEach { (statusCode, expectedKind) ->
+            fakeOpenRouterApi.getModelsFailure = HttpException(
+                Response.error<OpenRouterModelsResponse>(statusCode, "private provider response".toResponseBody())
+            )
+            val result = repository.testConnection(userId, "provider-failures")
+            val failure = result.exceptionOrNull() as? AIProviderOperationException
+            assertEquals(expectedKind, failure?.kind)
+            assertFalse(failure?.message.orEmpty().contains("private provider response"))
+        }
+
+        fakeOpenRouterApi.getModelsFailure = SocketTimeoutException("private host and request details")
+        val timeoutResult = repository.testConnection(userId, "provider-failures")
+        val timeoutFailure = timeoutResult.exceptionOrNull() as? AIProviderOperationException
+        assertEquals(AIProviderFailureKind.TIMEOUT, timeoutFailure?.kind)
+        assertFalse(timeoutFailure?.message.orEmpty().contains("private host"))
+
+        fakeOpenRouterApi.getModelsFailure = null
+        fakeOpenRouterApi.models = listOf(
+            OpenRouterModelData("free", "Free", null, 8000, OpenRouterPricing("0", "0", "0", "0"), null)
+        )
+        fakeOpenRouterApi.responseContent = ""
+        val emptyResult = repository.testConnection(userId, "provider-failures")
+        val emptyFailure = emptyResult.exceptionOrNull() as? AIProviderOperationException
+        assertEquals(AIProviderFailureKind.EMPTY_RESPONSE, emptyFailure?.kind)
+    }
+
+    @Test
     fun `generateResponse fails closed when Free Only is on and no free models exist`() = runTest {
         val userId = "user1"
         // No providers added, so no models
@@ -211,11 +253,13 @@ class AIFreeSystemValidationTest {
         var models = emptyList<OpenRouterModelData>()
         var responseContent = ""
         var shouldFailForModel: String? = null
+        var getModelsFailure: Exception? = null
         var getModelsCallCount: Int = 0
         var lastRequestedModel: String? = null
 
         override suspend fun getModels(token: String): OpenRouterModelsResponse {
             getModelsCallCount += 1
+            getModelsFailure?.let { throw it }
             return OpenRouterModelsResponse(models)
         }
 
