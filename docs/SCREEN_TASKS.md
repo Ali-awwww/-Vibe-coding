@@ -1663,3 +1663,41 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Last domain worked:** AIModels — user-scoped provider/model data and authorization.
 - **Next domain:** AIModels — truthful provider connection status and UI state handling.
 - **Screen status:** OPEN — security/data isolation was hardened, but UI behavior, real provider setup/connectivity, visual RTL/LTR and device sign-off remain unverified.
+
+
+## 2026-11-16 — AIModels provider lifecycle and account-state hardening
+
+### Prior verification rechecked
+- The previous AIModels multi-tenant isolation commit `87f81559902d186b81f5ac123ae27c8f71418c36` was rechecked against its push-triggered workflows.
+- Android CI run [#43769713268](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43769713268) completed successfully: `testDebugUnitTest` and `assembleDebug` both reported BUILD SUCCESSFUL; the debug APK artifact was uploaded.
+- APK run [#43769713249](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43769713249) completed successfully: `testDebugUnitTest`, `assembleDebug` and `assembleRelease` reported BUILD SUCCESSFUL. Debug and release APK artifacts were uploaded. The release workflow is configured to continue on error for the release build, but this run's log explicitly reports BUILD SUCCESSFUL.
+- Code Quality run [#43769713233](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43769713233) completed successfully; `lintDebug` reported BUILD SUCCESSFUL and a lint report artifact was uploaded.
+- The three workflows ran on commit `87f81559902d186b81f5ac123ae27c8f71418c36`. This validates that prior commit only, not the changes in this entry. No emulator/device UI test was part of those workflows.
+
+### Confirmed AIModels lifecycle defects
+- The ViewModel used `currentUser.filterNotNull()`; signing out never emitted a cleared screen state, so the previous account's provider/model data remained visible in memory and UI.
+- Initial provider/model load failures had no durable inline retry state; transient operation failures could expose raw exception text through the snackbar.
+- Provider actions did not consistently share operation state; the add-provider path launched model sync in a second coroutine, allowing the loading indicator to finish before synchronization did.
+- A failed model sync could leave an earlier CONNECTED status unchanged. The provider-test success text was stored in the error field.
+- The API-key field displayed the entered key in clear text, provider deletion had no confirmation, and the guide contained an inert external-link button.
+
+### Changes in this batch
+- Reworked AIModels account observation so logout clears all user-scoped provider/model state and account switching replaces the previous account's data.
+- Added a retryable load-error state, operation-aware loading, stale default-model filtering and safe user-facing error messages that do not echo provider diagnostics.
+- Kept provider creation and initial model sync in one operation; failed sync/test actions now set the provider status to ERROR instead of leaving stale CONNECTED state. Success feedback is distinct from errors.
+- Added delete confirmation, masked API-key entry with an explicit visibility toggle, disabled duplicate actions while an operation is active, localized provider status labels, and explicit loading/empty/retry states. Removed the non-functional guide button.
+- Added ViewModel regression tests for logout clearing, account switching, provider test failure, model sync failure and load retry.
+- No production schema, Auth settings, external services, provider credentials or secrets were changed.
+
+### Verification at commit time
+- Tests have been added but have not yet been executed against this batch. The push-triggered Android CI, APK build and Code Quality workflows must be checked on the new commit before any test/build success is recorded.
+- Emulator/device rendering, RTL/LTR and TalkBack verification remain BLOCKED because this execution environment has no Android SDK, ADB or attached device.
+- Live provider credentials are not available in this execution context; no real provider request was sent.
+
+### Explicit continuity fields
+- **Active screen:** AIModels / provider and model configuration.
+- **Last completed step:** Verified prior AIModels isolation CI and APK artifacts; implemented account-state clearing, provider operation handling, secret-field masking, delete confirmation and retry states.
+- **Exact next step:** Inspect all push-triggered Android CI, APK and Code Quality runs for the latest commit, inspect failed job logs if any, fix compile/test/lint failures, then continue with provider catalog correctness and model availability behavior. Do not claim visual completion without emulator/device evidence.
+- **Last domain worked:** AIModels — account isolation and provider lifecycle.
+- **Next domain:** AIModels — provider catalog freshness, unsupported provider behavior and live-connection truthfulness.
+- **Screen status:** OPEN — source and regression coverage updated; new CI/device verification pending.
