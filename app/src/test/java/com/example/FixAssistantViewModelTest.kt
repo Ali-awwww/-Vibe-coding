@@ -84,7 +84,7 @@ class FixAssistantViewModelTest {
         val viewModel = FixAssistantViewModel(
             repositoryReturning(
                 crashFlow = flowOf(CrashReport(id = "crash-123")),
-                diagnosisError = IOException("diagnosis offline")
+                diagnosisError = IllegalStateException("diagnosis offline")
             )
         )
 
@@ -93,7 +93,10 @@ class FixAssistantViewModelTest {
 
         assertFalse(viewModel.uiState.value.isLoading)
         assertTrue(viewModel.uiState.value.crash != null)
-        assertTrue(viewModel.uiState.value.loadError.orEmpty().contains("diagnosis offline"))
+        assertTrue(
+            "Unexpected diagnosis loadError='${viewModel.uiState.value.loadError}'",
+            viewModel.uiState.value.loadError.orEmpty().contains("diagnosis offline")
+        )
         assertNull(viewModel.uiState.value.error)
     }
 
