@@ -599,7 +599,7 @@ fun LoginScreen(
                             ) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(20.dp),
-                                    color = Color.White,
+                                    color = VibeDesignTokens.Color.OnCyan,
                                     strokeWidth = 2.dp
                                 )
                                 Text(
