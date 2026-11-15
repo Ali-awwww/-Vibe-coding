@@ -110,7 +110,9 @@ fun AIModelsScreen(
                     models = uiState.models,
                     selectedId = uiState.defaultModelId,
                     onSelect = { viewModel.setDefaultModel(it) },
-                    autoSelect = uiState.autoSelectFree,
+                    autoSelect = uiState.autoSelectFree && uiState.freeOnly,
+                    freeOnly = uiState.freeOnly,
+                    hasProviders = uiState.providers.isNotEmpty(),
                     isLoading = uiState.isLoading,
                     enabled = !uiState.isLoading
                 )
@@ -239,11 +241,16 @@ fun AICostSettingsCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Free AI Only", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                    Text("منع النماذج المدفوعة نهائياً وضمان العمل المجاني.", style = MaterialTheme.typography.bodySmall)
+                    Text("استبعاد النماذج التي قد تترتب عليها رسوم لضمان وضع مجاني محافظ.", style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(checked = uiState.freeOnly, onCheckedChange = onFreeOnlyToggle, enabled = enabled)
             }
-            
+            Text(
+                "قد تُحاسب حسابات Google المدفوعة على استخدام Gemini؛ لذلك تُستبعد نماذجه من وضع المجاني المضمون.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             HorizontalDivider()
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -263,6 +270,8 @@ fun AIModelSelectionSection(
     selectedId: String?,
     onSelect: (String) -> Unit,
     autoSelect: Boolean,
+    freeOnly: Boolean,
+    hasProviders: Boolean,
     isLoading: Boolean,
     enabled: Boolean
 ) {
@@ -290,7 +299,11 @@ fun AIModelSelectionSection(
             }
         } else {
             Text(
-                "لا توجد نماذج متاحة حالياً. أضف مزوداً ثم اختبر الاتصال وحدّث النماذج.",
+                if (freeOnly && hasProviders) {
+                    "لا توجد نماذج مجانية مضمونة لدى المزودين الحاليين. عطّل Free AI Only لعرض نماذج Gemini التي قد تُحاسب حسب خطة حسابك."
+                } else {
+                    "لا توجد نماذج متاحة حالياً. أضف مزوداً ثم اختبر الاتصال وحدّث النماذج."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -324,12 +337,18 @@ fun AIModelItem(model: AIModel, isSelected: Boolean, onSelect: () -> Unit, enabl
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(model.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    if (model.isFree) {
-                        Spacer(Modifier.width(8.dp))
-                        ModelStatusChip("Free", Color(0xFF2E7D32))
-                    }
+                    Spacer(Modifier.width(8.dp))
+                    ModelStatusChip(
+                        if (model.isFree) "مجاني" else "مدفوع",
+                        if (model.isFree) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                    )
                 }
                 Text("${model.apiId} • Context: ${model.contextWindow / 1000}k", style = MaterialTheme.typography.labelSmall)
+                Text(
+                    "إدخال: ${"%.2f".format(model.inputPricePer1M)}/1M • إخراج: ${"%.2f".format(model.outputPricePer1M)}/1M",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
         }

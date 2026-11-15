@@ -7,6 +7,8 @@ import com.example.data.local.AIProviderDao
 import com.example.data.local.AppDatabase
 import com.example.data.remote.*
 import com.example.data.repository.AIModelRepositoryImpl
+import com.example.data.repository.AIModelPricing
+import com.example.data.repository.GeminiModelCatalog
 import com.example.domain.model.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -148,6 +150,34 @@ class AIFreeSystemValidationTest {
 
         assertTrue("Foreign-provider rows must be rejected before the cache is replaced", failure is IllegalArgumentException)
         assertEquals(listOf(existing.id), aiProviderDao.getModelsByProvider(userId, providerId).first().map { it.id })
+    }
+
+    @Test
+    fun geminiCatalogUsesCurrentStableModelsAndConservativePaidPricing() = runTest {
+        val userId = "gemini-catalog-user"
+        val providerId = "gemini-catalog-provider"
+        aiProviderDao.insertProvider(
+            AIProvider(id = providerId, userId = userId, name = "Google", type = AIProviderType.GOOGLE_GEMINI, apiKey = "key")
+        )
+
+        val models = GeminiModelCatalog.models(providerId)
+        assertEquals(
+            listOf("gemini-3.8-flash", "gemini-3.5-flash-lite"),
+            models.map { it.apiId }
+        )
+        assertEquals(GeminiModelCatalog.CONNECTION_MODEL_ID, models.first().apiId)
+        assertTrue("Google account tier is unknown, so Gemini must not enter guaranteed-free mode", models.none { it.isFree })
+        assertEquals(1_048_576, models.first().contextWindow)
+        assertEquals(0.75, models.first().inputPricePer1M, 0.000001)
+        assertEquals(3.75, models.first().outputPricePer1M, 0.000001)
+        assertEquals(0.30, models.last().inputPricePer1M, 0.000001)
+        assertEquals(2.50, models.last().outputPricePer1M, 0.000001)
+        assertEquals(4.50, AIModelPricing.estimateCost(models.first(), 1_000_000, 1_000_000), 0.000001)
+        assertEquals(2.80, AIModelPricing.estimateCost(models.last(), 1_000_000, 1_000_000), 0.000001)
+
+        aiProviderDao.insertModels(models)
+        assertTrue("Free Only must exclude Gemini when the account billing tier cannot be determined", aiProviderDao.getAllAvailableModels(userId, true).first().isEmpty())
+        assertEquals(2, aiProviderDao.getAllAvailableModels(userId, false).first().size)
     }
 
     @Test

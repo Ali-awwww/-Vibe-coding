@@ -109,28 +109,7 @@ class AIModelRepositoryImpl(
 
                 fetchedModels + virtualFreeModel
             }
-            AIProviderType.GOOGLE_GEMINI -> listOf(
-                AIModel(
-                    id = "${provider.id}:gemini-1.5-flash",
-                    providerId = provider.id,
-                    apiId = "gemini-1.5-flash",
-                    name = "Gemini 1.5 Flash",
-                    isFree = true,
-                    contextWindow = 1_000_000,
-                    capabilities = listOf(AICapability.CODING, AICapability.REASONING, AICapability.LONG_CONTEXT, AICapability.VISION, AICapability.AGENTIC),
-                    category = AIModelCategory.FREE
-                ),
-                AIModel(
-                    id = "${provider.id}:gemini-1.5-pro",
-                    providerId = provider.id,
-                    apiId = "gemini-1.5-pro",
-                    name = "Gemini 1.5 Pro",
-                    isFree = false,
-                    contextWindow = 2_000_000,
-                    capabilities = listOf(AICapability.CODING, AICapability.REASONING, AICapability.LONG_CONTEXT, AICapability.VISION),
-                    category = AIModelCategory.REASONING
-                )
-            )
+            AIProviderType.GOOGLE_GEMINI -> GeminiModelCatalog.models(provider.id)
             AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM -> emptyList()
         }
 
@@ -156,7 +135,7 @@ class AIModelRepositoryImpl(
     }
 
     private suspend fun verifyGeminiConnection(apiKey: String) {
-        val response = GenerativeModel("gemini-1.5-flash", apiKey).generateContent("ping")
+        val response = GenerativeModel(GeminiModelCatalog.CONNECTION_MODEL_ID, apiKey).generateContent("ping")
         if (response.text.isNullOrBlank()) {
             throw IllegalStateException("Provider returned an empty test response")
         }
@@ -361,7 +340,11 @@ class AIModelRepositoryImpl(
                         taskId = taskId ?: "",
                         tokensInput = response.usageMetadata?.promptTokenCount ?: 0,
                         tokensOutput = response.usageMetadata?.candidatesTokenCount ?: 0,
-                        estimatedCost = 0.0,
+                        estimatedCost = AIModelPricing.estimateCost(
+                            model,
+                            response.usageMetadata?.promptTokenCount ?: 0,
+                            response.usageMetadata?.candidatesTokenCount ?: 0
+                        ),
                         taskType = taskType,
                         isSuccess = true
                     ))
@@ -389,8 +372,11 @@ class AIModelRepositoryImpl(
                         taskId = taskId ?: "",
                         tokensInput = response.usage?.prompt_tokens ?: 0,
                         tokensOutput = response.usage?.completion_tokens ?: 0,
-                        estimatedCost = ((response.usage?.prompt_tokens ?: 0) * model.inputPricePer1M / 1_000_000.0) +
-                                        ((response.usage?.completion_tokens ?: 0) * model.outputPricePer1M / 1_000_000.0),
+                        estimatedCost = AIModelPricing.estimateCost(
+                            model,
+                            response.usage?.prompt_tokens ?: 0,
+                            response.usage?.completion_tokens ?: 0
+                        ),
                         taskType = taskType,
                         isSuccess = true
                     ))

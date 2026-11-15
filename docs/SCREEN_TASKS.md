@@ -1742,3 +1742,31 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The first compile failure on catalog commit `b9c2e038139b761009c0c754f828e6aacf7739fc` was the missing `OpenRouterModelData` import; fixed in `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08`. The Android CI workflow for that corrected commit completed successfully, including unit tests and debug APK packaging. APK Release packaging and Code Quality were still running at the last status check.
 - Typed-failure commit `c04a345e854981471f05105e03cb69b312e68ff2` then failed `:app:testDebugUnitTest` before tests ran because of the stale `markProviderError` reference. The follow-up source commit `a064a28f3a24dc72365602e2a42e923f3ed61b8b` corrected nullable HTTP status classification but did not yet include the ViewModel call-site fix.
 - **Current next step:** inspect CI for the new HEAD after this correction; do not infer test success from the earlier commit. If the tests expose further issues, fix them before continuing AIModels.
+
+
+## 2026-11-16 — Gemini model availability and cost safety
+
+### Confirmed defect
+- The Gemini provider catalog and connection probe still used `gemini-1.5-flash` / `gemini-1.5-pro`, which are not current supported choices. The repository also logged every Gemini request with `estimatedCost = 0.0`, so paid-tier usage was under-reported.
+- Google’s current model documentation lists `gemini-3.8-flash` and `gemini-3.5-flash-lite` as stable models. The current pricing page shows free-tier availability but paid-tier rates of $0.75/$3.75 per million input/output tokens for Gemini 3.8 Flash (through 2026-12-31), and $0.30/$2.50 for Gemini 3.5 Flash-Lite.
+- Because the app cannot determine whether a user’s Google API project is on the free or paid billing tier, both Gemini models are conservatively excluded from the guaranteed-free filter. This avoids claiming that a potentially billable model is free. Their published paid-tier rates are used for cost estimates.
+
+### Files changed in this batch
+- `app/src/main/java/com/example/data/repository/AIModelPricing.kt` — current stable Gemini catalog and shared token-cost calculation.
+- `app/src/main/java/com/example/data/repository/AIModelRepositoryImpl.kt` — use Gemini 3.8 Flash for connection checks, replace retired model IDs, and calculate Gemini/OpenRouter usage cost from actual token counts.
+- `app/src/main/java/com/example/presentation/ui/screens/AIModelsScreen.kt` — explain conservative Free Only behavior, distinguish free/paid models, show input/output prices and give an actionable empty state.
+- `app/src/test/java/com/example/AIFreeSystemValidationTest.kt` — stable model ID, pricing, Free Only and cost-calculation regression tests.
+
+### External source of truth
+- Gemini supported model IDs and stability: https://ai.google.dev/gemini-api/docs/models
+- Gemini 3.8 Flash model limits: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+- Gemini 3.5 Flash-Lite model limits: https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
+- Paid/free tier pricing: https://ai.google.dev/gemini-api/docs/pricing
+
+### Verification and continuity
+- Previous HEAD `5855e8bcedc654989974fc84031f514533e64cd4`: Android CI completed successfully (unit tests and Debug APK). APK Release packaging and Code Quality lint were still running at the time this entry was prepared; inspect their final conclusions before counting them as PASS.
+- Current Gemini catalog/UI batch: tests added; push-triggered CI and lint are pending until the new commit's runs finish. Do not treat tests as executed until CI reports completion.
+- NOT RUN locally — no local Gradle/Android SDK/ADB or emulator is available. Live Gemini credentials are not available, so no live provider request was made.
+- **Active screen:** AIModels — provider/model setup and truthful cost/availability.
+- **Exact next step:** inspect the final workflows for the new HEAD, then remove or clearly isolate the remaining synthetic Gemini 1.5 references in the ModelTeams/TeamValidation demo path; do not present those hardcoded demo reports as live usage.
+- **Screen status:** OPEN — source, UI and regression tests updated; emulator/RTL/LTR/accessibility and real-provider checks remain unverified.
