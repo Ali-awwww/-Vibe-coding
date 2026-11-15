@@ -424,8 +424,8 @@ class AuthRepositoryImpl(
         return UserAccount(
             id = id,
             email = email.orEmpty(),
-            displayName = metadata["display_name"].orEmpty(),
-            organization = metadata["organization"].orEmpty(),
+            displayName = metadata["display_name"]?.toString().orEmpty(),
+            organization = metadata["organization"]?.toString().orEmpty(),
             createdAt = parseCreatedAt(createdAt),
             lastLoginAt = nowEpochSeconds() * 1000L
         )

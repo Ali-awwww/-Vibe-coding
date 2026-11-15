@@ -56,7 +56,8 @@ data class SupabaseAuthUser(
     val email: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "email_confirmed_at") val emailConfirmedAt: String? = null,
-    @Json(name = "user_metadata") val userMetadata: Map<String, String>? = null
+    // Supabase metadata is JSON and may contain strings, booleans, or numbers.
+    @Json(name = "user_metadata") val userMetadata: Map<String, Any?>? = null
 )
 
 @JsonClass(generateAdapter = true)
