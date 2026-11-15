@@ -139,7 +139,8 @@ class ComprehensiveSecurityAndCrashTest {
             symbolicationRepository = fakeSymbolicationRepo,
             aiModelRepository = fakeAiModelRepo,
             auth = null,
-            authRepository = fakeAuthRepository
+            authRepository = fakeAuthRepository,
+            currentUserIdProvider = { activeUserId }
         )
     }
 
