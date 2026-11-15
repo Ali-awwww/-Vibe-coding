@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">ذكاء الانهيارات</string>
+    <string name="app_name">Vibe Coding</string>
     <string name="crash_details">تفاصيل الانهيار</string>
     <string name="stack_trace">تتبع المكدس</string>
     <string name="ai_diagnosis">تشخيص الذكاء الاصطناعي</string>
