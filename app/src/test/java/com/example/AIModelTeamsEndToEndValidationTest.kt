@@ -7,7 +7,6 @@ import com.example.data.local.AIProviderDao
 import com.example.data.local.AppDatabase
 import com.example.data.remote.*
 import com.example.data.repository.AIModelRepositoryImpl
-import com.example.data.repository.AIModelTeamRepositoryImpl
 import com.example.data.validation.TeamValidationEngineImpl
 import com.example.domain.agent.TeamOrchestrator
 import com.example.domain.model.*
@@ -49,9 +48,6 @@ class AIModelTeamsEndToEndValidationTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         val context = ApplicationProvider.getApplicationContext<Context>()
-        if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) {
-            com.google.firebase.FirebaseApp.initializeApp(context)
-        }
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
@@ -73,7 +69,7 @@ class AIModelTeamsEndToEndValidationTest {
         }
 
         aiModelRepository = AIModelRepositoryImpl(aiProviderDao, fakeOpenRouter, fakeHuggingFace)
-        teamRepository = AIModelTeamRepositoryImpl(context)
+        teamRepository = InMemoryAIModelTeamRepository()
 
         mockTeamOrchestrator = object : TeamOrchestrator {
             override fun executeTask(userId: String, team: ModelTeam, prompt: String): Flow<TeamExecution> =
@@ -282,5 +278,61 @@ class AIModelTeamsEndToEndValidationTest {
         assertTrue(viewModel.uiState.value.expandedTestIds.contains(1))
         viewModel.toggleExpandTest(1)
         assertFalse(viewModel.uiState.value.expandedTestIds.contains(1))
+    }
+}
+
+private class InMemoryAIModelTeamRepository : AIModelTeamRepository {
+    private val teams = linkedMapOf<String, ModelTeam>()
+    private val executions = linkedMapOf<String, TeamExecution>()
+    private val usageRecords = linkedMapOf<String, TeamUsageRecord>()
+
+    override fun getTeams(userId: String): Flow<List<ModelTeam>> =
+        flowOf(teams.values.filter { it.ownerId == userId })
+
+    override suspend fun getTeamById(teamId: String): ModelTeam? = teams[teamId]
+
+    override suspend fun createTeam(team: ModelTeam): Result<String> = runCatching {
+        teams[team.id] = team
+        team.id
+    }
+
+    override suspend fun updateTeam(team: ModelTeam): Result<Unit> = runCatching {
+        teams[team.id] = team
+    }
+
+    override suspend fun deleteTeam(teamId: String): Result<Unit> = runCatching {
+        teams.remove(teamId)
+        Unit
+    }
+
+    override fun getTeamExecutions(teamId: String): Flow<List<TeamExecution>> =
+        flowOf(executions.values.filter { it.teamId == teamId })
+
+    override suspend fun getExecutionById(executionId: String): TeamExecution? = executions[executionId]
+
+    override suspend fun logExecution(execution: TeamExecution): Result<Unit> = runCatching {
+        executions[execution.id] = execution
+    }
+
+    override suspend fun addTeamMember(teamId: String, member: TeamMember): Result<Unit> = Result.success(Unit)
+
+    override suspend fun removeTeamMember(teamId: String, memberId: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun updateMemberStatus(
+        teamId: String,
+        memberId: String,
+        status: MemberStatus,
+        currentTask: String?,
+        lastResult: String?
+    ): Result<Unit> = Result.success(Unit)
+
+    override fun getTeamUsageRecords(teamId: String): Flow<List<TeamUsageRecord>> =
+        flowOf(usageRecords.values.filter { it.teamId == teamId })
+
+    override fun getAllTeamUsageRecords(userId: String): Flow<List<TeamUsageRecord>> =
+        flowOf(usageRecords.values.filter { it.userId == userId })
+
+    override suspend fun logTeamUsage(record: TeamUsageRecord): Result<Unit> = runCatching {
+        usageRecords[record.id] = record
     }
 }
