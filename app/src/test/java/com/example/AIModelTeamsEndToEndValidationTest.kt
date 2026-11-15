@@ -68,7 +68,15 @@ class AIModelTeamsEndToEndValidationTest {
             override suspend fun getModels(filter: String, sort: String, direction: Int, limit: Int): List<HuggingFaceModelData> = emptyList()
         }
 
-        aiModelRepository = AIModelRepositoryImpl(aiProviderDao, fakeOpenRouter, fakeHuggingFace)
+        val testEncryptSecret: (String) -> String = { "test-encrypted:$it" }
+        val testDecryptSecret: (String) -> String = { it.removePrefix("test-encrypted:") }
+        aiModelRepository = AIModelRepositoryImpl(
+            aiProviderDao,
+            fakeOpenRouter,
+            fakeHuggingFace,
+            testEncryptSecret,
+            testDecryptSecret
+        )
         teamRepository = InMemoryAIModelTeamRepository()
 
         mockTeamOrchestrator = object : TeamOrchestrator {
@@ -117,7 +125,9 @@ class AIModelTeamsEndToEndValidationTest {
         validationEngine = TeamValidationEngineImpl(
             aiModelRepository = aiModelRepository,
             teamRepository = teamRepository,
-            teamOrchestrator = mockTeamOrchestrator
+            teamOrchestrator = mockTeamOrchestrator,
+            encryptSecret = testEncryptSecret,
+            decryptSecret = testDecryptSecret
         )
     }
 

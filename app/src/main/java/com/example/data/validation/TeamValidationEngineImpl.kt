@@ -17,7 +17,9 @@ class TeamValidationEngineImpl(
     private val aiModelRepository: AIModelRepository,
     private val teamRepository: AIModelTeamRepository,
     private val teamOrchestrator: TeamOrchestrator,
-    private val vibeStudioRepository: VibeStudioRepository? = null
+    private val vibeStudioRepository: VibeStudioRepository? = null,
+    private val encryptSecret: (String) -> String = SecurityUtils::encryptSecret,
+    private val decryptSecret: (String) -> String = SecurityUtils::decryptSecret
 ) : TeamValidationEngine {
 
     override fun getInitialTests(): List<ValidationTestItem> = listOf(
@@ -280,11 +282,11 @@ class TeamValidationEngineImpl(
                     // 3. Bind Independent API Keys
                     val keyGoogle = "AIzaSyTestGoogleKey_${UUID.randomUUID().toString().take(6)}"
                     val keyOpenRouter = "sk-or-v1-TestOpenRouterKey_${UUID.randomUUID().toString().take(6)}"
-                    val encryptedGoogle = SecurityUtils.encryptSecret(keyGoogle)
-                    val encryptedOpenRouter = SecurityUtils.encryptSecret(keyOpenRouter)
+                    val encryptedGoogle = encryptSecret(keyGoogle)
+                    val encryptedOpenRouter = encryptSecret(keyOpenRouter)
 
-                    check(SecurityUtils.decryptSecret(encryptedGoogle) == keyGoogle)
-                    check(SecurityUtils.decryptSecret(encryptedOpenRouter) == keyOpenRouter)
+                    check(decryptSecret(encryptedGoogle) == keyGoogle)
+                    check(decryptSecret(encryptedOpenRouter) == keyOpenRouter)
                     check(encryptedGoogle != encryptedOpenRouter)
 
                     val duration = System.currentTimeMillis() - startTime
