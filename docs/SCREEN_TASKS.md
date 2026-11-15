@@ -1782,3 +1782,6 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 
 - Follow-up for unsupported-provider UI: the `isSupported` flag is declared in the provider-card column scope so both the status badge and disabled action controls use the same supported-provider check. This corrects the scope before the current CI run; validate the new HEAD rather than counting the prior commit.
+
+
+- CI follow-up: commit `a3e904aa87d83fc3407d17ab990b8ef84787db36` exposed an `isSupported` scope error in `AIProviderCard`; the first attempted move placed the declaration in the cost-settings card. It has now been moved into the `AIProviderCard` column itself, where the status badge, warning and disabled actions share its scope. Recheck the current HEAD before treating this UI change as compiled.
