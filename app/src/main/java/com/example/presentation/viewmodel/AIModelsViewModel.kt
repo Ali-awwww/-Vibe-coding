@@ -225,10 +225,10 @@ class AIModelsViewModel(
     private fun isCurrentUser(userId: String): Boolean = currentUserId() == userId
 
     private suspend fun markProviderFailure(userId: String, providerId: String, failure: Throwable?) {
-        val status = if ((failure as? AIProviderOperationException)?.kind == AIProviderFailureKind.RATE_LIMITED) {
-            AIProviderStatus.RATE_LIMITED
-        } else {
-            AIProviderStatus.ERROR
+        val status = when ((failure as? AIProviderOperationException)?.kind) {
+            AIProviderFailureKind.RATE_LIMITED -> AIProviderStatus.RATE_LIMITED
+            AIProviderFailureKind.UNSUPPORTED -> AIProviderStatus.UNSUPPORTED
+            else -> AIProviderStatus.ERROR
         }
         try {
             aiModelRepository.updateProviderStatus(userId, providerId, status, System.currentTimeMillis())

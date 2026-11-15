@@ -146,6 +146,22 @@ class AIModelsViewModelTest {
     }
 
     @Test
+    fun unsupportedProviderFailureUsesNonOperationalStatus() = runTest(mainDispatcher) {
+        val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
+        val repository = FakeAIModelRepository().apply {
+            connectionResult = Result.failure(AIProviderOperationException(AIProviderFailureKind.UNSUPPORTED))
+        }
+        val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
+        advanceUntilIdle()
+
+        viewModel.testConnection("legacy-provider")
+        advanceUntilIdle()
+
+        assertEquals(AIProviderStatus.UNSUPPORTED, repository.statusUpdates.single().status)
+        assertTrue(viewModel.uiState.value.error.orEmpty().contains("غير مدعوم"))
+    }
+
+    @Test
     fun providerLoadFailureCanBeRetried() = runTest(mainDispatcher) {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
         val repository = FakeAIModelRepository().apply { failProviderLoad = true }

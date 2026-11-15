@@ -188,7 +188,7 @@ enum class AIProviderType {
 }
 
 enum class AIProviderStatus {
-    CONNECTED, DISCONNECTED, ERROR, RATE_LIMITED
+    CONNECTED, DISCONNECTED, ERROR, RATE_LIMITED, UNSUPPORTED
 }
 
 @Entity(tableName = "ai_models")

@@ -1765,8 +1765,17 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### Verification and continuity
 - PASS — all workflows for previous HEAD `5855e8bcedc654989974fc84031f514533e64cd4` completed successfully: Android CI [43774283867](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43774283867), APK [43774283846](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43774283846), and Code Quality [43774283843](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43774283843). Debug APK, Release APK and lint artifacts were produced. The lint HTML reports 166 warnings across the app; no AIModels files were listed among the reported locations.
-- Current Gemini catalog/UI batch on HEAD `2d4a21f44f3fff1b20f94ccc1d427e1bad96ec53`: push-triggered Android CI, APK and Code Quality runs were in progress when this note was prepared. Do not treat the added Gemini tests as executed until the final run conclusions are checked.
+- FAIL — HEAD `2d4a21f44f3fff1b20f94ccc1d427e1bad96ec53` failed unit-test compilation because the new test called the DAO's one-argument `getAllAvailableModels(userId)` with a nonexistent `freeOnly` argument. The test now reads the DAO flow and asserts the free-only predicate directly in commit `8a61c0b602564949ef0e66936042c65dad205371`.
 - NOT RUN locally — no local Gradle/Android SDK/ADB or emulator is available. Live Gemini credentials are not available, so no live provider request was made.
 - **Active screen:** AIModels — provider/model setup and truthful cost/availability.
 - **Exact next step:** inspect the final workflows for the new HEAD, then remove or clearly isolate the remaining synthetic Gemini 1.5 references in the ModelTeams/TeamValidation demo path; do not present those hardcoded demo reports as live usage.
 - **Screen status:** OPEN — source, UI and regression tests updated; emulator/RTL/LTR/accessibility and real-provider checks remain unverified.
+
+
+## 2026-11-16 — unsupported provider status is explicit
+
+- Added `AIProviderStatus.UNSUPPORTED`; typed unsupported-provider failures no longer collapse into generic ERROR.
+- Existing database entries for HUGGING_FACE or CUSTOM providers are now displayed as UNSUPPORTED regardless of a stale stored CONNECTED value. Their test/sync actions are disabled and the card explains why; deletion remains available.
+- Added a ViewModel regression test for the unsupported failure status and safe Arabic message.
+- Test correction: commit `2d4a21f44f3fff1b20f94ccc1d427e1bad96ec53` failed `:app:compileDebugUnitTestKotlin` because the DAO exposes only `getAllAvailableModels(userId)`. The incorrect two-argument test calls were replaced in `8a61c0b602564949ef0e66936042c65dad205371`; that commit's CI is still pending at this point.
+- **Active screen:** AIModels remains OPEN. The latest code batch adds explicit unsupported-provider behavior; the next step is to inspect CI for the current HEAD and then continue provider-model selection and device verification.

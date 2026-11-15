@@ -432,7 +432,9 @@ fun AIProviderCard(
                     Text(provider.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(provider.type.name, style = MaterialTheme.typography.bodySmall)
                 }
-                ProviderStatusBadge(provider.status)
+                val isSupported = provider.type == AIProviderType.GOOGLE_GEMINI ||
+                    provider.type == AIProviderType.OPEN_ROUTER
+                ProviderStatusBadge(if (isSupported) provider.status else AIProviderStatus.UNSUPPORTED)
             }
 
             Text(
@@ -440,14 +442,21 @@ fun AIProviderCard(
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
             )
+            if (!isSupported) {
+                Text(
+                    "هذا النوع من المزودين غير مدعوم حالياً؛ لن يتم اختباره أو مزامنته.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { onTest(provider.id) }, enabled = !isLoading) {
+                TextButton(onClick = { onTest(provider.id) }, enabled = !isLoading && isSupported) {
                     Icon(Icons.Default.FactCheck, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("اختبار")
                 }
-                TextButton(onClick = { onSync(provider.id) }, enabled = !isLoading) {
+                TextButton(onClick = { onSync(provider.id) }, enabled = !isLoading && isSupported) {
                     if (isLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     else Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
@@ -468,6 +477,8 @@ fun ProviderStatusBadge(status: AIProviderStatus) {
         AIProviderStatus.CONNECTED -> Color(0xFF2E7D32)
         AIProviderStatus.ERROR -> MaterialTheme.colorScheme.error
         AIProviderStatus.RATE_LIMITED -> Color(0xFFF57C00)
+        AIProviderStatus.UNSUPPORTED -> MaterialTheme.colorScheme.error
+        AIProviderStatus.DISCONNECTED -> MaterialTheme.colorScheme.outline
         else -> MaterialTheme.colorScheme.outline
     }
     val label = when (status) {
@@ -475,6 +486,7 @@ fun ProviderStatusBadge(status: AIProviderStatus) {
         AIProviderStatus.DISCONNECTED -> "غير متصل"
         AIProviderStatus.ERROR -> "خطأ في الاتصال"
         AIProviderStatus.RATE_LIMITED -> "تجاوز حد الطلبات"
+        AIProviderStatus.UNSUPPORTED -> "غير مدعوم"
     }
     Surface(
         color = color.copy(alpha = 0.15f),
