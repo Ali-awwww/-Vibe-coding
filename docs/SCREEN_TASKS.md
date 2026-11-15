@@ -1582,6 +1582,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - app/src/test/java/com/example/MainViewModelPasswordRecoveryTest.kt
 
 ### Verification
-- Regression test added; not yet executed locally in this environment.
-- Existing baseline CI on pre-change HEAD 83508a125971c955f51b3f6e7ad307072995f2a4 passed Android unit tests, Debug APK build, Release APK build, and Android lint. Those results do not validate this change.
-- Await CI on the resulting commit. Emulator/device validation and rendered RTL/LTR review remain outstanding; Login remains OPEN.
+- Regression test `replacingRecoveryLinkWhilePasswordSetupIsOpenAdvancesUiGeneration` executed and passed in both Android CI runs for source commit `cccfbb2b1c8d7837b605dfa0594c302767966bcd`.
+- PASS — Android CI/CD run [43754233799](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43754233799): `testDebugUnitTest` and `assembleDebug` succeeded; Debug APK artifact uploaded.
+- PASS — APK workflow run [43754233814](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43754233814): `testDebugUnitTest`, `assembleDebug`, and `assembleRelease` succeeded; Debug and Release APK artifacts uploaded.
+- PASS — Code Quality run [43754233794](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43754233794): `lintDebug` succeeded and lint report artifact uploaded.
+- BLOCKED — no Android emulator/device is attached to this execution environment. Installed-app behavior, screenshots, TalkBack, compact-screen/IME behavior, and rendered Arabic RTL / English LTR review remain outstanding; Login remains OPEN.
