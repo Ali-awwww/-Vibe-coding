@@ -91,7 +91,7 @@ class AIModelTeamsEndToEndValidationTest {
                 projectId: String?
             ): Flow<TeamExecution> = flowOf(TeamExecution(id = "e1", teamId = team.id, status = ExecutionStatus.COMPLETED))
 
-            override suspend fun estimateTaskResources(team: ModelTeam, prompt: String): PreExecutionEstimation =
+            override suspend fun estimateTaskResources(userId: String, team: ModelTeam, prompt: String): PreExecutionEstimation =
                 PreExecutionEstimation()
 
             override suspend fun pauseExecution(executionId: String) {

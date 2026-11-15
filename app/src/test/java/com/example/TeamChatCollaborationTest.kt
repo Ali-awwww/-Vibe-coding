@@ -363,7 +363,7 @@ class TeamChatCollaborationTest {
             }
             override suspend fun changeMemberAgent(teamId: String, memberId: String, newModelId: String) = Result.success(Unit)
             override suspend fun planAndDistribute(team: ModelTeam, prompt: String) = Result.success(emptyList<ExecutionStep>())
-            override suspend fun estimateTaskResources(team: ModelTeam, prompt: String) =
+            override suspend fun estimateTaskResources(userId: String, team: ModelTeam, prompt: String) =
                 PreExecutionEstimation(estimatedTasksCount = 2, isFreeOnly = true)
         }
     }
@@ -442,14 +442,14 @@ class TeamChatCollaborationTest {
             override suspend fun addProvider(provider: AIProvider) {}
             override suspend fun deleteProvider(userId: String, id: String) {}
             override suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long) {}
-            override fun getModelsByProvider(providerId: String): Flow<List<AIModel>> = flowOf(emptyList())
-            override fun getAllAvailableModels(freeOnly: Boolean): Flow<List<AIModel>> = flowOf(
+            override fun getModelsByProvider(userId: String, providerId: String): Flow<List<AIModel>> = flowOf(emptyList())
+            override fun getAllAvailableModels(userId: String, freeOnly: Boolean): Flow<List<AIModel>> = flowOf(
                 listOf(
                     AIModel(id = "gemini-2.0-flash", providerId = "google", name = "Gemini 2.0 Flash", isFree = true),
                     AIModel(id = "deepseek-coder", providerId = "openrouter", name = "DeepSeek Coder Free", isFree = true)
                 )
             )
-            override suspend fun getModelById(id: String): AIModel? =
+            override suspend fun getModelById(userId: String, id: String): AIModel? =
                 AIModel(id = id, providerId = "google", name = id, isFree = true)
             override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = Result.success(Unit)
             override suspend fun testConnection(userId: String, providerId: String): Result<Unit> = Result.success(Unit)

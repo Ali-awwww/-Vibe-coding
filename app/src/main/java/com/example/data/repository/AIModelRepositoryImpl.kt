@@ -34,23 +34,24 @@ class AIModelRepositoryImpl(
     }
 
     override suspend fun deleteProvider(userId: String, id: String) {
-        aiProviderDao.deleteModelsByProvider(id)
-        aiProviderDao.deleteProvider(id)
+        aiProviderDao.deleteModelsByProvider(userId, id)
+        aiProviderDao.deleteProvider(userId, id)
     }
 
     override suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long) {
         aiProviderDao.updateProviderStatus(userId, id, status, syncTime)
     }
 
-    override fun getModelsByProvider(providerId: String): Flow<List<AIModel>> = 
-        aiProviderDao.getModelsByProvider(providerId)
+    override fun getModelsByProvider(userId: String, providerId: String): Flow<List<AIModel>> =
+        aiProviderDao.getModelsByProvider(userId, providerId)
 
-    override fun getAllAvailableModels(freeOnly: Boolean): Flow<List<AIModel>> = 
-        aiProviderDao.getAllAvailableModels().map { models ->
+    override fun getAllAvailableModels(userId: String, freeOnly: Boolean): Flow<List<AIModel>> =
+        aiProviderDao.getAllAvailableModels(userId).map { models ->
             if (freeOnly) models.filter { it.isFree } else models
         }
 
-    override suspend fun getModelById(id: String): AIModel? = aiProviderDao.getModelById(id)
+    override suspend fun getModelById(userId: String, id: String): AIModel? =
+        aiProviderDao.getModelById(userId, id)
 
     override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = runCatching {
         val provider = aiProviderDao.getProviderById(userId, providerId) ?: throw Exception("Provider not found or not owned by user")
@@ -121,7 +122,7 @@ class AIModelRepositoryImpl(
         }
 
         if (models.isEmpty()) throw Exception("Provider returned no supported models")
-        aiProviderDao.deleteModelsByProvider(providerId)
+        aiProviderDao.deleteModelsByProvider(userId, providerId)
         aiProviderDao.insertModels(models)
         aiProviderDao.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, System.currentTimeMillis())
     }
@@ -181,6 +182,9 @@ class AIModelRepositoryImpl(
     }
 
     override suspend fun setDefaultModel(userId: String, modelId: String) {
+        requireNotNull(getModelById(userId, modelId)) {
+            "Selected model is not owned by the current user"
+        }
         val current = aiProviderDao.getUserSettings(userId).first()
         val newSettings = (current ?: AIUserSettings(userId = userId)).copy(
             defaultModelId = modelId,
@@ -194,9 +198,9 @@ class AIModelRepositoryImpl(
         val modelId = settings?.defaultModelId
         
         return if (modelId != null) {
-            aiProviderDao.getModelById(modelId)
+            getModelById(userId, modelId)
         } else {
-            aiProviderDao.getAllAvailableModels().first().firstOrNull { it.isFree }
+            getAllAvailableModels(userId, freeOnly = false).first().firstOrNull { it.isFree }
         }
     }
 
@@ -225,13 +229,13 @@ class AIModelRepositoryImpl(
         
         if (isAutoSelect) {
             // Intelligent routing: Start with best free models for this task
-            val allModels = aiProviderDao.getAllAvailableModels().first()
+            val allModels = getAllAvailableModels(userId, freeOnly = false).first()
             val freeModels = allModels.filter { it.isFree }
             val prioritized = prioritizeModelsForTask(freeModels, taskType)
             modelsToTry.addAll(prioritized)
         } else {
             // Manual selection: Specific model requested (if it exists and respects Free Only)
-            val requestedModel = aiProviderDao.getModelById(modelId)
+            val requestedModel = getModelById(userId, modelId)
             if (requestedModel != null && (!isFreeOnly || requestedModel.isFree)) {
                 modelsToTry.add(requestedModel)
             }
@@ -239,7 +243,7 @@ class AIModelRepositoryImpl(
             // Default model from settings
             settings.defaultModelId?.let { defId ->
                 if (defId != modelId) {
-                    aiProviderDao.getModelById(defId)?.let { defModel ->
+                    getModelById(userId, defId)?.let { defModel ->
                         if (!isFreeOnly || defModel.isFree) {
                             modelsToTry.add(defModel)
                         }

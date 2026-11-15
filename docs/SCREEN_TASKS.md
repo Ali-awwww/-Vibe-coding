@@ -1628,3 +1628,38 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Last domain worked:** Login / Identity — authentication error presentation and privacy.
 - **Next domain:** Login / Identity — substantive visual/UX redesign (not another authentication error-message rewrite).
 - **Screen status:** OPEN — this is a targeted regression fix, not screen completion.
+
+ 
+## 2026-11-16 — AIModels multi-tenant model isolation
+
+### Selection and blocker handling
+- Login remains OPEN. Its remaining visual redesign and rendered RTL/LTR/accessibility sign-off require an Android emulator/device. This execution environment has no Android SDK or ADB and no attached device; further UI styling without rendered feedback would be speculative. The Login gate is therefore BLOCKED for device verification, not PASS. Work moved to the next independent, security-relevant screen task rather than repeating Login source edits.
+- Selected AIModels because its provider/model data is used by AIModels, ModelTeams, TeamChat and agent orchestration, and its current persistence queries can be hardened without changing production services or schemas.
+
+### Confirmed security defect
+- `AIProviderDao.getAllAvailableModels()`, `getModelsByProvider(providerId)` and `getModelById(id)` queried `ai_models` without joining `ai_providers.userId`.
+- The repository's provider list and provider-by-id queries were user-scoped, but model list/detail reads were not. A signed-in account could therefore receive another account's model names/metadata in AIModels, ModelTeams, TeamChat and orchestration model lists. A foreign model ID could also be stored as the current user's default model.
+- `deleteProvider(userId, id)` ignored `userId` in the DAO delete query; a caller with another provider's ID could delete that provider and its models. The ID is random, but authorization must not rely on identifier secrecy.
+
+### Changes implemented
+- Added mandatory `userId` parameters to model list/detail/provider queries and joined each model query to `ai_providers` on provider ID with an explicit owner predicate.
+- Scoped provider deletion and model deletion to both `userId` and provider ID.
+- Made default-model selection reject models not owned by the requesting user; default-model lookup and inference/failover model selection now use the same scoped reads.
+- Passed the authenticated user ID through AIModels, ModelTeams, TeamChat, TeamDetail estimation, TeamOrchestrator and DAG orchestration instead of requesting a global model catalogue.
+- Updated all repository/orchestrator test doubles to the user-scoped contracts and added a two-account regression test covering model listing, provider model reads, default-model lookup/selection, and foreign-provider deletion.
+- No Room entity, schema, migration, Supabase project, production data, Auth configuration or secrets were changed.
+
+### Verification
+- Source-level review confirms all production model read/delete paths in this feature now include the authenticated user ID. The new regression test is present in source.
+- NOT RUN — Gradle/JUnit and Room/Robolectric tests were not executed locally. The container has Java 21 but no Gradle, ADB, Android SDK or repository checkout.
+- CI for the preceding Login privacy fix completed successfully on source commit `6f29f62604b1bc4f6dab1f05022965a06c167ab6`: Android CI, Debug/Release APK build and Code Quality all succeeded. That result does not validate this new AIModels change; the new push-triggered workflows must complete separately.
+- BLOCKED — no emulator/device is available for AIModels UI, provider setup, real API connectivity, RTL/LTR or TalkBack review. Live provider credentials are not present and no real provider request was sent.
+
+### Explicit continuity fields
+- **الشاشة النشطة:** AIModels / Provider and model configuration.
+- **آخر خطوة مكتملة:** Enforced per-user ownership for model reads, default selection, provider deletion and agent model discovery; added cross-account regression coverage.
+- **الخطوة التالية الدقيقة:** Inspect the push-triggered Android CI, APK and lint runs for the new AIModels commit and read their job logs/artifacts. Fix any compile/test/lint failures. Then review AIModelsScreen/ViewModel state transitions (loading, empty, provider test, sync failure/success) and ensure the UI never labels a provider CONNECTED without a successful live test.
+- **العوائق:** Emulator/device verification remains unavailable. Live AI provider connectivity is not tested because no user provider credentials are available.
+- **Last domain worked:** AIModels — user-scoped provider/model data and authorization.
+- **Next domain:** AIModels — truthful provider connection status and UI state handling.
+- **Screen status:** OPEN — security/data isolation was hardened, but UI behavior, real provider setup/connectivity, visual RTL/LTR and device sign-off remain unverified.

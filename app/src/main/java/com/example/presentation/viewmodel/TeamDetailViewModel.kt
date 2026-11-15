@@ -57,8 +57,9 @@ class TeamDetailViewModel(
         val prompt = _uiState.value.taskPrompt
         if (prompt.isBlank()) return
 
+        val userId = authRepository.getCurrentUserSync()?.id?.takeIf { it.isNotBlank() } ?: return
         viewModelScope.launch {
-            val est = teamOrchestrator.estimateTaskResources(team, prompt)
+            val est = teamOrchestrator.estimateTaskResources(userId, team, prompt)
             _uiState.update { it.copy(preEstimation = est, showEstimationDialog = true) }
         }
     }

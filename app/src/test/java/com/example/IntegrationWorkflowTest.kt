@@ -73,9 +73,9 @@ class IntegrationWorkflowTest {
             override suspend fun addProvider(provider: AIProvider) {}
             override suspend fun deleteProvider(userId: String, id: String) {}
             override suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long) {}
-            override fun getModelsByProvider(providerId: String): Flow<List<AIModel>> = flowOf(emptyList())
-            override fun getAllAvailableModels(freeOnly: Boolean): Flow<List<AIModel>> = flowOf(emptyList())
-            override suspend fun getModelById(id: String): AIModel? = null
+            override fun getModelsByProvider(userId: String, providerId: String): Flow<List<AIModel>> = flowOf(emptyList())
+            override fun getAllAvailableModels(userId: String, freeOnly: Boolean): Flow<List<AIModel>> = flowOf(emptyList())
+            override suspend fun getModelById(userId: String, id: String): AIModel? = null
             override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = Result.success(Unit)
             override suspend fun testConnection(userId: String, providerId: String): Result<Unit> = Result.success(Unit)
             override fun getRecentUsageLogs(userId: String): Flow<List<AIUsageLog>> = flowOf(emptyList())

@@ -86,9 +86,9 @@ class ComprehensiveSecurityAndCrashTest {
             override suspend fun addProvider(provider: AIProvider) {}
             override suspend fun deleteProvider(userId: String, id: String) {}
             override suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long) {}
-            override fun getModelsByProvider(providerId: String) = kotlinx.coroutines.flow.flowOf(emptyList<AIModel>())
-            override fun getAllAvailableModels(freeOnly: Boolean) = kotlinx.coroutines.flow.flowOf(emptyList<AIModel>())
-            override suspend fun getModelById(id: String) = null
+            override fun getModelsByProvider(userId: String, providerId: String) = kotlinx.coroutines.flow.flowOf(emptyList<AIModel>())
+            override fun getAllAvailableModels(userId: String, freeOnly: Boolean) = kotlinx.coroutines.flow.flowOf(emptyList<AIModel>())
+            override suspend fun getModelById(userId: String, id: String) = null
             override suspend fun syncModels(userId: String, providerId: String) = Result.success(Unit)
             override suspend fun testConnection(userId: String, providerId: String) = Result.success(Unit)
             override fun getRecentUsageLogs(userId: String) = kotlinx.coroutines.flow.flowOf(emptyList<AIUsageLog>())

@@ -10,9 +10,9 @@ interface AIModelRepository {
     suspend fun deleteProvider(userId: String, id: String)
     suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long)
 
-    fun getModelsByProvider(providerId: String): Flow<List<AIModel>>
-    fun getAllAvailableModels(freeOnly: Boolean = false): Flow<List<AIModel>>
-    suspend fun getModelById(id: String): AIModel?
+    fun getModelsByProvider(userId: String, providerId: String): Flow<List<AIModel>>
+    fun getAllAvailableModels(userId: String, freeOnly: Boolean = false): Flow<List<AIModel>>
+    suspend fun getModelById(userId: String, id: String): AIModel?
     suspend fun syncModels(userId: String, providerId: String): Result<Unit>
     
     suspend fun testConnection(userId: String, providerId: String): Result<Unit>

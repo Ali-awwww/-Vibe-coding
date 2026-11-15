@@ -119,7 +119,7 @@ class TeamChatViewModel(
 
             // Load available models for switching & comparison
             launch {
-                aiModelRepository.getAllAvailableModels(false).collect { models ->
+                aiModelRepository.getAllAvailableModels(userId, false).collect { models ->
                     _uiState.update { it.copy(availableModels = models) }
                 }
             }
@@ -195,8 +195,9 @@ class TeamChatViewModel(
         val prompt = _uiState.value.taskPrompt
         if (prompt.isBlank()) return
 
+        val userId = getUserId() ?: return
         viewModelScope.launch {
-            val est = teamOrchestrator.estimateTaskResources(team, prompt)
+            val est = teamOrchestrator.estimateTaskResources(userId, team, prompt)
             _uiState.update { it.copy(preEstimation = est, showEstimationDialog = true) }
         }
     }

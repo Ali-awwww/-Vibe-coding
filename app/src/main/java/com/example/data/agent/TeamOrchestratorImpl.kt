@@ -36,11 +36,12 @@ class TeamOrchestratorImpl(
     }
 
     override suspend fun estimateTaskResources(
+        userId: String,
         team: ModelTeam,
         prompt: String
     ): PreExecutionEstimation {
         val models = try {
-            aiModelRepository.getAllAvailableModels(false).first()
+            aiModelRepository.getAllAvailableModels(userId, false).first()
         } catch (_: Exception) {
             emptyList()
         }
@@ -66,7 +67,7 @@ class TeamOrchestratorImpl(
         val executionId = UUID.randomUUID().toString()
         executionControls[executionId] = ControlState.RUNNING
         val availableModels = try {
-            aiModelRepository.getAllAvailableModels(false).first()
+            aiModelRepository.getAllAvailableModels(userId, false).first()
         } catch (_: Exception) {
             emptyList()
         }

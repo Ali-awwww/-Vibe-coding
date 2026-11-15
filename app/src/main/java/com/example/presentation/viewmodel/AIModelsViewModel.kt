@@ -47,7 +47,7 @@ class AIModelsViewModel(
                     aiModelRepository.getTotalCost(userId, System.currentTimeMillis() - 30 * 24 * 60 * 60 * 1000L)
                 ) { providers, settings, logs, cost ->
                     val freeOnly = settings?.freeOnly ?: true
-                    val models = aiModelRepository.getAllAvailableModels(freeOnly).first()
+                    val models = aiModelRepository.getAllAvailableModels(userId, freeOnly).first()
                     
                     AIModelsUiState(
                         providers = providers,

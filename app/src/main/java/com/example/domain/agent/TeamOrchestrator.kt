@@ -56,6 +56,7 @@ interface TeamOrchestrator {
      * Estimates required tasks, calls, tokens, and cost prior to execution.
      */
     suspend fun estimateTaskResources(
+        userId: String,
         team: ModelTeam,
         prompt: String
     ): PreExecutionEstimation

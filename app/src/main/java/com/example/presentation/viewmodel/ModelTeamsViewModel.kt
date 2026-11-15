@@ -41,7 +41,7 @@ class ModelTeamsViewModel(
             currentUser.filterNotNull().collectLatest { user ->
                 combine(
                     teamRepository.getTeams(user.id),
-                    aiModelRepository.getAllAvailableModels()
+                    aiModelRepository.getAllAvailableModels(user.id)
                 ) { teams, models ->
                     _uiState.update { it.copy(
                         teams = teams,

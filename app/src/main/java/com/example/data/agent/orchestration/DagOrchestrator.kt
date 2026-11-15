@@ -73,7 +73,7 @@ class DagOrchestrator(
                             val agentPrompt = gov.maskSecrets(rawAgentPrompt)
 
                             // Pre-call validation (Free Only, limits)
-                            val targetModel = aiModelRepository.getModelById(member.modelId)
+                            val targetModel = aiModelRepository.getModelById(userId, member.modelId)
                             val validatedModel = gov.validateMemberCall(team, member, execution, targetModel).getOrThrow()
 
                             var activeModelId = validatedModel.id
@@ -87,7 +87,7 @@ class DagOrchestrator(
                             // If rate-limited / quota exhausted, attempt free failover
                             if (response.isFailure && team.governance.autoFallbackToFree) {
                                 val err = response.exceptionOrNull() ?: Exception("Quota error")
-                                val allModels = try { aiModelRepository.getAllAvailableModels(false).first() } catch (_: Exception) { emptyList() }
+                                val allModels = try { aiModelRepository.getAllAvailableModels(userId, false).first() } catch (_: Exception) { emptyList() }
                                 val failoverResult = gov.handleQuotaExhaustion(userId, team, member, err, allModels)
                                 if (failoverResult.isSuccess) {
                                     val failover = failoverResult.getOrThrow()

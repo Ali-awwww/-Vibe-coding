@@ -71,7 +71,7 @@ class AIFreeSystemValidationTest {
 
         repository.syncModels(userId, "p1")
 
-        val allModels = aiProviderDao.getModelsByProvider("p1").first()
+        val allModels = aiProviderDao.getModelsByProvider(userId, "p1").first()
         val freeModel = allModels.find { it.apiId == "m_free" }
         val paidModel = allModels.find { it.apiId == "m_paid" }
 
@@ -79,6 +79,42 @@ class AIFreeSystemValidationTest {
         assertTrue("Model with 0 price should be marked free", freeModel!!.isFree)
         assertNotNull(paidModel)
         assertFalse("Model with non-zero price should NOT be marked free", paidModel!!.isFree)
+    }
+
+    @Test
+    fun modelReadsDefaultsAndDeletesAreScopedToTheOwningUser() = runTest {
+        val ownerId = "owner-user"
+        val otherUserId = "other-user"
+        val ownerProviderId = "owner-provider"
+        val otherProviderId = "other-provider"
+        val ownerModelId = "$ownerProviderId:owner-model"
+        val otherModelId = "$otherProviderId:other-model"
+
+        aiProviderDao.insertProvider(
+            AIProvider(id = ownerProviderId, userId = ownerId, name = "Owner", type = AIProviderType.OPEN_ROUTER, apiKey = "owner-key")
+        )
+        aiProviderDao.insertProvider(
+            AIProvider(id = otherProviderId, userId = otherUserId, name = "Other", type = AIProviderType.OPEN_ROUTER, apiKey = "other-key")
+        )
+        aiProviderDao.insertModels(
+            listOf(
+                AIModel(id = ownerModelId, providerId = ownerProviderId, apiId = "owner-model", name = "Owner model", isFree = true),
+                AIModel(id = otherModelId, providerId = otherProviderId, apiId = "other-model", name = "Other model", isFree = true)
+            )
+        )
+
+        assertEquals(listOf(ownerModelId), repository.getAllAvailableModels(ownerId).first().map { it.id })
+        assertTrue(repository.getModelsByProvider(ownerId, otherProviderId).first().isEmpty())
+        assertNull(repository.getModelById(ownerId, otherModelId))
+
+        aiProviderDao.insertUserSettings(AIUserSettings(userId = ownerId, defaultModelId = otherModelId))
+        assertNull(repository.getDefaultModel(ownerId))
+        val selectionFailure = runCatching { repository.setDefaultModel(ownerId, otherModelId) }.exceptionOrNull()
+        assertTrue(selectionFailure is IllegalArgumentException)
+
+        repository.deleteProvider(ownerId, otherProviderId)
+        assertNotNull(aiProviderDao.getProviderById(otherUserId, otherProviderId))
+        assertEquals(1, repository.getModelsByProvider(otherUserId, otherProviderId).first().size)
     }
 
     @Test

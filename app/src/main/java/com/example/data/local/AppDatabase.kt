@@ -293,27 +293,46 @@ interface AIProviderDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProvider(provider: AIProvider)
 
-    @Query("DELETE FROM ai_providers WHERE id = :id")
-    suspend fun deleteProvider(id: String)
+    @Query("DELETE FROM ai_providers WHERE id = :id AND userId = :userId")
+    suspend fun deleteProvider(userId: String, id: String)
 
     @Query("UPDATE ai_providers SET status = :status, lastSyncAt = :syncTime WHERE userId = :userId AND id = :id")
     suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long)
 
     // Models
-    @Query("SELECT * FROM ai_models WHERE providerId = :providerId ORDER BY name ASC")
-    fun getModelsByProvider(providerId: String): Flow<List<AIModel>>
+    @Query("""
+        SELECT ai_models.* FROM ai_models
+        INNER JOIN ai_providers ON ai_providers.id = ai_models.providerId
+        WHERE ai_providers.userId = :userId AND ai_models.providerId = :providerId
+        ORDER BY ai_models.name ASC
+    """)
+    fun getModelsByProvider(userId: String, providerId: String): Flow<List<AIModel>>
 
-    @Query("SELECT * FROM ai_models WHERE isAvailable = 1 ORDER BY category ASC, name ASC")
-    fun getAllAvailableModels(): Flow<List<AIModel>>
+    @Query("""
+        SELECT ai_models.* FROM ai_models
+        INNER JOIN ai_providers ON ai_providers.id = ai_models.providerId
+        WHERE ai_providers.userId = :userId AND ai_models.isAvailable = 1
+        ORDER BY ai_models.category ASC, ai_models.name ASC
+    """)
+    fun getAllAvailableModels(userId: String): Flow<List<AIModel>>
 
-    @Query("SELECT * FROM ai_models WHERE id = :id")
-    suspend fun getModelById(id: String): AIModel?
+    @Query("""
+        SELECT ai_models.* FROM ai_models
+        INNER JOIN ai_providers ON ai_providers.id = ai_models.providerId
+        WHERE ai_providers.userId = :userId AND ai_models.id = :id
+        LIMIT 1
+    """)
+    suspend fun getModelById(userId: String, id: String): AIModel?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertModels(models: List<AIModel>)
 
-    @Query("DELETE FROM ai_models WHERE providerId = :providerId")
-    suspend fun deleteModelsByProvider(providerId: String)
+    @Query("""
+        DELETE FROM ai_models
+        WHERE providerId = :providerId
+          AND providerId IN (SELECT id FROM ai_providers WHERE userId = :userId)
+    """)
+    suspend fun deleteModelsByProvider(userId: String, providerId: String)
 
     // Usage Logs
     @Insert(onConflict = OnConflictStrategy.REPLACE)
