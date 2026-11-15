@@ -5,6 +5,7 @@ import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseUpdateUserRequest
 import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
 import com.example.auth.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
+import com.example.auth.SUPABASE_EMAIL_CONFIRMATION_REDIRECT_URI
 import com.example.data.remote.supabase.SupabaseAuthResponse
 import com.example.data.remote.supabase.SupabasePasswordGrantRequest
 import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
@@ -66,6 +67,7 @@ class AuthRepositoryImpl(
             val requestGeneration = synchronized(sessionStateLock) { sessionGeneration }
             val response = api.signUp(
                 publishableKey = publishableKey,
+                redirectTo = SUPABASE_EMAIL_CONFIRMATION_REDIRECT_URI,
                 request = SupabaseSignUpRequest(
                     email = email.trim(),
                     password = password,
