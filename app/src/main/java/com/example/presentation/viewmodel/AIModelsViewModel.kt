@@ -101,6 +101,7 @@ class AIModelsViewModel(
     }
 
     fun refresh() {
+        _uiState.update { it.copy(isLoadError = false, error = null, message = null) }
         refreshTrigger.update { it + 1 }
     }
 
