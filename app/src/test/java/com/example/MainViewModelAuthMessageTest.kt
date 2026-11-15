@@ -37,6 +37,7 @@ class MainViewModelAuthMessageTest {
 
         assertEquals(AuthUiMessage.SIGN_IN_FAILED, viewModel.actionState.value.errorMessage)
         assertNull(viewModel.actionState.value.successMessage)
+        assertFalse(viewModel.actionState.value.toString().contains("raw Supabase response detail"))
         assertEquals(false, completed)
     }
 
@@ -69,6 +70,21 @@ class MainViewModelAuthMessageTest {
         assertEquals(AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED, viewModel.actionState.value.successMessage)
         assertNull(viewModel.actionState.value.errorMessage)
         assertEquals(false, completed)
+    }
+
+    @Test
+    fun signupFailureDoesNotExposeProviderDetailsInUiState() = runMainViewModelTest {
+        val providerDetail = "raw Supabase signup response detail"
+        val repository = RecordingAuthRepository().apply {
+            signUpResult = Result.failure(IllegalStateException(providerDetail))
+        }
+        val viewModel = MainViewModel(repository)
+
+        viewModel.signUp("person@example.com", "password123", "Developer", "") {}
+        advanceUntilIdle()
+
+        assertEquals(AuthUiMessage.SIGN_UP_FAILED, viewModel.actionState.value.errorMessage)
+        assertFalse(viewModel.actionState.value.toString().contains(providerDetail))
     }
 
     @Test
