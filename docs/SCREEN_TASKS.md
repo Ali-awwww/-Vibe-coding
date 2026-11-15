@@ -1587,3 +1587,44 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - PASS — APK workflow run [43754233814](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43754233814): `testDebugUnitTest`, `assembleDebug`, and `assembleRelease` succeeded; Debug and Release APK artifacts uploaded.
 - PASS — Code Quality run [43754233794](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43754233794): `lintDebug` succeeded and lint report artifact uploaded.
 - BLOCKED — no Android emulator/device is attached to this execution environment. Installed-app behavior, screenshots, TalkBack, compact-screen/IME behavior, and rendered Arabic RTL / English LTR review remain outstanding; Login remains OPEN.
+
+
+## 2026-11-16 — Login provider-error disclosure regression fix
+
+### Selection and independent review
+- Re-read the full task register and the latest 20 commits on `main`. Current code HEAD before this fix: `e5c476540555f4d3a6d92b7ba08eae7904cb2e46`.
+- Reviewed the other agent's intervening changes rather than overwriting them: Supabase auth error-body parsing / Login diagnostics (`3225facb`, `50678f31`, `781bd114`), JSON-compatible user metadata (`63309009`, `d677c57c`), app branding (`c091fd4c`, `4fba3a1c`, `a3439921`), and Android Keystore-generated AES-GCM IV (`63119439`, `e5c47654`).
+- Checked root, `.github/`, `app/`, and the relevant data/repository/remote/viewmodel/screen/test instruction paths for `AGENTS.md` / `agents.md`; none exist at the checked paths.
+- The latest explicit screen continuity remains Login / Identity. Its functional/auth work has recent changes, but its required visual redesign and rendered device review remain open; this run addressed a newly introduced security/privacy regression in that same flow.
+
+### Confirmed regression
+- The typed, localized authentication result contract had intentionally stopped forwarding raw provider exception text to Login (see the 2026-11-13 localized-auth entry).
+- Commit `781bd114` added `AuthActionState.errorDetail`, copied `Throwable.message` from sign-in/sign-up failures into that field, and made `LoginScreen` prefer it over the localized `AuthUiMessage`. Since `AuthRepositoryImpl` now parses Supabase error bodies into exception messages, raw server/provider detail could be displayed directly to the user and bypass the localized error mapping.
+- The existing sign-in regression test asserted the typed message key but did not assert that the raw provider detail was absent, so it did not detect this reintroduction.
+
+### Changes implemented on main
+- Removed `errorDetail` from `AuthActionState` and stopped copying provider exception messages into the UI state for sign-in and sign-up.
+- Restored `LoginScreen` to render only the localized string resource mapped from `AuthUiMessage`; the repository may retain exception context internally, but it is not exposed in the user-facing state.
+- Strengthened the sign-in regression test and added a sign-up regression test asserting that raw provider details are absent from the ViewModel UI state.
+
+### Files and commits
+- `app/src/main/java/com/example/presentation/viewmodel/MainViewModel.kt` — `83caa5c05c79c6ca8afd00efc86eb68f16184f9f`.
+- `app/src/main/java/com/example/presentation/ui/screens/LoginScreen.kt` — `f5519e691f9b1d004985ff846f943e973aafcba4`.
+- `app/src/test/java/com/example/MainViewModelAuthMessageTest.kt` — `6f29f62604b1bc4f6dab1f05022965a06c167ab6`.
+
+### Verification and limitations
+- PASS — re-fetched each changed file after its write and confirmed the saved content exactly matches the intended replacement.
+- PASS — static search/review confirms `errorDetail` and `visibleActionError` are removed from the ViewModel and Login screen; the displayed error path is again the typed localized mapping.
+- PASS — the regression test source now checks sign-in and sign-up provider-detail non-disclosure.
+- NOT RUN — the new/updated JUnit tests, Gradle compilation, lint and APK build were not executed in this environment. Java 21 is available, but `gradle` and `adb` are absent, Android SDK environment variables are unset, and no repository checkout exists in the execution container.
+- BLOCKED — combined commit status for the prior HEAD returned no entries; the connector's commit-workflow lookup returned no runs because it exposes PR-triggered runs only, and the available GitHub connector does not provide a repository-wide push-run listing action. The current workflows are configured to run on pushes to `main`, but no run or result for the new HEAD is claimed. The latest documented successful CI remains the earlier run on `cccfbb2b`, not this fix.
+- BLOCKED — no emulator/device is attached, so rendered Login review, RTL/LTR screenshots, IME, TalkBack and real signup/recovery callback checks remain outstanding. Login remains OPEN.
+
+### Explicit continuity fields
+- **الشاشة النشطة:** Login / Identity.
+- **آخر خطوة مكتملة:** Removed raw Supabase/provider error text from Login UI state and added sign-in/sign-up non-disclosure regression assertions.
+- **الخطوة التالية الدقيقة:** Continue the Login screen's substantive visual/UX redesign from the current source; do not repeat the error-detail fix. Inspect the current Compose hierarchy and shared theme tokens, implement one cohesive visual/interaction improvement with focused tests, then use the next available successful CI run and a real Android emulator/device for rendered RTL/LTR and accessibility verification.
+- **العوائق:** No local Gradle/Android SDK/ADB or repository checkout; no push-run listing/status result for this HEAD is exposed by the available connector; no emulator/device. Keep the screen open until these gates are actually satisfied.
+- **Last domain worked:** Login / Identity — authentication error presentation and privacy.
+- **Next domain:** Login / Identity — substantive visual/UX redesign (not another authentication error-message rewrite).
+- **Screen status:** OPEN — this is a targeted regression fix, not screen completion.
