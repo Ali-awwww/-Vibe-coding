@@ -1478,3 +1478,18 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - No Android source, Gradle configuration, dependency version, manifest/resource, or workflow change was made in this recheck. This entry records the inspected source HEAD `00656640f4b3bb03e846de32323d63d7ebc0cfa1`; the only intended change in this batch is this documentation update.
 - No APK artifact, successful Gradle configuration, compilation, unit-test run, lint result, or release build is available.
 - Highest blocker: GitHub Actions runner allocation. A repository/organization owner must inspect Actions usage/billing, hosted-runner access, and organization/repository runner policies, then restore runner allocation. Once a runner is assigned, rerun configuration, clean, debug assembly, unit tests, lint, and APK artifact inspection before diagnosing any application-level build failure.
+
+
+## 2026-11-15 — Android signup email-confirmation deep link (source change; runtime pending)
+
+- Root cause: Android signup called Supabase Auth REST `/auth/v1/signup` without `redirect_to`, so Supabase fell back to the project's Site URL (the reported `localhost:3000` destination).
+- Added `SUPABASE_EMAIL_CONFIRMATION_REDIRECT_URI` using the app's existing registered scheme/host: `com.aistudio.crashintelligence.vyfrip://auth/email-confirmation`.
+- Signup requests now pass this URI as `redirect_to`; AndroidManifest registers the matching callback path. Existing `MainActivity` already forwards cold-start and `onNewIntent` deep links into `AppNavigation`.
+- Added strict callback parsing: accept only the exact app scheme/host/path, no Supabase error, `type=signup`, and a non-empty access token. The callback token is not persisted or logged; the app returns to Login with an explicit Arabic/English “email confirmed; sign in” message. Email confirmation does not silently create a local authenticated session.
+- Added unit coverage for a valid signup callback and wrong scheme, wrong type, missing token and error cases.
+- Files: `AuthRedirects.kt`, `AndroidManifest.xml`, `AuthRepositoryImpl.kt`, new `EmailConfirmationLinkParser.kt`, `MainViewModel.kt`, `LoginScreen.kt`, English/Arabic `strings.xml`, new `EmailConfirmationLinkParserTest.kt`.
+- Commits: `f0f2dc0e`, `28259cd7`, `ac504b1c`, `842f52d5`, `5d3190cd`, `d227bc4d`, `4e21c3e2`, `7aee8fef`, `b72cb05a`.
+- Supabase project `vibe-coding` (`hgfgbjomwhogpswpqusk`) was verified as `ACTIVE_HEALTHY`. The Supabase dashboard URL allow-list was not changed by the available project connector. Owner action remains: add the exact callback URI above under Authentication → URL Configuration → Redirect URLs (Additional Redirect URLs). Do not change Confirm email.
+- Verification limits: source writes and GitHub re-fetch are being checked; no Gradle build, unit-test execution, installed APK test, real confirmation email click, or live Supabase redirect test has yet been performed. GitHub combined status returned no status entries for the latest source/test commit; this is not a passing CI result.
+- Repository agent instructions: root `AGENTS.md`, `.github/AGENTS.md`, and `app/AGENTS.md` returned 404; no agent file was available at those paths.
+- Next: user adds the redirect allow-list entry, install a build containing these changes, perform a fresh signup and click the email confirmation link on the same Android device; then verify it opens this app and shows the confirmation message. If Supabase emits a different callback parameter shape, capture only parameter names (never token values) and adjust the parser accordingly.
