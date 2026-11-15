@@ -267,6 +267,7 @@
     <string name="auth_success_sign_in">Signed in successfully.</string>
     <string name="auth_success_sign_up">Your account was created successfully.</string>
     <string name="auth_success_email_confirmation">Your account request was accepted. Check your email to confirm it, then sign in.</string>
+    <string name="auth_success_email_confirmed">Your email has been confirmed. Sign in to continue.</string>
     <string name="auth_success_recovery_request">If an account matches this email, a recovery link will be sent.</string>
     <string name="auth_success_password_updated">Your password was updated successfully.</string>
 
