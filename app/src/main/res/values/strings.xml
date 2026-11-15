@@ -256,11 +256,11 @@
     <string name="auth_validation_password_mismatch">The passwords do not match.</string>
     <string name="auth_validation_name">Enter your developer name.</string>
     <string name="auth_validation_password_required">Enter your password.</string>
-    <string name="auth_error_sign_in">We couldn't sign in. Check your email and password, then try again.</string>
-    <string name="auth_error_sign_up">We couldn't create your account. Check your details and try again.</string>
-    <string name="auth_error_recovery_request">We couldn't request a password recovery link. Try again.</string>
-    <string name="auth_error_password_recovery">We couldn't update your password with this recovery link. It may have expired; request a new link.</string>
-    <string name="auth_error_password_update">We couldn't update your password. Sign in again and retry.</string>
+    <string name="auth_error_sign_in">We couldn\'t sign in. Check your email and password, then try again.</string>
+    <string name="auth_error_sign_up">We couldn\'t create your account. Check your details and try again.</string>
+    <string name="auth_error_recovery_request">We couldn\'t request a password recovery link. Try again.</string>
+    <string name="auth_error_password_recovery">We couldn\'t update your password with this recovery link. It may have expired; request a new link.</string>
+    <string name="auth_error_password_update">We couldn\'t update your password. Sign in again and retry.</string>
     <string name="auth_error_network">No network connection is available. Check your connection and try again.</string>
     <string name="auth_error_recovery_link_invalid">This password recovery link is invalid or expired. Request a new link.</string>
     <string name="auth_error_recovery_link_unavailable">Password recovery credentials are unavailable. Request a new recovery link.</string>
