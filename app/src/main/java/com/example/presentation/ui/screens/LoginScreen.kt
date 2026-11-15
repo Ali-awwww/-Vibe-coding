@@ -84,6 +84,7 @@ private fun authMessageResource(message: AuthUiMessage): Int = when (message) {
     AuthUiMessage.SIGN_IN_SUCCEEDED -> R.string.auth_success_sign_in
     AuthUiMessage.SIGN_UP_SUCCEEDED -> R.string.auth_success_sign_up
     AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED -> R.string.auth_success_email_confirmation
+    AuthUiMessage.EMAIL_CONFIRMED_SIGN_IN -> R.string.auth_success_email_confirmed
     AuthUiMessage.PASSWORD_RECOVERY_REQUEST_ACCEPTED -> R.string.auth_success_recovery_request
     AuthUiMessage.PASSWORD_UPDATED -> R.string.auth_success_password_updated
 }
