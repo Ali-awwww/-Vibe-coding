@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import java.util.Locale
 import com.example.di.DependencyProvider
 import com.example.domain.model.*
 import com.example.presentation.viewmodel.AIModelsUiState
@@ -347,7 +348,7 @@ fun AIModelItem(model: AIModel, isSelected: Boolean, onSelect: () -> Unit, enabl
                 }
                 Text("${model.apiId} • Context: ${model.contextWindow / 1000}k", style = MaterialTheme.typography.labelSmall)
                 Text(
-                    "إدخال: ${"%.2f".format(model.inputPricePer1M)}/1M • إخراج: ${"%.2f".format(model.outputPricePer1M)}/1M",
+                    "إدخال: ${String.format(Locale.US, "%.2f", model.inputPricePer1M)}/1M • إخراج: ${String.format(Locale.US, "%.2f", model.outputPricePer1M)}/1M",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
