@@ -192,7 +192,6 @@ fun LoginScreen(
     val displayNameError = validationError?.takeIf { it.field == AuthFormField.DISPLAY_NAME }?.let { stringResource(it.messageRes) }
     val confirmPasswordError = validationError?.takeIf { it.field == AuthFormField.CONFIRM_PASSWORD }?.let { stringResource(it.messageRes) }
     val actionErrorMessage = actionState.errorMessage?.let(::authMessageResource)?.let { stringResource(it) }
-    val visibleActionError = actionState.errorDetail?.takeIf { it.isNotBlank() } ?: actionErrorMessage
     val actionSuccessMessage = actionState.successMessage?.let(::authMessageResource)?.let { stringResource(it) }
 
     val submit: () -> Unit = {
@@ -381,8 +380,8 @@ fun LoginScreen(
                         }
                     }
 
-                    AnimatedVisibility(visible = validationError != null || visibleActionError != null) {
-                        val message = validationError?.let { stringResource(it.messageRes) } ?: visibleActionError.orEmpty()
+                    AnimatedVisibility(visible = validationError != null || actionErrorMessage != null) {
+                        val message = validationError?.let { stringResource(it.messageRes) } ?: actionErrorMessage.orEmpty()
                         Surface(
                             color = Color(0x33FF4565),
                             shape = RoundedCornerShape(10.dp),
