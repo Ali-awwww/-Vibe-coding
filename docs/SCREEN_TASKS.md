@@ -1523,3 +1523,37 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **الخطوة التالية الدقيقة للتشغيل القادم:** Obtain/install an APK built from a commit containing `f48cde58215b94d513e2768b65f765320df2f439` or later; create a fresh test account; open the confirmation email on the same Android device; tap the confirmation link; verify Android opens this app and Login shows the localized “email confirmed; sign in” message. Record only callback parameter names and outcome if debugging is needed—never capture or log token values. Then run the parser unit tests and Gradle build when a functioning runner is available, and continue Login's visual redesign/review without switching screens.
 - **العائق/المتطلب الخارجي:** An installed build and access to a test mailbox plus a physical Android device or emulator are needed for the real callback test. A functioning Gradle/Android SDK runner is also needed for build and test execution.
 - **Screen status:** OPEN — no end-to-end, build, automated test, or visual sign-off evidence has been produced by this run.
+
+## 2026-11-15 — Login accessibility contrast correction (source change; CI/device verification pending)
+
+### Screen and finding
+- **الشاشة النشطة:** Login / Identity — remains OPEN; this is the first ordered identity screen and its visual redesign/runtime review is still incomplete.
+- Confirmed a measurable accessibility issue in the primary action: white foreground text and spinner were rendered over the bright cyan action background (`#28D7F2`), which does not meet WCAG AA's 4.5:1 contrast target for normal text.
+- This is a focused accessibility correction, not a claim that Login's overall visual design is complete.
+
+### Implemented changes
+- Added the shared `VibeDesignTokens.Color.OnCyan` foreground token (`#050914`).
+- Changed the Login primary action label and loading spinner to use `OnCyan`, preserving the existing cyan action surface and disabled-state styling.
+- Added `LoginAccessibilityContrastTest.kt`, which calculates the relative-luminance contrast ratio between `OnCyan` and `Cyan` and asserts WCAG AA 4.5:1 minimum.
+
+### Files and commits
+- `app/src/main/java/com/example/ui/theme/VibeDesignTokens.kt` — `e569b049587bb9ea27463a03af375a2fc55e68cc`.
+- `app/src/main/java/com/example/presentation/ui/screens/LoginScreen.kt` — `bf518380d2ec782738c172ecdd933fe577d412e6`.
+- `app/src/test/java/com/example/LoginAccessibilityContrastTest.kt` — `6e92eecabf99debc3a461db84b565c67ae90f333`.
+- These are three sequential commits on `main`; the documentation update is a separate following commit.
+
+### Verification status
+- PASS — static color review identified the low-contrast white-on-cyan combination and the code now references the dark shared foreground token for both label and progress indicator.
+- PASS — a regression test has been added to assert the token pair meets the 4.5:1 threshold; this test has not yet been executed in this run.
+- PASS — the latest pre-change Android CI run on source-equivalent HEAD `5cc51e6634f06bb8f21b003aaed09324ff4dd163` completed successfully: Unit Tests and Debug APK build steps both succeeded. This is baseline CI evidence only; it does not validate the new commits.
+- BLOCKED — CI for the new commits is pending at the time of this entry; do not treat the newly added test or current source as CI-verified until a run for the resulting HEAD completes successfully.
+- BLOCKED — no Android emulator/device is attached to this run, so rendered Login review, Arabic RTL/English LTR screenshots, compact-screen/IME and TalkBack inspection remain outstanding.
+
+### Explicit continuity fields
+- **الشاشة النشطة:** Login / Identity.
+- **آخر خطوة مكتملة:** Corrected the primary action foreground contrast and added a WCAG AA contrast regression test.
+- **معيار القبول التالي:** Run the new contrast regression test and full Android CI on the latest HEAD, then inspect the rendered Login screen in Arabic RTL and English LTR.
+- **الخطوة التالية الدقيقة للتشغيل القادم:** Read latest HEAD and this entry; inspect CI run triggered by commit `6e92eecabf99debc3a461db84b565c67ae90f333` or a later docs commit. Confirm `:app:testDebugUnitTest` and `:app:assembleDebug` pass. Then obtain a debug APK and run Login on an Android emulator/device at compact and standard sizes in both Arabic RTL and English LTR; capture fresh screenshots and inspect IME, focus order, field errors, loading, success and error announcements. Continue Login visual refinement without switching screens.
+- **العائق/المتطلب الخارجي:** Android emulator or physical device with installable debug APK is required for visual and accessibility runtime evidence. If CI is not yet complete, wait for the workflow result; do not infer test success from workflow creation.
+- **Screen status:** OPEN — accessibility contrast source correction implemented; full Login visual redesign, functional end-to-end review, RTL/LTR visual evidence and device sign-off remain outstanding.
+
