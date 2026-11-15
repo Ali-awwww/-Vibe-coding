@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,13 +42,15 @@ fun AIModelsScreen(
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showAddProviderDialog by remember { mutableStateOf(false) }
+    var providerPendingDeletion by remember { mutableStateOf<AIProvider?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearError()
+    LaunchedEffect(uiState.error, uiState.message) {
+        val feedback = uiState.error ?: uiState.message
+        if (feedback != null) {
+            snackbarHostState.showSnackbar(feedback)
+            viewModel.clearFeedback()
         }
     }
 
@@ -61,8 +65,8 @@ fun AIModelsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showAddProviderDialog = true }) {
-                        Icon(Icons.Default.AddCircleOutline, contentDescription = "Add Provider")
+                    IconButton(onClick = { showAddProviderDialog = true }, enabled = !uiState.isLoading) {
+                        Icon(Icons.Default.AddCircleOutline, contentDescription = "إضافة مزود")
                     }
                 }
             )
@@ -86,7 +90,12 @@ fun AIModelsScreen(
             item {
                 Text("إعدادات التكلفة والذكاء", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
-                AICostSettingsCard(uiState, onFreeOnlyToggle = { viewModel.toggleFreeOnly(it) }, onAutoSelectToggle = { viewModel.toggleAutoSelect(it) })
+                AICostSettingsCard(
+                    uiState,
+                    onFreeOnlyToggle = { viewModel.toggleFreeOnly(it) },
+                    onAutoSelectToggle = { viewModel.toggleAutoSelect(it) },
+                    enabled = !uiState.isLoading
+                )
             }
 
             // 3. Model Selection
@@ -101,7 +110,9 @@ fun AIModelsScreen(
                     models = uiState.models,
                     selectedId = uiState.defaultModelId,
                     onSelect = { viewModel.setDefaultModel(it) },
-                    autoSelect = uiState.autoSelectFree
+                    autoSelect = uiState.autoSelectFree,
+                    isLoading = uiState.isLoading,
+                    enabled = !uiState.isLoading
                 )
             }
 
@@ -110,7 +121,19 @@ fun AIModelsScreen(
                 Text("المزودون (BYOK)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 if (uiState.providers.isEmpty()) {
-                    AIProvidersGuide()
+                    if (uiState.isLoading) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text("جارٍ تحميل المزودين…", style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else {
+                        AIProvidersGuide()
+                    }
                 }
             }
 
@@ -119,7 +142,8 @@ fun AIModelsScreen(
                     provider = provider,
                     onSync = { viewModel.syncModels(it) },
                     onTest = { viewModel.testConnection(it) },
-                    onDelete = { viewModel.deleteProvider(it) }
+                    onDelete = { providerPendingDeletion = provider },
+                    isLoading = uiState.isLoading
                 )
             }
         }
@@ -130,6 +154,41 @@ fun AIModelsScreen(
                 onConfirm = { name, type, key, url ->
                     viewModel.addProvider(name, type, key, url)
                     showAddProviderDialog = false
+                }
+            )
+        }
+
+        if (uiState.isLoadError) {
+            AlertDialog(
+                onDismissRequest = { },
+                title = { Text("تعذر تحميل الإعدادات") },
+                text = { Text("تحقق من اتصالك ثم أعد المحاولة. لم يتم عرض بيانات قديمة من حساب آخر.") },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.refresh() }, enabled = !uiState.isLoading) {
+                        Text("إعادة المحاولة")
+                    }
+                }
+            )
+        }
+
+        providerPendingDeletion?.let { provider ->
+            AlertDialog(
+                onDismissRequest = { providerPendingDeletion = null },
+                title = { Text("حذف المزود؟") },
+                text = {
+                    Text("سيتم حذف ${provider.name} وقائمة نماذجه من هذا الجهاز. لا يمكن التراجع عن هذا الإجراء.")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.deleteProvider(provider.id)
+                            providerPendingDeletion = null
+                        },
+                        enabled = !uiState.isLoading
+                    ) { Text("حذف", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { providerPendingDeletion = null }) { Text("إلغاء") }
                 }
             )
         }
@@ -172,7 +231,8 @@ fun AISettingsDashboard(uiState: AIModelsUiState) {
 fun AICostSettingsCard(
     uiState: AIModelsUiState,
     onFreeOnlyToggle: (Boolean) -> Unit,
-    onAutoSelectToggle: (Boolean) -> Unit
+    onAutoSelectToggle: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -181,7 +241,7 @@ fun AICostSettingsCard(
                     Text("Free AI Only", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                     Text("منع النماذج المدفوعة نهائياً وضمان العمل المجاني.", style = MaterialTheme.typography.bodySmall)
                 }
-                Switch(checked = uiState.freeOnly, onCheckedChange = onFreeOnlyToggle)
+                Switch(checked = uiState.freeOnly, onCheckedChange = onFreeOnlyToggle, enabled = enabled)
             }
             
             HorizontalDivider()
@@ -191,7 +251,7 @@ fun AICostSettingsCard(
                     Text("Auto Select Free Model", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                     Text("اختيار أفضل نموذج مجاني متاح للمهمة تلقائياً.", style = MaterialTheme.typography.bodySmall)
                 }
-                Switch(checked = uiState.autoSelectFree, onCheckedChange = onAutoSelectToggle)
+                Switch(checked = uiState.autoSelectFree, onCheckedChange = onAutoSelectToggle, enabled = enabled)
             }
         }
     }
@@ -202,9 +262,11 @@ fun AIModelSelectionSection(
     models: List<AIModel>,
     selectedId: String?,
     onSelect: (String) -> Unit,
-    autoSelect: Boolean
+    autoSelect: Boolean,
+    isLoading: Boolean,
+    enabled: Boolean
 ) {
-    if (autoSelect) {
+    if (autoSelect && models.isNotEmpty()) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
@@ -215,24 +277,44 @@ fun AIModelSelectionSection(
                 Text("الوضع الذكي مفعل: سيتم اختيار النموذج المجاني الأنسب لكل تحليل تلقائياً.", style = MaterialTheme.typography.bodyMedium)
             }
         }
-    } else {
-        if (models.isEmpty()) {
-            Text("لا توجد نماذج متوفرة. أضف مزوداً أولاً.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    } else if (models.isEmpty()) {
+        if (isLoading) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("جارٍ تحميل النماذج…", style = MaterialTheme.typography.bodySmall)
+            }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                models.forEach { model ->
-                    AIModelItem(model = model, isSelected = model.id == selectedId, onSelect = { onSelect(model.id) })
-                }
+            Text(
+                "لا توجد نماذج متاحة حالياً. أضف مزوداً ثم اختبر الاتصال وحدّث النماذج.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            models.forEach { model ->
+                AIModelItem(
+                    model = model,
+                    isSelected = model.id == selectedId,
+                    onSelect = { onSelect(model.id) },
+                    enabled = enabled
+                )
             }
         }
     }
 }
 
 @Composable
-fun AIModelItem(model: AIModel, isSelected: Boolean, onSelect: () -> Unit) {
+fun AIModelItem(model: AIModel, isSelected: Boolean, onSelect: () -> Unit, enabled: Boolean = true) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = onSelect,
+        enabled = enabled,
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
         ),
@@ -266,12 +348,6 @@ fun AIProvidersGuide() {
             GuideStep("2", "أنشئ مفتاح API جديد (API Key).")
             GuideStep("3", "أضف المفتاح هنا باستخدام زر الإضافة في الأعلى.")
             
-            TextButton(
-                onClick = { /* Open external links if needed */ },
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text("الموقع الرسمي: OpenRouter.ai")
-            }
         }
     }
 }
@@ -317,7 +393,8 @@ fun AIProviderCard(
     provider: AIProvider,
     onSync: (String) -> Unit,
     onTest: (String) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    isLoading: Boolean
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -346,18 +423,19 @@ fun AIProviderCard(
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { onTest(provider.id) }) {
+                TextButton(onClick = { onTest(provider.id) }, enabled = !isLoading) {
                     Icon(Icons.Default.FactCheck, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("اختبار")
                 }
-                TextButton(onClick = { onSync(provider.id) }) {
-                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
+                TextButton(onClick = { onSync(provider.id) }, enabled = !isLoading) {
+                    if (isLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("تحديث")
                 }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { onDelete(provider.id) }) {
+                IconButton(onClick = { onDelete(provider.id) }, enabled = !isLoading) {
                     Icon(Icons.Default.DeleteOutline, null, tint = MaterialTheme.colorScheme.error)
                 }
             }
@@ -373,12 +451,18 @@ fun ProviderStatusBadge(status: AIProviderStatus) {
         AIProviderStatus.RATE_LIMITED -> Color(0xFFF57C00)
         else -> MaterialTheme.colorScheme.outline
     }
+    val label = when (status) {
+        AIProviderStatus.CONNECTED -> "متصل"
+        AIProviderStatus.DISCONNECTED -> "غير متصل"
+        AIProviderStatus.ERROR -> "خطأ في الاتصال"
+        AIProviderStatus.RATE_LIMITED -> "تجاوز حد الطلبات"
+    }
     Surface(
         color = color.copy(alpha = 0.15f),
         contentColor = color,
         shape = RoundedCornerShape(4.dp)
     ) {
-        Text(status.name, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall)
+        Text(label, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -390,6 +474,7 @@ fun AddAIProviderDialog(
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(AIProviderType.OPEN_ROUTER) }
     var key by remember { mutableStateOf("") }
+    var keyVisible by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -406,7 +491,22 @@ fun AddAIProviderDialog(
                     }
                 }
 
-                OutlinedTextField(value = key, onValueChange = { key = it }, label = { Text("API Key") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = { key = it },
+                    label = { Text("مفتاح API") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { keyVisible = !keyVisible }) {
+                            Icon(
+                                if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (keyVisible) "إخفاء المفتاح" else "إظهار المفتاح"
+                            )
+                        }
+                    }
+                )
                 
                 if (type == AIProviderType.CUSTOM) {
                     OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("Base URL") }, modifier = Modifier.fillMaxWidth())
@@ -422,7 +522,10 @@ fun AddAIProviderDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { if (name.isNotBlank() && key.isNotBlank()) onConfirm(name, type, key, url.ifBlank { null }) }) {
+            Button(
+                onClick = { onConfirm(name.trim(), type, key.trim(), url.trim().ifBlank { null }) },
+                enabled = name.isNotBlank() && key.isNotBlank()
+            ) {
                 Text("حفظ")
             }
         },
