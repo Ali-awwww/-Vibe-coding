@@ -1493,3 +1493,33 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Verification limits: source writes and GitHub re-fetch are being checked; no Gradle build, unit-test execution, installed APK test, real confirmation email click, or live Supabase redirect test has yet been performed. GitHub combined status returned no status entries for the latest source/test commit; this is not a passing CI result.
 - Repository agent instructions: root `AGENTS.md`, `.github/AGENTS.md`, and `app/AGENTS.md` returned 404; no agent file was available at those paths.
 - Next: user adds the redirect allow-list entry, install a build containing these changes, perform a fresh signup and click the email confirmation link on the same Android device; then verify it opens this app and shows the confirmation message. If Supabase emits a different callback parameter shape, capture only parameter names (never token values) and adjust the parser accordingly.
+
+
+## 2026-11-15 — Login continuation run: email-confirmation callback handoff recheck
+
+### Continuity and selection
+- Re-read the current task register and reviewed the latest 20 commits on `main`. Current HEAD at the start of this run: `f48cde58215b94d513e2768b65f765320df2f439`.
+- The latest open Login work is the Supabase signup email-confirmation deep link. Login remains not design-complete under the mandatory visual review gate; this run did not mark it complete or move to another screen.
+- Checked root `AGENTS.md`, `.github/AGENTS.md`, and `app/AGENTS.md`; all three paths returned 404. No instructions were available at those paths.
+- User previously confirmed in this conversation that the exact app callback URI had been added under Supabase Authentication → URL Configuration → Additional Redirect URLs. This supersedes the earlier owner-action note that the allow-list entry was still pending. Do not change Supabase Auth settings again without a new reason.
+
+### Source recheck
+- Re-fetched and inspected `LoginScreen.kt`, `MainViewModel.kt`, `EmailConfirmationLinkParser.kt`, `AuthRepositoryImpl.kt`, `AndroidManifest.xml`, and the English/Arabic authentication strings.
+- The source consistently passes `com.aistudio.crashintelligence.vyfrip://auth/email-confirmation` as signup `redirect_to`, registers the matching Android VIEW intent filter, accepts only the exact custom scheme/host/path with `type=signup`, no Supabase error, and a non-empty access token, and displays the confirmation message on Login without persisting/logging the callback token or silently creating a session.
+- Re-fetched `EmailConfirmationLinkParserTest.kt`; it covers the valid callback and rejection of a wrong route, wrong type, missing token and error response. These are tests present in source, not tests executed in this run.
+- No new source defect was established by this static recheck, so no speculative source change was made.
+
+### Verification status
+- PASS — GitHub source re-fetch and static consistency review for the callback URI, manifest filter, parser and UI message.
+- PASS — repository commit history query returned the latest 20 commits; current inspected HEAD is `f48cde58215b94d513e2768b65f765320df2f439`.
+- BLOCKED — GitHub combined status returned no status entries for this commit, and the available commit-workflow lookup returned no workflow runs. This is not a passing CI result.
+- BLOCKED — no Gradle build, unit-test execution, APK installation, device/emulator test, fresh signup, or real email-link click was performed in this run. No Android SDK/Emulator execution environment was attached to this task context.
+- BLOCKED — rendered Login review in Arabic RTL and English LTR, compact-screen/IME review, and accessibility inspection remain outstanding.
+
+### Explicit continuity fields
+- **الشاشة النشطة:** Login / Identity.
+- **آخر خطوة مكتملة:** Static source consistency recheck of the signup email-confirmation deep-link implementation; user-confirmed redirect allow-list setup recorded.
+- **معيار القبول التالي:** Verify the callback end-to-end on an installed Android build using a fresh signup.
+- **الخطوة التالية الدقيقة للتشغيل القادم:** Obtain/install an APK built from a commit containing `f48cde58215b94d513e2768b65f765320df2f439` or later; create a fresh test account; open the confirmation email on the same Android device; tap the confirmation link; verify Android opens this app and Login shows the localized “email confirmed; sign in” message. Record only callback parameter names and outcome if debugging is needed—never capture or log token values. Then run the parser unit tests and Gradle build when a functioning runner is available, and continue Login's visual redesign/review without switching screens.
+- **العائق/المتطلب الخارجي:** An installed build and access to a test mailbox plus a physical Android device or emulator are needed for the real callback test. A functioning Gradle/Android SDK runner is also needed for build and test execution.
+- **Screen status:** OPEN — no end-to-end, build, automated test, or visual sign-off evidence has been produced by this run.
