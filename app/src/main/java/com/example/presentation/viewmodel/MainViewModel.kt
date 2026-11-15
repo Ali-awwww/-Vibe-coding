@@ -8,6 +8,7 @@ import com.example.domain.repository.EmailConfirmationRequiredException
 import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.presentation.auth.PasswordRecoveryLinkResult
 import com.example.presentation.auth.parsePasswordRecoveryLink
+import com.example.presentation.auth.isVerifiedEmailConfirmationLink
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -35,6 +36,7 @@ enum class AuthUiMessage {
     SIGN_IN_SUCCEEDED,
     SIGN_UP_SUCCEEDED,
     EMAIL_CONFIRMATION_REQUIRED,
+    EMAIL_CONFIRMED_SIGN_IN,
     PASSWORD_RECOVERY_REQUEST_ACCEPTED,
     PASSWORD_UPDATED
 }
@@ -71,6 +73,15 @@ class MainViewModel(
     }
 
     fun acceptPasswordRecoveryLink(rawLink: String) {
+        if (isVerifiedEmailConfirmationLink(rawLink)) {
+            invalidatePasswordRecoveryAttempt()
+            pendingPasswordRecovery = null
+            _passwordRecoveryState.value = PasswordRecoveryUiState()
+            _actionState.value = AuthActionState(
+                successMessage = AuthUiMessage.EMAIL_CONFIRMED_SIGN_IN
+            )
+            return
+        }
         invalidatePasswordRecoveryAttempt()
         when (val parsed = parsePasswordRecoveryLink(rawLink)) {
             is PasswordRecoveryLinkResult.Ready -> {
