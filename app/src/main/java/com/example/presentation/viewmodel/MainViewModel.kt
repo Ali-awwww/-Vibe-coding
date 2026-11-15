@@ -46,8 +46,7 @@ enum class AuthUiMessage {
 data class AuthActionState(
     val isLoading: Boolean = false,
     val errorMessage: AuthUiMessage? = null,
-    val successMessage: AuthUiMessage? = null,
-    val errorDetail: String? = null
+    val successMessage: AuthUiMessage? = null
 )
 
 class MainViewModel(
@@ -209,8 +208,7 @@ class MainViewModel(
                     errorMessage = resolveFailureMessage(
                         result.exceptionOrNull(),
                         AuthUiMessage.SIGN_IN_FAILED
-                    ),
-                    errorDetail = result.exceptionOrNull()?.message
+                    )
                 )
                 onComplete(false)
             }
@@ -247,8 +245,7 @@ class MainViewModel(
                         errorMessage = resolveFailureMessage(
                             failure,
                             AuthUiMessage.SIGN_UP_FAILED
-                        ),
-                        errorDetail = failure?.message
+                        )
                     )
                 }
                 onComplete(false)
