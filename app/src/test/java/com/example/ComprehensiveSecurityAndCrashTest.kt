@@ -31,11 +31,13 @@ class ComprehensiveSecurityAndCrashTest {
     private lateinit var database: AppDatabase
     private lateinit var crashRepository: CrashRepository
     private lateinit var context: Context
+    private var activeUserId: String? = null
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext<Context>()
+        activeUserId = null
         
         // Initialize Firebase for repository dependencies
         if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) {
@@ -99,8 +101,35 @@ class ComprehensiveSecurityAndCrashTest {
             override suspend fun generateResponse(userId: String, modelId: String, prompt: String, systemInstruction: String?, taskId: String?, taskType: AITaskType) = Result.success("")
         }
 
-        // We use null for firestore and auth to force the repository to use the local DAO for testing
-        // This is safe because of the null checks in CrashRepositoryImpl
+        val fakeAuthRepository = object : AuthRepository {
+            override val currentUser: kotlinx.coroutines.flow.Flow<UserAccount?> =
+                kotlinx.coroutines.flow.flow { emit(activeUserId?.let { UserAccount(id = it) }) }
+
+            override fun getCurrentUserSync(): UserAccount? =
+                activeUserId?.let { UserAccount(id = it) }
+
+            override suspend fun signUp(
+                email: String,
+                password: String,
+                displayName: String,
+                organization: String
+            ): Result<UserAccount> = Result.failure(UnsupportedOperationException())
+
+            override suspend fun signIn(email: String, password: String): Result<UserAccount> =
+                Result.failure(UnsupportedOperationException())
+
+            override suspend fun signOut() {
+                activeUserId = null
+            }
+
+            override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =
+                Result.failure(UnsupportedOperationException())
+
+            override suspend fun signInWithGoogle(idToken: String): Result<Unit> =
+                Result.failure(UnsupportedOperationException())
+        }
+
+        // Use local Room storage with a mutable Supabase identity; do not bypass the project identity guard.
         crashRepository = CrashRepositoryImpl(
             firestore = null,
             crashDao = database.crashDao(),
@@ -109,7 +138,8 @@ class ComprehensiveSecurityAndCrashTest {
             githubRepository = fakeGithubRepo,
             symbolicationRepository = fakeSymbolicationRepo,
             aiModelRepository = fakeAiModelRepo,
-            auth = null
+            auth = null,
+            authRepository = fakeAuthRepository
         )
     }
 
@@ -147,16 +177,18 @@ class ComprehensiveSecurityAndCrashTest {
         
         val projA = Project(id = "p_a", name = "Project A", ownerId = userA)
         val projB = Project(id = "p_b", name = "Project B", ownerId = userB)
-        
+
+        activeUserId = userA
         crashRepository.addProject(projA)
+        activeUserId = userB
         crashRepository.addProject(projB)
-        
-        // User A fetches projects
+
+        activeUserId = userA
         val projectsForA = crashRepository.getProjectsForUser(userA).first()
         assertEquals(1, projectsForA.size)
         assertEquals("p_a", projectsForA[0].id)
-        
-        // User B fetches projects
+
+        activeUserId = userB
         val projectsForB = crashRepository.getProjectsForUser(userB).first()
         assertEquals(1, projectsForB.size)
         assertEquals("p_b", projectsForB[0].id)
@@ -167,7 +199,8 @@ class ComprehensiveSecurityAndCrashTest {
         val userId = "dev_1"
         val projectId = "proj_123"
         val appId = "app_android"
-        
+        activeUserId = userId
+
         // 1. Setup Project & App
         crashRepository.addProject(Project(id = projectId, name = "Test Proj", ownerId = userId))
         crashRepository.addApplication(Application(id = appId, projectId = projectId, name = "Android App"))
@@ -216,4 +249,3 @@ class ComprehensiveSecurityAndCrashTest {
         assertFalse(masked.contains("secret-12345"))
     }
 }
-
