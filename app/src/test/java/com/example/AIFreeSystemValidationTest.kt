@@ -57,28 +57,38 @@ class AIFreeSystemValidationTest {
     }
 
     @Test
-    fun `syncModels strictly marks free models based on pricing`() = runTest {
+    fun `syncModels parses numeric pricing and keeps free category consistent`() = runTest {
         val userId = "user1"
         val provider = AIProvider(id = "p1", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, apiKey = "key")
         aiProviderDao.insertProvider(provider)
-
-        // Setup fake API to return one free and one paid model
         fakeOpenRouterApi.responseContent = "Connection check succeeded"
         fakeOpenRouterApi.models = listOf(
-            OpenRouterModelData("m_free", "Free Model", null, 8000, OpenRouterPricing("0", "0", "0", "0"), null),
-            OpenRouterModelData("m_paid", "Paid Model", null, 8000, OpenRouterPricing("0.01", "0.01", "0", "0"), null)
+            OpenRouterModelData("m_free_decimal", "Free Decimal", null, 8000, OpenRouterPricing("0.000000", "0.0", "0", "0"), null),
+            OpenRouterModelData("m_paid", "Paid Model", null, 8000, OpenRouterPricing("0.01", "0.01", "0", "0"), null),
+            OpenRouterModelData("m_zero_input_paid_output", "Mixed Pricing", null, 8000, OpenRouterPricing("0", "0.0001", "0", "0"), null),
+            OpenRouterModelData("m_invalid_price", "Invalid Pricing", null, 8000, OpenRouterPricing("unknown", "0", "0", "0"), null)
         )
 
-        repository.syncModels(userId, "p1")
+        val syncResult = repository.syncModels(userId, "p1")
+        assertTrue("Catalog sync should succeed for valid catalog entries", syncResult.isSuccess)
 
         val allModels = aiProviderDao.getModelsByProvider(userId, "p1").first()
-        val freeModel = allModels.find { it.apiId == "m_free" }
+        val freeModel = allModels.find { it.apiId == "m_free_decimal" }
         val paidModel = allModels.find { it.apiId == "m_paid" }
+        val mixedModel = allModels.find { it.apiId == "m_zero_input_paid_output" }
 
         assertNotNull(freeModel)
-        assertTrue("Model with 0 price should be marked free", freeModel!!.isFree)
+        assertTrue("Decimal zero pricing should be recognized as free", freeModel!!.isFree)
+        assertEquals(AIModelCategory.FREE, freeModel.category)
         assertNotNull(paidModel)
-        assertFalse("Model with non-zero price should NOT be marked free", paidModel!!.isFree)
+        assertFalse("Non-zero pricing must not be marked free", paidModel!!.isFree)
+        assertEquals(AIModelCategory.GENERAL_PURPOSE, paidModel.category)
+        assertNotNull(mixedModel)
+        assertFalse("A paid completion price means the model is not free", mixedModel!!.isFree)
+        assertEquals(AIModelCategory.GENERAL_PURPOSE, mixedModel.category)
+        assertFalse("Models with invalid prices must not be cached with a zero-cost default", allModels.any { it.apiId == "m_invalid_price" })
+        assertEquals("The sync should reuse one catalog response for verification and persistence", 1, fakeOpenRouterApi.getModelsCallCount)
+        assertEquals("m_free_decimal", fakeOpenRouterApi.lastRequestedModel)
     }
 
     @Test
@@ -115,6 +125,25 @@ class AIFreeSystemValidationTest {
         repository.deleteProvider(ownerId, otherProviderId)
         assertNotNull(aiProviderDao.getProviderById(otherUserId, otherProviderId))
         assertEquals(1, repository.getModelsByProvider(otherUserId, otherProviderId).first().size)
+    }
+
+    @Test
+    fun modelCatalogReplacementRejectsForeignProviderModelsWithoutDeletingCurrentCatalog() = runTest {
+        val userId = "owner-user"
+        val providerId = "owner-provider"
+        aiProviderDao.insertProvider(
+            AIProvider(id = providerId, userId = userId, name = "Owner", type = AIProviderType.OPEN_ROUTER, apiKey = "key")
+        )
+        val existing = AIModel(id = "$providerId:existing", providerId = providerId, apiId = "existing", name = "Existing")
+        aiProviderDao.insertModels(listOf(existing))
+
+        val replacement = AIModel(id = "foreign-provider:model", providerId = "foreign-provider", apiId = "model", name = "Foreign")
+        val failure = runCatching {
+            aiProviderDao.replaceModelsForProvider(userId, providerId, listOf(replacement))
+        }.exceptionOrNull()
+
+        assertTrue("Foreign-provider rows must be rejected before the cache is replaced", failure is IllegalArgumentException)
+        assertEquals(listOf(existing.id), aiProviderDao.getModelsByProvider(userId, providerId).first().map { it.id })
     }
 
     @Test
@@ -182,10 +211,16 @@ class AIFreeSystemValidationTest {
         var models = emptyList<OpenRouterModelData>()
         var responseContent = ""
         var shouldFailForModel: String? = null
+        var getModelsCallCount: Int = 0
+        var lastRequestedModel: String? = null
 
-        override suspend fun getModels(token: String): OpenRouterModelsResponse = OpenRouterModelsResponse(models)
+        override suspend fun getModels(token: String): OpenRouterModelsResponse {
+            getModelsCallCount += 1
+            return OpenRouterModelsResponse(models)
+        }
 
         override suspend fun generateCompletion(token: String, request: OpenRouterChatRequest): OpenRouterChatResponse {
+            lastRequestedModel = request.model
             if (request.model == shouldFailForModel) throw Exception("Simulated Failure")
             return OpenRouterChatResponse(
                 id = UUID.randomUUID().toString(),

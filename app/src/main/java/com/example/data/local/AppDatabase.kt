@@ -334,6 +334,15 @@ interface AIProviderDao {
     """)
     suspend fun deleteModelsByProvider(userId: String, providerId: String)
 
+    @Transaction
+    suspend fun replaceModelsForProvider(userId: String, providerId: String, models: List<AIModel>) {
+        require(models.isNotEmpty()) { "Cannot replace a provider catalog with an empty model list" }
+        require(models.all { it.providerId == providerId }) { "Every model must belong to the selected provider" }
+        check(getProviderById(userId, providerId) != null) { "Provider is not owned by the current user" }
+        deleteModelsByProvider(userId, providerId)
+        insertModels(models)
+    }
+
     // Usage Logs
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUsageLog(log: AIUsageLog)

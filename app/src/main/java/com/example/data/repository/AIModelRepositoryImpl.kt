@@ -54,78 +54,115 @@ class AIModelRepositoryImpl(
         aiProviderDao.getModelById(userId, id)
 
     override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = runCatching {
-        val provider = aiProviderDao.getProviderById(userId, providerId) ?: throw Exception("Provider not found or not owned by user")
+        val provider = aiProviderDao.getProviderById(userId, providerId)
+            ?: throw IllegalArgumentException("Provider not found or not owned by user")
         val apiKey = provider.apiKey?.let(decryptSecret)
-            ?.takeIf { it.isNotBlank() } ?: throw Exception("API key is missing")
+            ?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("API key is missing")
 
-        // Verify credentials with a real inference request before marking the provider connected.
-        testConnection(userId, providerId).getOrThrow()
+        val openRouterModels = when (provider.type) {
+            AIProviderType.OPEN_ROUTER -> openRouterApi.getModels("Bearer $apiKey").data.also {
+                verifyOpenRouterConnection(apiKey, it)
+            }
+            AIProviderType.GOOGLE_GEMINI -> {
+                verifyGeminiConnection(apiKey)
+                emptyList()
+            }
+            AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM ->
+                throw UnsupportedOperationException("This provider type is not supported for model sync.")
+        }
 
         val models = when (provider.type) {
             AIProviderType.OPEN_ROUTER -> {
-                val response = openRouterApi.getModels("Bearer $apiKey")
-                val fetchedModels = response.data.map { data ->
+                val fetchedModels = openRouterModels.mapNotNull { data ->
+                    val promptPrice = data.pricing.prompt.toValidPricePerToken() ?: return@mapNotNull null
+                    val completionPrice = data.pricing.completion.toValidPricePerToken() ?: return@mapNotNull null
+                    val isFree = promptPrice == 0.0 && completionPrice == 0.0
                     AIModel(
                         id = "${provider.id}:${data.id}",
                         providerId = provider.id,
                         apiId = data.id,
                         name = data.name,
-                        isFree = data.pricing.prompt == "0" && data.pricing.completion == "0",
+                        isFree = isFree,
                         contextWindow = data.context_length,
-                        inputPricePer1M = data.pricing.prompt.toDoubleOrNull()?.let { it * 1_000_000 } ?: 0.0,
-                        outputPricePer1M = data.pricing.completion.toDoubleOrNull()?.let { it * 1_000_000 } ?: 0.0,
+                        inputPricePer1M = promptPrice * 1_000_000.0,
+                        outputPricePer1M = completionPrice * 1_000_000.0,
                         capabilities = inferCapabilities(data),
-                        category = if (data.pricing.prompt == "0") AIModelCategory.FREE else AIModelCategory.GENERAL_PURPOSE
+                        category = if (isFree) AIModelCategory.FREE else AIModelCategory.GENERAL_PURPOSE
                     )
                 }
-                
-                // Add the virtual "openrouter/free" model for intelligent routing
+
                 val virtualFreeModel = AIModel(
                     id = "${provider.id}:openrouter/free",
                     providerId = provider.id,
                     apiId = "openrouter/free",
                     name = "OpenRouter Auto Free",
                     isFree = true,
-                    contextWindow = 8192, // Conservative default
+                    contextWindow = 8192,
                     capabilities = listOf(AICapability.REASONING, AICapability.CODING, AICapability.AGENTIC),
                     category = AIModelCategory.FREE
                 )
-                
+
                 fetchedModels + virtualFreeModel
             }
-            AIProviderType.HUGGING_FACE -> throw UnsupportedOperationException("Hugging Face inference is not configured yet.")
-            AIProviderType.GOOGLE_GEMINI -> {
-                listOf(
-                    AIModel(
-                        id = "${provider.id}:gemini-1.5-flash",
-                        providerId = provider.id,
-                        apiId = "gemini-1.5-flash",
-                        name = "Gemini 1.5 Flash",
-                        isFree = true,
-                        contextWindow = 1000000,
-                        capabilities = listOf(AICapability.CODING, AICapability.REASONING, AICapability.LONG_CONTEXT, AICapability.VISION, AICapability.AGENTIC),
-                        category = AIModelCategory.FREE
-                    ),
-                    AIModel(
-                        id = "${provider.id}:gemini-1.5-pro",
-                        providerId = provider.id,
-                        apiId = "gemini-1.5-pro",
-                        name = "Gemini 1.5 Pro",
-                        isFree = false,
-                        contextWindow = 2000000,
-                        capabilities = listOf(AICapability.CODING, AICapability.REASONING, AICapability.LONG_CONTEXT, AICapability.VISION),
-                        category = AIModelCategory.REASONING
-                    )
+            AIProviderType.GOOGLE_GEMINI -> listOf(
+                AIModel(
+                    id = "${provider.id}:gemini-1.5-flash",
+                    providerId = provider.id,
+                    apiId = "gemini-1.5-flash",
+                    name = "Gemini 1.5 Flash",
+                    isFree = true,
+                    contextWindow = 1_000_000,
+                    capabilities = listOf(AICapability.CODING, AICapability.REASONING, AICapability.LONG_CONTEXT, AICapability.VISION, AICapability.AGENTIC),
+                    category = AIModelCategory.FREE
+                ),
+                AIModel(
+                    id = "${provider.id}:gemini-1.5-pro",
+                    providerId = provider.id,
+                    apiId = "gemini-1.5-pro",
+                    name = "Gemini 1.5 Pro",
+                    isFree = false,
+                    contextWindow = 2_000_000,
+                    capabilities = listOf(AICapability.CODING, AICapability.REASONING, AICapability.LONG_CONTEXT, AICapability.VISION),
+                    category = AIModelCategory.REASONING
                 )
-            }
-            else -> emptyList()
+            )
+            AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM -> emptyList()
         }
 
-        if (models.isEmpty()) throw Exception("Provider returned no supported models")
-        aiProviderDao.deleteModelsByProvider(userId, providerId)
-        aiProviderDao.insertModels(models)
+        if (models.isEmpty()) throw IllegalStateException("Provider returned no supported models")
+        aiProviderDao.replaceModelsForProvider(userId, providerId, models)
         aiProviderDao.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, System.currentTimeMillis())
     }
+
+    private suspend fun verifyOpenRouterConnection(apiKey: String, models: List<com.example.data.remote.OpenRouterModelData>) {
+        val testModel = models.firstOrNull { it.isFreeModel() }
+            ?: models.firstOrNull()
+            ?: throw IllegalStateException("OpenRouter returned no models")
+        val response = openRouterApi.generateCompletion(
+            "Bearer $apiKey",
+            OpenRouterChatRequest(
+                model = testModel.id,
+                messages = listOf(ChatMessage("user", "ping"))
+            )
+        )
+        if (response.choices.firstOrNull()?.message?.content.isNullOrBlank()) {
+            throw IllegalStateException("Provider returned an empty test response")
+        }
+    }
+
+    private suspend fun verifyGeminiConnection(apiKey: String) {
+        val response = GenerativeModel("gemini-1.5-flash", apiKey).generateContent("ping")
+        if (response.text.isNullOrBlank()) {
+            throw IllegalStateException("Provider returned an empty test response")
+        }
+    }
+
+    private fun OpenRouterModelData.isFreeModel(): Boolean =
+        pricing.prompt.toValidPricePerToken() == 0.0 &&
+            pricing.completion.toValidPricePerToken() == 0.0
+
+    private fun String.toValidPricePerToken(): Double? =
+        toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
 
     private fun inferCapabilities(data: com.example.data.remote.OpenRouterModelData): List<AICapability> {
         val list = mutableListOf<AICapability>()
@@ -139,31 +176,17 @@ class AIModelRepositoryImpl(
     }
 
     override suspend fun testConnection(userId: String, providerId: String): Result<Unit> = runCatching {
-        val provider = aiProviderDao.getProviderById(userId, providerId) ?: throw Exception("Provider not found")
-        val apiKey = provider.apiKey?.let(decryptSecret) ?: throw Exception("API Key missing")
+        val provider = aiProviderDao.getProviderById(userId, providerId)
+            ?: throw IllegalArgumentException("Provider not found or not owned by user")
+        val apiKey = provider.apiKey?.let(decryptSecret)
+            ?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("API key is missing")
 
         when (provider.type) {
-            AIProviderType.GOOGLE_GEMINI -> {
-                val model = GenerativeModel("gemini-1.5-flash", apiKey)
-                model.generateContent("test")
-            }
-            AIProviderType.OPEN_ROUTER -> {
-                val listedModels = openRouterApi.getModels("Bearer $apiKey").data
-                val testModel = listedModels.firstOrNull { it.pricing.prompt == "0" && it.pricing.completion == "0" }
-                    ?: listedModels.firstOrNull()
-                    ?: throw Exception("OpenRouter returned no models")
-                val response = openRouterApi.generateCompletion(
-                    "Bearer $apiKey",
-                    OpenRouterChatRequest(
-                        model = testModel.id,
-                        messages = listOf(ChatMessage("user", "ping"))
-                    )
-                )
-                if (response.choices.firstOrNull()?.message?.content.isNullOrBlank()) {
-                    throw Exception("Provider returned an empty test response")
-                }
-            }
-            else -> throw UnsupportedOperationException("Connection test is not implemented for ${provider.type}")
+            AIProviderType.GOOGLE_GEMINI -> verifyGeminiConnection(apiKey)
+            AIProviderType.OPEN_ROUTER ->
+                verifyOpenRouterConnection(apiKey, openRouterApi.getModels("Bearer $apiKey").data)
+            AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM ->
+                throw UnsupportedOperationException("Connection test is not implemented for this provider type.")
         }
     }
 
