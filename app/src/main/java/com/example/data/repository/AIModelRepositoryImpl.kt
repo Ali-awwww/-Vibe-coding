@@ -181,19 +181,18 @@ class AIModelRepositoryImpl(
         if (this is AIProviderOperationException) return this
         val causes = generateSequence(this) { it.cause }.toList()
         val httpFailure = causes.filterIsInstance<HttpException>().firstOrNull()
-        val kind = when (httpFailure?.code()) {
-            401 -> AIProviderFailureKind.INVALID_CREDENTIALS
-            403 -> AIProviderFailureKind.ACCESS_DENIED
-            402 -> AIProviderFailureKind.QUOTA_EXCEEDED
-            429 -> AIProviderFailureKind.RATE_LIMITED
-            in 500..599 -> AIProviderFailureKind.SERVICE_UNAVAILABLE
-            else -> when {
-                causes.any { it is SocketTimeoutException } -> AIProviderFailureKind.TIMEOUT
-                causes.any { it is IOException } -> AIProviderFailureKind.NETWORK
-                this is UnsupportedOperationException -> AIProviderFailureKind.UNSUPPORTED
-                this is IllegalArgumentException -> AIProviderFailureKind.MISCONFIGURED
-                else -> AIProviderFailureKind.UNKNOWN
-            }
+        val statusCode = httpFailure?.code()
+        val kind = when {
+            statusCode == 401 -> AIProviderFailureKind.INVALID_CREDENTIALS
+            statusCode == 403 -> AIProviderFailureKind.ACCESS_DENIED
+            statusCode == 402 -> AIProviderFailureKind.QUOTA_EXCEEDED
+            statusCode == 429 -> AIProviderFailureKind.RATE_LIMITED
+            statusCode != null && statusCode in 500..599 -> AIProviderFailureKind.SERVICE_UNAVAILABLE
+            causes.any { it is SocketTimeoutException } -> AIProviderFailureKind.TIMEOUT
+            causes.any { it is IOException } -> AIProviderFailureKind.NETWORK
+            this is UnsupportedOperationException -> AIProviderFailureKind.UNSUPPORTED
+            this is IllegalArgumentException -> AIProviderFailureKind.MISCONFIGURED
+            else -> AIProviderFailureKind.UNKNOWN
         }
         return AIProviderOperationException(kind, this)
     }
