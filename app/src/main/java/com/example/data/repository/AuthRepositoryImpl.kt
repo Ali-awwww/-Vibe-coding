@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import com.example.data.remote.supabase.SupabaseAuthApi
+import com.example.data.remote.supabase.SupabaseAuthError
 import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseUpdateUserRequest
 import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
@@ -188,11 +189,7 @@ class AuthRepositoryImpl(
                     request = SupabaseVerifyOtpRequest(type = "recovery", tokenHash = tokenHash)
                 )
                 operationContext.ensureActive()
-                requireSuccessfulBody(
-                    verification.isSuccessful,
-                    verification.body(),
-                    verification.message()
-                ).toStoredSession()
+                requireSuccessfulBody(verification).toStoredSession()
                     ?: throw IllegalStateException("لم يُرجع رابط الاستعادة جلسة تحقق صالحة.")
             }
 
