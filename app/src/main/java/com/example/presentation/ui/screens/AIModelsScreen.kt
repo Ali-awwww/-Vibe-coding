@@ -238,6 +238,8 @@ fun AICostSettingsCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val isSupported = provider.type == AIProviderType.GOOGLE_GEMINI ||
+                provider.type == AIProviderType.OPEN_ROUTER
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Free AI Only", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
@@ -432,8 +434,6 @@ fun AIProviderCard(
                     Text(provider.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(provider.type.name, style = MaterialTheme.typography.bodySmall)
                 }
-                val isSupported = provider.type == AIProviderType.GOOGLE_GEMINI ||
-                    provider.type == AIProviderType.OPEN_ROUTER
                 ProviderStatusBadge(if (isSupported) provider.status else AIProviderStatus.UNSUPPORTED)
             }
 

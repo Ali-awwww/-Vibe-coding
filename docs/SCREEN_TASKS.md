@@ -1779,3 +1779,6 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added a ViewModel regression test for the unsupported failure status and safe Arabic message.
 - Test correction: commit `2d4a21f44f3fff1b20f94ccc1d427e1bad96ec53` failed `:app:compileDebugUnitTestKotlin` because the DAO exposes only `getAllAvailableModels(userId)`. The incorrect two-argument test calls were replaced in `8a61c0b602564949ef0e66936042c65dad205371`; that commit's CI is still pending at this point.
 - **Active screen:** AIModels remains OPEN. The latest code batch adds explicit unsupported-provider behavior; the next step is to inspect CI for the current HEAD and then continue provider-model selection and device verification.
+
+
+- Follow-up for unsupported-provider UI: the `isSupported` flag is declared in the provider-card column scope so both the status badge and disabled action controls use the same supported-provider check. This corrects the scope before the current CI run; validate the new HEAD rather than counting the prior commit.
