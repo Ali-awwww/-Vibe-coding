@@ -46,12 +46,12 @@ class FixHistoryViewModelTest {
     @Test
     fun loadFailureClearsLoadingAndRetryRecovers() = runTest(mainDispatcher) {
         val requests = AtomicInteger()
-        val repository = repositoryReturning {
+        val repository = repositoryReturning(allFlow = {
             when (requests.incrementAndGet()) {
                 1 -> flow { throw IOException("history offline") }
                 else -> flowOf(emptyList())
             }
-        }
+        })
         val viewModel = FixHistoryViewModel(repository)
 
         // Loading is initiated by the screen, not by ViewModel construction.
@@ -61,7 +61,10 @@ class FixHistoryViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.isLoading)
-        assertTrue(viewModel.uiState.value.error.orEmpty().contains("history offline"))
+        assertTrue(
+            "Unexpected history error='${viewModel.uiState.value.error}'",
+            viewModel.uiState.value.error.orEmpty().contains("history offline")
+        )
 
         viewModel.loadData()
         advanceUntilIdle()

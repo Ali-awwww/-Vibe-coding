@@ -9,6 +9,7 @@ import com.example.data.remote.SentryApi
 import com.example.data.repository.CrashRepositoryImpl
 import com.example.data.repository.SymbolicationRepositoryImpl
 import com.example.domain.model.*
+import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.GitHubRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -88,6 +89,24 @@ class IntegrationWorkflowTest {
                 Result.success("{}")
         }
 
+        val testAuthRepository = object : AuthRepository {
+            override val currentUser: Flow<UserAccount?> = flowOf(UserAccount(id = "usr-dev"))
+            override fun getCurrentUserSync(): UserAccount = UserAccount(id = "usr-dev")
+            override suspend fun signUp(
+                email: String,
+                password: String,
+                displayName: String,
+                organization: String
+            ): Result<UserAccount> = Result.failure(UnsupportedOperationException())
+            override suspend fun signIn(email: String, password: String): Result<UserAccount> =
+                Result.failure(UnsupportedOperationException())
+            override suspend fun signOut() {}
+            override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =
+                Result.failure(UnsupportedOperationException())
+            override suspend fun signInWithGoogle(idToken: String): Result<Unit> =
+                Result.failure(UnsupportedOperationException())
+        }
+
         repository = CrashRepositoryImpl(
             firestore = null,
             crashDao = db.crashDao(),
@@ -96,7 +115,9 @@ class IntegrationWorkflowTest {
             githubRepository = stubGitHubRepository,
             symbolicationRepository = symbolicationRepo,
             aiModelRepository = stubAIModelRepository,
-            auth = null
+            auth = null,
+            authRepository = testAuthRepository,
+            currentUserIdProvider = { "usr-dev" }
         )
     }
 

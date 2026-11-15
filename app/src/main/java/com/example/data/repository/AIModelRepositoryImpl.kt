@@ -18,7 +18,9 @@ import java.util.UUID
 class AIModelRepositoryImpl(
     private val aiProviderDao: AIProviderDao,
     private val openRouterApi: OpenRouterApi,
-    private val huggingFaceApi: HuggingFaceApi
+    private val huggingFaceApi: HuggingFaceApi,
+    private val encryptSecret: (String) -> String = SecurityUtils::encryptSecret,
+    private val decryptSecret: (String) -> String = SecurityUtils::decryptSecret
 ) : AIModelRepository {
 
     override fun getProviders(userId: String): Flow<List<AIProvider>> = aiProviderDao.getProviders(userId)
@@ -26,7 +28,7 @@ class AIModelRepositoryImpl(
     override suspend fun getProviderById(userId: String, id: String): AIProvider? = aiProviderDao.getProviderById(userId, id)
 
     override suspend fun addProvider(provider: AIProvider) {
-        val encryptedKey = provider.apiKey?.let { SecurityUtils.encryptSecret(it) }
+        val encryptedKey = provider.apiKey?.let(encryptSecret)
         val newProvider = if (provider.id.isEmpty()) provider.copy(id = UUID.randomUUID().toString()) else provider
         aiProviderDao.insertProvider(newProvider.copy(apiKey = encryptedKey))
     }
@@ -52,7 +54,7 @@ class AIModelRepositoryImpl(
 
     override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = runCatching {
         val provider = aiProviderDao.getProviderById(userId, providerId) ?: throw Exception("Provider not found or not owned by user")
-        val apiKey = provider.apiKey?.let { SecurityUtils.decryptSecret(it) }
+        val apiKey = provider.apiKey?.let(decryptSecret)
             ?.takeIf { it.isNotBlank() } ?: throw Exception("API key is missing")
 
         // Verify credentials with a real inference request before marking the provider connected.
@@ -137,7 +139,7 @@ class AIModelRepositoryImpl(
 
     override suspend fun testConnection(userId: String, providerId: String): Result<Unit> = runCatching {
         val provider = aiProviderDao.getProviderById(userId, providerId) ?: throw Exception("Provider not found")
-        val apiKey = provider.apiKey?.let { SecurityUtils.decryptSecret(it) } ?: throw Exception("API Key missing")
+        val apiKey = provider.apiKey?.let(decryptSecret) ?: throw Exception("API Key missing")
 
         when (provider.type) {
             AIProviderType.GOOGLE_GEMINI -> {
@@ -277,7 +279,7 @@ class AIModelRepositoryImpl(
     ): String {
         val provider = aiProviderDao.getProviderById(userId, model.providerId) 
             ?: throw Exception("Provider not found for model ${model.name}")
-        val apiKey = provider.apiKey?.let { SecurityUtils.decryptSecret(it) } 
+        val apiKey = provider.apiKey?.let(decryptSecret)
             ?: throw Exception("API Key missing for provider ${provider.name}")
 
         return try {

@@ -42,13 +42,15 @@ class CrashRepositoryImpl(
     private val aiModelRepository: com.example.domain.repository.AIModelRepository,
     private val auth: FirebaseAuth? = null,
     private val authRepository: AuthRepository? = null,
-    private val supabaseProjectDataSource: SupabaseProjectDataSource? = null
+    private val supabaseProjectDataSource: SupabaseProjectDataSource? = null,
+    private val currentUserIdProvider: (() -> String?)? = null
 ) : CrashRepository {
 
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
 
     private fun requireUserId(): String = try {
-        auth?.currentUser?.uid?.takeIf { it.isNotBlank() }
+        currentUserIdProvider?.invoke()?.takeIf { it.isNotBlank() }
+            ?: auth?.currentUser?.uid?.takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("Authentication is required for cloud crash data operations.")
     } catch (error: IllegalStateException) {
         throw error

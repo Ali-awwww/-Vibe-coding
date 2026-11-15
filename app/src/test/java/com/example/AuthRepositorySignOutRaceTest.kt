@@ -60,7 +60,11 @@ class AuthRepositorySignOutRaceTest {
 
     @Test
     fun signOutClearsLocalIdentityBeforeAnInFlightRefreshCanPersist() = runTest(testDispatcher) {
-        val sessionStore = SupabaseSessionStore(context)
+        val sessionStore = SupabaseSessionStore(
+            context = context,
+            encryptSecret = { "test-encrypted:$it" },
+            decryptSecret = { it.removePrefix("test-encrypted:") }
+        )
         seedNearExpirySession(sessionStore)
 
         val refreshStarted = CompletableDeferred<Unit>()

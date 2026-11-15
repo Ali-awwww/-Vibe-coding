@@ -9,7 +9,11 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
  * Stores the Supabase refresh/access token pair encrypted with an Android Keystore key.
  * The encrypted preference value is excluded from Android backup by the app backup rules.
  */
-class SupabaseSessionStore(context: Context) {
+class SupabaseSessionStore(
+    context: Context,
+    private val encryptSecret: (String) -> String = SecurityUtils::encryptSecret,
+    private val decryptSecret: (String) -> String = SecurityUtils::decryptSecret
+) {
     private val preferences = context.applicationContext.getSharedPreferences(
         PREFERENCES_NAME,
         Context.MODE_PRIVATE
@@ -23,7 +27,7 @@ class SupabaseSessionStore(context: Context) {
     fun read(): SupabaseStoredSession? {
         val encrypted = preferences.getString(SESSION_KEY, null) ?: return null
         return runCatching {
-            adapter.fromJson(SecurityUtils.decryptSecret(encrypted))
+            adapter.fromJson(decryptSecret(encrypted))
         }.getOrElse {
             clear()
             null
@@ -33,7 +37,7 @@ class SupabaseSessionStore(context: Context) {
     @Synchronized
     fun write(session: SupabaseStoredSession) {
         val serialized = adapter.toJson(session)
-        val encrypted = SecurityUtils.encryptSecret(serialized)
+        val encrypted = encryptSecret(serialized)
         check(preferences.edit().putString(SESSION_KEY, encrypted).commit()) {
             "تعذر حفظ جلسة Supabase بأمان على هذا الجهاز."
         }
