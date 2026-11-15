@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import com.example.data.remote.supabase.SupabaseAuthApi
+import com.example.data.remote.supabase.SupabaseAuthError
 import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseUpdateUserRequest
 import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
@@ -17,6 +18,7 @@ import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.domain.repository.EmailConfirmationRequiredException
+import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import retrofit2.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -77,7 +80,7 @@ class AuthRepositoryImpl(
                     )
                 )
             )
-            val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
+            val body = requireSuccessfulBody(response)
             val session = body.toStoredSession()
                 ?: throw EmailConfirmationRequiredException(
                     "تم قبول طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول."
@@ -100,7 +103,7 @@ class AuthRepositoryImpl(
                 publishableKey = publishableKey,
                 request = SupabasePasswordGrantRequest(email = email.trim(), password = password)
             )
-            val body = requireSuccessfulBody(response.isSuccessful, response.body(), response.message())
+            val body = requireSuccessfulBody(response)
             val session = body.toStoredSession()
                 ?: throw IllegalStateException("لم يُرجع Supabase جلسة مصادقة صالحة.")
             synchronized(sessionStateLock) {
@@ -186,11 +189,7 @@ class AuthRepositoryImpl(
                     request = SupabaseVerifyOtpRequest(type = "recovery", tokenHash = tokenHash)
                 )
                 operationContext.ensureActive()
-                requireSuccessfulBody(
-                    verification.isSuccessful,
-                    verification.body(),
-                    verification.message()
-                ).toStoredSession()
+                requireSuccessfulBody(verification).toStoredSession()
                     ?: throw IllegalStateException("لم يُرجع رابط الاستعادة جلسة تحقق صالحة.")
             }
 
@@ -396,17 +395,28 @@ class AuthRepositoryImpl(
     }
 
     private fun requireSuccessfulBody(
-        successful: Boolean,
-        body: SupabaseAuthResponse?,
-        responseMessage: String
+        response: Response<SupabaseAuthResponse>
     ): SupabaseAuthResponse {
-        if (!successful) {
+        if (!response.isSuccessful) {
+            val serverError = response.errorBody()?.string()?.let(::parseSupabaseError)
             throw IllegalStateException(
-                responseMessage.takeIf(String::isNotBlank)
+                serverError
+                    ?: response.message().takeIf(String::isNotBlank)
                     ?: "رفض خادم Supabase طلب المصادقة."
             )
         }
-        return body ?: throw IllegalStateException("استجابة المصادقة من Supabase فارغة.")
+        return response.body() ?: throw IllegalStateException("استجابة المصادقة من Supabase فارغة.")
+    }
+
+    private fun parseSupabaseError(rawBody: String): String? {
+        if (rawBody.isBlank()) return null
+        val parsed = runCatching {
+            Moshi.Builder().build().adapter(SupabaseAuthError::class.java).fromJson(rawBody)
+        }.getOrNull()
+        return listOf(parsed?.errorDescription, parsed?.message, parsed?.msg, parsed?.error)
+            .firstOrNull { !it.isNullOrBlank() }
+            ?.trim()
+            ?: rawBody.trim().takeIf { it.isNotBlank() }
     }
 
     private fun com.example.data.remote.supabase.SupabaseAuthUser.toAccount(): UserAccount {
