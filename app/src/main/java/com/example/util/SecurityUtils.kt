@@ -79,9 +79,11 @@ object SecurityUtils {
     // 2. AES-GCM encryption backed by the non-exportable Android Keystore.
     fun encryptSecret(plainText: String): String {
         if (plainText.isBlank()) return ""
-        val iv = ByteArray(12).also(secureRandom::nextBytes)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey(), GCMParameterSpec(128, iv))
+        // With randomizedEncryptionRequired=true, Android Keystore must generate the IV.
+        // Passing a caller-provided IV throws "Caller-provided IV not permitted" on device.
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey())
+        val iv = cipher.iv
         val encrypted = cipher.doFinal(plainText.toByteArray(StandardCharsets.UTF_8))
         return "ENC2:" + Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)
     }
