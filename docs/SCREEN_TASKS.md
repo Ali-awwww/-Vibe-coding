@@ -90,7 +90,7 @@ Complete each slice end-to-end before marking it complete. Visual redesign and f
 - Fixed cross-file visibility of `isGitHubPullRequestUrl` used by `FixHistoryScreen`.
 - Fixed Android resource parsing by escaping apostrophes in five English authentication error strings.
 - Added Gradle 9.3.1 wrapper scripts and JAR; CI continues to provision the matching Gradle version.
-- Verification on the current branch: `:app:compileDebugKotlin` succeeded. After the string-resource fix, `:app:assembleDebug` succeeded. The full unit-test suite was not rerun on this branch; a prior run on the earlier checkout timed out at the configured 2-minute test-task limit during `AICodingAgentTest`. No live app or RLS negative-authorization test is claimed.
+- Verification on the current branch: `:app:compileDebugKotlin` and `:app:assembleDebug` succeeded locally. GitHub Actions initially failed before any runner steps; after runner availability was restored, both workflows started and exposed test issues. The PR Validation workflow's JDK was raised from 17 to 21 because Robolectric with Android SDK 36 requires JDK 21. The free-model sync test now gives its fake OpenRouter API a non-empty inference response because `syncModels` verifies provider connectivity before listing models. Local full-suite and focused test attempts exceeded the configured 2-minute task timeout; GitHub re-validation after these fixes is pending. No live app or RLS negative-authorization test is claimed.
 
 ---
 

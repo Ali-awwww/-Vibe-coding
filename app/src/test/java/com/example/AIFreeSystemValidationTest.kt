@@ -63,6 +63,7 @@ class AIFreeSystemValidationTest {
         aiProviderDao.insertProvider(provider)
 
         // Setup fake API to return one free and one paid model
+        fakeOpenRouterApi.responseContent = "Connection check succeeded"
         fakeOpenRouterApi.models = listOf(
             OpenRouterModelData("m_free", "Free Model", null, 8000, OpenRouterPricing("0", "0", "0", "0"), null),
             OpenRouterModelData("m_paid", "Paid Model", null, 8000, OpenRouterPricing("0.01", "0.01", "0", "0"), null)
