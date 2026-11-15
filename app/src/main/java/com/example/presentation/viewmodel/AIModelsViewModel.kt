@@ -131,7 +131,7 @@ class AIModelsViewModel(
                 aiModelRepository.addProvider(provider)
                 val result = aiModelRepository.syncModels(userId, provider.id)
                 if (result.isFailure) {
-                    markProviderError(userId, provider.id)
+                    markProviderFailure(userId, provider.id, result.exceptionOrNull())
                     throw result.exceptionOrNull() ?: IllegalStateException()
                 }
             }

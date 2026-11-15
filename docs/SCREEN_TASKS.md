@@ -1735,3 +1735,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Last domain worked:** AIModels — provider catalog integrity and failure handling.
 - **Next domain:** AIModels — remaining model availability and screen interaction/accessibility verification.
 - **Screen status:** OPEN — source and regression tests updated; latest CI/device/provider-runtime verification pending.
+
+
+### 2026-11-16 — provider failure compile follow-up
+- CI for the first typed-failure batch exposed one remaining call site in `AIModelsViewModel.addProvider` that still referenced the removed `markProviderError` method. The call now passes the actual sync failure to `markProviderFailure`, so rate limits retain the RATE_LIMITED status and other failures use ERROR.
+- The first compile failure on catalog commit `b9c2e038139b761009c0c754f828e6aacf7739fc` was the missing `OpenRouterModelData` import; fixed in `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08`. The Android CI workflow for that corrected commit completed successfully, including unit tests and debug APK packaging. APK Release packaging and Code Quality were still running at the last status check.
+- Typed-failure commit `c04a345e854981471f05105e03cb69b312e68ff2` then failed `:app:testDebugUnitTest` before tests ran because of the stale `markProviderError` reference. The follow-up source commit `a064a28f3a24dc72365602e2a42e923f3ed61b8b` corrected nullable HTTP status classification but did not yet include the ViewModel call-site fix.
+- **Current next step:** inspect CI for the new HEAD after this correction; do not infer test success from the earlier commit. If the tests expose further issues, fix them before continuing AIModels.
