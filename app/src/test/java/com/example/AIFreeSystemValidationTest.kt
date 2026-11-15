@@ -176,8 +176,9 @@ class AIFreeSystemValidationTest {
         assertEquals(2.80, AIModelPricing.estimateCost(models.last(), 1_000_000, 1_000_000), 0.000001)
 
         aiProviderDao.insertModels(models)
-        assertTrue("Free Only must exclude Gemini when the account billing tier cannot be determined", aiProviderDao.getAllAvailableModels(userId, true).first().isEmpty())
-        assertEquals(2, aiProviderDao.getAllAvailableModels(userId, false).first().size)
+        val persistedModels = aiProviderDao.getAllAvailableModels(userId).first()
+        assertTrue("Free Only must exclude Gemini when the account billing tier cannot be determined", persistedModels.none { it.isFree })
+        assertEquals(2, persistedModels.size)
     }
 
     @Test

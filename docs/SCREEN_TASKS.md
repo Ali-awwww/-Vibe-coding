@@ -1724,7 +1724,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Verification evidence
 - PASS — pre-change HEAD `fbaa39fc1b5dc6f3789f862f896aad41974cd049`: Android CI, APK and Code Quality workflows all completed successfully, with debug APK, release APK and lint artifacts.
 - FAIL — first catalog commit `b9c2e038139b761009c0c754f828e6aacf7739fc`: Android CI and Code Quality exposed a compile error, `Unresolved reference: OpenRouterModelData`, in the new member-extension receiver. The import was added in `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08`.
-- PENDING — push-triggered Android CI, APK and Code Quality runs for `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08` were still running when this entry was prepared; do not count them as PASS until final conclusions and logs are checked.
+- PASS — all push-triggered workflows for corrected HEAD `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08` completed successfully: Android CI [43773820294](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43773820294), APK [43773820498](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43773820498), Code Quality [43773820325](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43773820325). Debug/Release APK and lint artifacts were produced.
 - NOT RUN locally — this execution environment has no repository checkout, Gradle installation, Android SDK or ADB. CI is the available compilation/test/lint evidence.
 - BLOCKED — no emulator/device is attached and no live OpenRouter/Gemini credentials are available in this run. Rendered RTL/LTR, TalkBack, device behavior and real user-provider connectivity remain unverified. AIModels remains OPEN.
 
@@ -1739,7 +1739,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### 2026-11-16 — provider failure compile follow-up
 - CI for the first typed-failure batch exposed one remaining call site in `AIModelsViewModel.addProvider` that still referenced the removed `markProviderError` method. The call now passes the actual sync failure to `markProviderFailure`, so rate limits retain the RATE_LIMITED status and other failures use ERROR.
-- The first compile failure on catalog commit `b9c2e038139b761009c0c754f828e6aacf7739fc` was the missing `OpenRouterModelData` import; fixed in `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08`. The Android CI workflow for that corrected commit completed successfully, including unit tests and debug APK packaging. APK Release packaging and Code Quality were still running at the last status check.
+- The first compile failure on catalog commit `b9c2e038139b761009c0c754f828e6aacf7739fc` was the missing `OpenRouterModelData` import; fixed in `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08`. All workflows for corrected commit `427b75cf9efe4f3f17e4f51ec42d8bef3308dd08` completed successfully: Android CI [43773820294](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43773820294), APK [43773820498](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43773820498), and Code Quality [43773820325](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43773820325).
 - Typed-failure commit `c04a345e854981471f05105e03cb69b312e68ff2` then failed `:app:testDebugUnitTest` before tests ran because of the stale `markProviderError` reference. The follow-up source commit `a064a28f3a24dc72365602e2a42e923f3ed61b8b` corrected nullable HTTP status classification but did not yet include the ViewModel call-site fix.
 - **Current next step:** inspect CI for the new HEAD after this correction; do not infer test success from the earlier commit. If the tests expose further issues, fix them before continuing AIModels.
 
@@ -1764,8 +1764,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Paid/free tier pricing: https://ai.google.dev/gemini-api/docs/pricing
 
 ### Verification and continuity
-- Previous HEAD `5855e8bcedc654989974fc84031f514533e64cd4`: Android CI completed successfully (unit tests and Debug APK). APK Release packaging and Code Quality lint were still running at the time this entry was prepared; inspect their final conclusions before counting them as PASS.
-- Current Gemini catalog/UI batch: tests added; push-triggered CI and lint are pending until the new commit's runs finish. Do not treat tests as executed until CI reports completion.
+- PASS — all workflows for previous HEAD `5855e8bcedc654989974fc84031f514533e64cd4` completed successfully: Android CI [43774283867](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43774283867), APK [43774283846](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43774283846), and Code Quality [43774283843](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/43774283843). Debug APK, Release APK and lint artifacts were produced. The lint HTML reports 166 warnings across the app; no AIModels files were listed among the reported locations.
+- Current Gemini catalog/UI batch on HEAD `2d4a21f44f3fff1b20f94ccc1d427e1bad96ec53`: push-triggered Android CI, APK and Code Quality runs were in progress when this note was prepared. Do not treat the added Gemini tests as executed until the final run conclusions are checked.
 - NOT RUN locally — no local Gradle/Android SDK/ADB or emulator is available. Live Gemini credentials are not available, so no live provider request was made.
 - **Active screen:** AIModels — provider/model setup and truthful cost/availability.
 - **Exact next step:** inspect the final workflows for the new HEAD, then remove or clearly isolate the remaining synthetic Gemini 1.5 references in the ModelTeams/TeamValidation demo path; do not present those hardcoded demo reports as live usage.
