@@ -12,6 +12,7 @@ object VibeDesignTokens {
         val SpacePanel = androidx.compose.ui.graphics.Color(0xE6101B2B)
         val SpacePanelRaised = androidx.compose.ui.graphics.Color(0xF0142235)
         val Cyan = androidx.compose.ui.graphics.Color(0xFF28D7F2)
+        val OnCyan = androidx.compose.ui.graphics.Color(0xFF050914)
         val Violet = androidx.compose.ui.graphics.Color(0xFF9B6BFF)
         val TextPrimary = androidx.compose.ui.graphics.Color(0xFFEAF8FF)
         val TextMuted = androidx.compose.ui.graphics.Color(0xFF9CB1C8)
