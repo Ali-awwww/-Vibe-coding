@@ -267,6 +267,7 @@
     <string name="auth_success_sign_in">تم تسجيل الدخول بنجاح.</string>
     <string name="auth_success_sign_up">تم إنشاء الحساب بنجاح.</string>
     <string name="auth_success_email_confirmation">تم قبول طلب إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده، ثم سجّل الدخول.</string>
+    <string name="auth_success_email_confirmed">تم تأكيد بريدك الإلكتروني بنجاح. سجّل الدخول للمتابعة.</string>
     <string name="auth_success_recovery_request">إذا كان هذا البريد مرتبطًا بحساب، فسيصلك رابط لاستعادة كلمة المرور.</string>
     <string name="auth_success_password_updated">تم تحديث كلمة المرور بنجاح.</string>
 
