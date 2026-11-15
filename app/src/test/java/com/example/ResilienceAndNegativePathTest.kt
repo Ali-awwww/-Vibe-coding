@@ -139,7 +139,7 @@ class ResilienceAndNegativePathTest {
         val authRepo = com.example.data.repository.AuthRepositoryImpl(
             api = unavailableAuthApi,
             publishableKey = "test-publishable-key",
-            sessionStore = SupabaseSessionStore(context)
+            sessionStore = createTestSessionStore()
         )
         val result = authRepo.signIn("wrong@example.com", "bad_pass")
         
@@ -205,7 +205,7 @@ class ResilienceAndNegativePathTest {
         val repository = com.example.data.repository.AuthRepositoryImpl(
             api = successfulAuthApi,
             publishableKey = "test-publishable-key",
-            sessionStore = SupabaseSessionStore(context)
+            sessionStore = createTestSessionStore()
         )
         val observedUsers = mutableListOf<com.example.domain.model.UserAccount?>()
         val collector = backgroundScope.launch { repository.currentUser.collect { observedUsers += it } }
@@ -272,7 +272,7 @@ class ResilienceAndNegativePathTest {
                 bearerToken: String
             ): retrofit2.Response<Unit> = throw IOException("unused")
         }
-        val sessionStore = SupabaseSessionStore(context)
+        val sessionStore = createTestSessionStore()
         val repository = com.example.data.repository.AuthRepositoryImpl(
             api = confirmationRequiredApi,
             publishableKey = "test-publishable-key",
@@ -306,7 +306,7 @@ class ResilienceAndNegativePathTest {
         val repository = com.example.data.repository.AuthRepositoryImpl(
             api = api,
             publishableKey = "test-publishable-key",
-            sessionStore = SupabaseSessionStore(context)
+            sessionStore = createTestSessionStore()
         )
 
         try {
@@ -319,7 +319,7 @@ class ResilienceAndNegativePathTest {
 
     @Test
     fun `sign out clears local identity before remote revocation and propagates cancellation`() = runTest(testDispatcher) {
-        val sessionStore = SupabaseSessionStore(context)
+        val sessionStore = createTestSessionStore()
         seedSession(sessionStore)
         val cancellation = CancellationException("logout cancelled")
         lateinit var repository: com.example.data.repository.AuthRepositoryImpl
@@ -356,7 +356,7 @@ class ResilienceAndNegativePathTest {
 
     @Test
     fun `sign out keeps local logout complete when remote revocation fails`() = runTest(testDispatcher) {
-        val sessionStore = SupabaseSessionStore(context)
+        val sessionStore = createTestSessionStore()
         seedSession(sessionStore)
         lateinit var repository: com.example.data.repository.AuthRepositoryImpl
         var remoteSawClearedLocalState = false
@@ -383,6 +383,12 @@ class ResilienceAndNegativePathTest {
         assertNull(sessionStore.read())
         assertNull(repository.getCurrentUserSync())
     }
+
+    private fun createTestSessionStore(): SupabaseSessionStore = SupabaseSessionStore(
+        context = context,
+        encryptSecret = { "test-encrypted:$it" },
+        decryptSecret = { it.removePrefix("test-encrypted:") }
+    )
 
     private fun seedSession(sessionStore: SupabaseSessionStore) {
         sessionStore.clear()
