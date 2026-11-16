@@ -11,6 +11,12 @@ jobs:
   build-apk:
     name: Build & Package APK
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PATH: ${{ runner.temp }}/vibe-coding-release.jks
+      STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
       - name: Checkout Repository
@@ -26,6 +32,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+
+      - name: Prepare release signing
+        shell: bash
+        run: |
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+            chmod 600 "$KEYSTORE_PATH"
+          else
+            echo "Release signing secrets are not configured; building unsigned release artifacts."
+          fi
 
       - name: Run Unit Tests
         run: gradle testDebugUnitTest --stacktrace
