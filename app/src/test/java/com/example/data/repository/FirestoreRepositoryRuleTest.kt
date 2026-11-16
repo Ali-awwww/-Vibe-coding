@@ -252,8 +252,9 @@ class FirestoreRepositoryRuleTest : FirestoreEmulatorTestBase() {
                     .collection("projects").get(Source.SERVER).await()
             }
         }.exceptionOrNull()
-        assertNotNull(directFailure)
+        assertNotNull("Expected unauthenticated Firestore read to fail, got: $directFailure", directFailure)
         assertEquals(
+            "Unexpected Firestore failure: $directFailure",
             FirebaseFirestoreException.Code.PERMISSION_DENIED,
             directFailure!!.unwrapFirestoreException()?.code
         )
