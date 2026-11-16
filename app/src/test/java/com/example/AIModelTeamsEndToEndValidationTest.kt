@@ -234,6 +234,19 @@ class AIModelTeamsEndToEndValidationTest {
         advanceUntilIdle()
         assertNotNull(viewModel.uiState.value.summaryReport)
 
+        viewModel.runAllMatrixTests()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.matrixProgress.isRunning)
+        viewModel.cancelMatrixTests()
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.matrixProgress.isRunning)
+        assertTrue(
+            viewModel.uiState.value.matrixProgress.items.any {
+                it.status == ValidationStatus.SKIPPED &&
+                    it.errorMessage?.contains("أوقف المستخدم") == true
+            }
+        )
+
         // Expand toggle
         viewModel.toggleExpandTest(1)
         assertTrue(viewModel.uiState.value.expandedTestIds.contains(1))
