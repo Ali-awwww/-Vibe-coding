@@ -98,7 +98,7 @@ class TeamDetailViewModel(
 
     private fun loadTeamFlow(userId: String): Flow<TeamDetailLoadResult> =
         combine(
-            flow { emit(teamRepository.getTeamById(teamId)) },
+            teamRepository.getTeams(userId).map { teams -> teams.firstOrNull { it.id == teamId } },
             teamRepository.getTeamExecutions(teamId)
         ) { team, executions ->
             val result: TeamDetailLoadResult = TeamDetailLoadResult.Loaded(userId, team, executions)

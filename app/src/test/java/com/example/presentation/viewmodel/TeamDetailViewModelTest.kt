@@ -96,6 +96,37 @@ class TeamDetailViewModelTest {
     }
 
     @Test
+    fun teamDetailsObserveLiveRosterAndConfigurationUpdates() = runTest(dispatcher) {
+        val initial = ModelTeam(id = "team-1", name = "Vibe team", ownerId = "user-1")
+        teamRepository.seedTeam(initial)
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals("Vibe team", viewModel.uiState.value.team?.name)
+
+        val updated = initial.copy(
+            name = "Updated Vibe team",
+            members = listOf(TeamMember(id = "member-1", name = "Live member"))
+        )
+        teamRepository.seedTeam(updated)
+        advanceUntilIdle()
+
+        assertEquals(updated, viewModel.uiState.value.team)
+    }
+
+    @Test
+    fun teamOwnedByAnotherAccountIsNotExposedInTheDetailState() = runTest(dispatcher) {
+        teamRepository.seedTeam(
+            ModelTeam(id = "team-1", name = "Other user's private team", ownerId = "user-2")
+        )
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.team)
+        assertNotNull(viewModel.uiState.value.loadError)
+        assertTrue(viewModel.uiState.value.executions.isEmpty())
+    }
+
+    @Test
     fun governanceFailureDoesNotPublishUnsavedSettingsOrCloseDialog() = runTest(dispatcher) {
         val original = TeamGovernanceSettings(freeOnly = true, maxApiRequests = 20)
         val team = ModelTeam(id = "team-1", name = "Vibe team", ownerId = "user-1", governance = original)
@@ -269,7 +300,7 @@ class TeamDetailViewModelTest {
         }
 
         override fun getTeams(userId: String): Flow<List<ModelTeam>> =
-            flowOf(listOfNotNull(teamState.value).filter { it.ownerId == userId })
+            teamState.map { team -> listOfNotNull(team).filter { it.ownerId == userId } }
 
         override suspend fun getTeamById(teamId: String): ModelTeam? {
             getTeamByIdCalls++

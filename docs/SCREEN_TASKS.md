@@ -1932,13 +1932,13 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - app/src/test/java/com/example/presentation/viewmodel/TeamDetailViewModelTest.kt
 - app/src/test/java/com/example/presentation/ui/screens/TeamDetailScreenTest.kt
 - app/src/test/java/com/example/presentation/ui/components/TeamGovernanceDialogTest.kt
-- Implementation commits: 692eb7769f2a5029de4e31e1fcd13f8046466ade, 983a780f915128b1b28041b53d510a6572d84643, 8747620160bd76f3d2c423204e39a21f1f738e22, 66baa8f5486304cec34bca671d4217e6fc576ba3 and 68125a08ad9c86c66d73c060381abf3915e5540f.
+- Implementation commits: 692eb7769f2a5029de4e31e1fcd13f8046466ade, 983a780f915128b1b28041b53d510a6572d84643, 8747620160bd76f3d2c423204e39a21f1f738e22, 66baa8f5486304cec34bca671d4217e6fc576ba3, 68125a08ad9c86c66d73c060381abf3915e5540f and e288b3329f582c708619a43bbf2893be2437d04d.
 
 ### Verification
-- Added eight ViewModel regression tests covering signed-out isolation, sign-out clearing, governance write failure/success, member write failure/success, estimation/execution errors, cancellation during sign-out, invalid team IDs and user-scoped model capability lookup.
+- Added ten ViewModel regression tests covering signed-out isolation, sign-out clearing, live roster/configuration updates, cross-account team isolation, governance/member write failures and successes, estimation/execution errors, cancellation during sign-out, invalid team IDs and user-scoped model capability lookup.
 - Added three TeamDetail Robolectric Compose tests for unavailable/retry, signed-out, and member details/capabilities/removal; added three governance-dialog Compose tests for invalid limits, save gating and valid values.
 - GitHub Actions for the latest code commits are still running/queued; no Gradle, test, lint or APK result for the final commit is recorded yet.
-- No emulator/device screenshots, rendered RTL/LTR review or live team-backend/RLS validation are claimed.
+- No emulator/device screenshots, rendered RTL/LTR review or live team-backend/RLS validation are claimed. The live team stream remains the authenticated Firebase/local repository path until the missing team-table DDL/RLS contract is supplied.
 - TeamDetail still uses the existing Firebase/local team repository path; Supabase team persistence is not claimed. Model capability metadata is read through the authenticated user's existing AIModelRepository.
 
 ### Continuity
