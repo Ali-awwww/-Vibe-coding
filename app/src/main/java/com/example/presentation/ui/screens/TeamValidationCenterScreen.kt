@@ -86,11 +86,27 @@ fun TeamValidationCenterScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { viewModel.runAllMatrixTests() },
-                        enabled = !uiState.matrixProgress.isRunning,
+                        onClick = {
+                            if (uiState.matrixProgress.isRunning) {
+                                viewModel.cancelMatrixTests()
+                            } else {
+                                viewModel.runAllMatrixTests()
+                            }
+                        },
                         modifier = Modifier.testTag("top_bar_run_validation")
                     ) {
-                        Icon(Icons.Default.PlayCircle, contentDescription = "Run All Tests")
+                        Icon(
+                            imageVector = if (uiState.matrixProgress.isRunning) {
+                                Icons.Default.StopCircle
+                            } else {
+                                Icons.Default.PlayCircle
+                            },
+                            contentDescription = if (uiState.matrixProgress.isRunning) {
+                                "Cancel validation"
+                            } else {
+                                "Run All Tests"
+                            }
+                        )
                     }
                     IconButton(
                         onClick = launchReportExport,
