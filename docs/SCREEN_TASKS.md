@@ -1922,7 +1922,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - TeamDetail previously treated failed repository Result values as successful writes, so governance/member UI could claim a change that was not persisted.
 - Team and execution collectors had no error boundary and did not clear state on sign-out or account switch.
 - Estimation and execution failures could escape the ViewModel without user feedback; concurrent calls were not guarded.
-- Reworked TeamDetailViewModel to scope its stream to the authenticated account, clear/cancel user-scoped work on sign-out/account change, preserve state on failed writes, validate task prompts, expose loading/mutation flags and map low-level failures to safe user messages.
+- Reworked TeamDetailViewModel to observe the current owner's team collection reactively, scope it to the authenticated account, clear/cancel user-scoped work on sign-out/account change, preserve state on failed writes, validate task prompts, expose loading/mutation flags and map low-level failures to safe user messages.
 - Updated TeamDetailScreen with explicit loading, signed-out, unavailable and retry states, Vibe design tokens, stable list keys, empty-member guidance, member removal confirmation and estimation progress.
 
 ### Files and commits
@@ -1932,18 +1932,18 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - app/src/test/java/com/example/presentation/viewmodel/TeamDetailViewModelTest.kt
 - app/src/test/java/com/example/presentation/ui/screens/TeamDetailScreenTest.kt
 - app/src/test/java/com/example/presentation/ui/components/TeamGovernanceDialogTest.kt
-- Implementation commits: 692eb7769f2a5029de4e31e1fcd13f8046466ade, 983a780f915128b1b28041b53d510a6572d84643, 8747620160bd76f3d2c423204e39a21f1f738e22, 66baa8f5486304cec34bca671d4217e6fc576ba3, 68125a08ad9c86c66d73c060381abf3915e5540f and e288b3329f582c708619a43bbf2893be2437d04d.
+- Implementation commits: 692eb7769f2a5029de4e31e1fcd13f8046466ade, 983a780f915128b1b28041b53d510a6572d84643, 8747620160bd76f3d2c423204e39a21f1f738e22, 66baa8f5486304cec34bca671d4217e6fc576ba3, 68125a08ad9c86c66d73c060381abf3915e5540f, e288b3329f582c708619a43bbf2893be2437d04d and 09d76b5e25b56e3426eb2faa1b6990f8f7a9405b.
 
 ### Verification
 - Added ten ViewModel regression tests covering signed-out isolation, sign-out clearing, live roster/configuration updates, cross-account team isolation, governance/member write failures and successes, estimation/execution errors, cancellation during sign-out, invalid team IDs and user-scoped model capability lookup.
 - Added three TeamDetail Robolectric Compose tests for unavailable/retry, signed-out, and member details/capabilities/removal; added three governance-dialog Compose tests for invalid limits, save gating and valid values.
-- GitHub Actions for the latest code commits are still running/queued; no Gradle, test, lint or APK result for the final commit is recorded yet.
+- On e288b332, Code Quality passed; Android CI and APK jobs failed at compileDebugUnitTestKotlin because of test-source issues (Compose text-input chaining and a missing AICapability import). Those test-source issues were corrected in 54e2b04. Runs on 54e2 and later heads were still in progress/queued at the last check; no final successful Gradle/test/APK result is claimed.
 - No emulator/device screenshots, rendered RTL/LTR review or live team-backend/RLS validation are claimed. The live team stream remains the authenticated Firebase/local repository path until the missing team-table DDL/RLS contract is supplied.
 - TeamDetail still uses the existing Firebase/local team repository path; Supabase team persistence is not claimed. Model capability metadata is read through the authenticated user's existing AIModelRepository.
 
 ### Continuity
 - TeamDetail remains OPEN until final CI passes and rendered device verification is completed.
-- Exact next step: inspect the three push-triggered workflows for the final HEAD and fix any reported failures. Then continue TeamUsage telemetry correctness; missing usage telemetry must remain unavailable rather than being rendered as zero.
+- Exact next step: inspect the three push-triggered workflows for the latest HEAD through completion and fix any reported failures. Then continue TeamUsage/TeamValidation; missing usage telemetry must remain unavailable rather than being rendered as zero.
 ### TeamDetail follow-up — member operations and governance validation
 - Added a confirmed member-removal flow; member cards now expose configured model/provider identity, user-scoped model capabilities and member instructions.
 - Hardened the shared TeamGovernanceDialog: invalid, negative or zero limits are rejected rather than silently replaced with old values; saving disables duplicate submission/dismissal and shows progress.
@@ -1962,7 +1962,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Implementation
 - Reworked TeamUsageViewModel to observe only the current user's team collection, clear data on sign-out/account change, fail closed for foreign/deleted teams, and surface retryable errors.
 - Added 7-day, 30-day and all-time periods; metrics, member summaries, failover events and operation logs now use the selected period.
-- Aggregation now uses persisted TeamUsageRecord metadata only. No member summary is invented without records; confirmed and unconfirmed cost are separated; model/provider names are never fabricated.
+- Aggregation now uses persisted TeamUsageRecord metadata only. No member summary is invented without billable usage; confirmed and unconfirmed cost are separated; model/provider names are never fabricated. Successful records or records with measured tokens/cost count as billable; zero-token/zero-cost blocked or rate-limited attempts remain visible in the operation log but do not inflate consumption totals.
 - The dashboard now distinguishes no telemetry from zero usage, labels estimated cost, warns if paid records appear under Free Only, and displays data freshness/provenance.
 - Governance writes now inspect repository Result, preserve the previous settings on failure, and dismiss only after success.
 
@@ -1971,14 +1971,31 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - app/src/main/java/com/example/presentation/ui/screens/TeamUsageDashboardScreen.kt
 - app/src/test/java/com/example/presentation/viewmodel/TeamUsageViewModelTest.kt
 - app/src/test/java/com/example/presentation/ui/screens/TeamUsageDashboardScreenTest.kt
-- Implementation commit: acbae1d72ec42c308eec05957e20aec1816102f8; screen/UI tests and documentation commit pending.
+- Implementation commits: acbae1d72ec42c308eec05957e20aec1816102f8, 3cfd57a599cb5b335c6b7cebf131fb97d014ff02, 6166df724a4c17987481db34cec8ae84c8c8f8c8, 54e2b04f842251e03ea1fc52d5060f793015fbfb, 8dca8db81fa2ce5b7232d0c75385ce5318f3bae3, b10d33c6a643d27101daeaeb64c5fbc39057dac2 and 0fbf630f52b76c1e431f53f4b9a34d0182731679.
 
 ### Verification
-- Added five ViewModel tests for absent telemetry, measured aggregation/cost provenance, period filtering, account/ownership isolation and failed/successful governance writes.
+- Added six ViewModel tests for absent telemetry, measured aggregation/cost provenance, period filtering, account/ownership isolation, blocked paid-attempt classification and failed/successful governance writes.
 - Added three Compose tests for the no-telemetry state, unconfirmed cost label and retry state.
-- CI/build/lint verification is pending the screen/test commit; no device screenshots, live Firestore/Supabase billing validation or RLS tests are claimed.
+- CI/build/lint verification for the latest HEAD is queued; earlier runs on e288/6166 exposed test-source compile errors that were corrected in later commits. No final successful build/test/lint/APK result, device screenshot, live Firestore/Supabase billing validation or RLS test is claimed.
 
 ### Continuity
 - TeamUsage remains OPEN until the final CI passes and the rendered screen is checked on an Android device/emulator.
 - TeamUsage still reads the current authenticated Firebase/local team repository path. Supabase team-table DDL/RLS is absent from the repository, so production Supabase migration remains BLOCKED without inventing a schema.
-- Exact next step: finish screen tests and inspect final Android CI/APK/Code Quality runs. Then proceed to TeamValidation; do not show estimated or missing usage as measured billing.
+- Exact next step: inspect the latest three Actions runs through final status, fix any failing step, then proceed to TeamValidation. Do not show estimated, blocked or missing usage as measured billing.
+### Criterion status (no screen is closed by code presence alone)
+
+| Screen | Criterion | State | Evidence / blocker |
+|---|---|---|---|
+| TeamDetail | Auth-scoped live team, roster, roles, model/provider, capabilities and instructions | IN_PROGRESS | Implementation and regression tests committed; CI not yet final |
+| TeamDetail | Loading, signed-out, unavailable, retry and mutation failure handling | IN_PROGRESS | Compose/ViewModel tests added; CI not yet final |
+| TeamDetail | Supabase team persistence and RLS verification | BLOCKED | Current implementation remains on Firebase/local repository; production schema/policy changes are prohibited without the required contract and approval |
+| TeamDetail | Rendered RTL/LTR, device sizes and accessibility review | BLOCKED | No Android emulator/device available in this automation environment |
+| TeamUsage | Auth-scoped telemetry, date periods, billable usage and cost provenance | IN_PROGRESS | Implementation and regression tests committed; CI not yet final |
+| TeamUsage | Governance write confirmation, loading/error and no-data states | IN_PROGRESS | Result failures no longer publish success; Compose/ViewModel tests added |
+| TeamUsage | Supabase usage/team persistence and RLS verification | BLOCKED | Current source still reads Firebase/local usage records; no production DDL/RLS changes made |
+| TeamUsage | Rendered RTL/LTR, device sizes and accessibility review | BLOCKED | No Android emulator/device available in this automation environment |
+
+### Persistent continuity
+- Last area worked: TeamUsage telemetry and governance integrity.
+- Next area: TeamValidation after the latest CI runs reach a final state; revisit TeamDetail/TeamUsage Supabase blockers when the project schema contract is available.
+- Latest implementation HEAD before this continuity commit: 0fbf630f52b76c1e431f53f4b9a34d0182731679.

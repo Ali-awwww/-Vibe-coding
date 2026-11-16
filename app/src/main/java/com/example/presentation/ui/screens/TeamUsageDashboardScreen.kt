@@ -79,6 +79,13 @@ fun TeamUsageDashboardScreen(
                 },
                 actions = {
                     IconButton(
+                        enabled = uiState.isAuthenticated && !uiState.isLoading,
+                        onClick = { viewModel.refresh() },
+                        modifier = Modifier.testTag("team_usage_refresh")
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "تحديث بيانات الاستهلاك")
+                    }
+                    IconButton(
                         enabled = uiState.team != null && uiState.isAuthenticated && !uiState.isMutating,
                         onClick = { showGovernanceDialog = true }
                     ) {
