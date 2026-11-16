@@ -83,19 +83,30 @@ fun ValidationMatrixTab(
                         }
 
                         Button(
-                            onClick = { viewModel.runAllMatrixTests() },
-                            enabled = !progress.isRunning,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            onClick = {
+                                if (progress.isRunning) {
+                                    viewModel.cancelMatrixTests()
+                                } else {
+                                    viewModel.runAllMatrixTests()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (progress.isRunning) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                }
+                            ),
                             modifier = Modifier.testTag("run_all_validation_tests_button")
                         ) {
                             if (progress.isRunning) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
+                                Icon(
+                                    Icons.Default.StopCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("جاري الفحص (${progress.currentTestIndex}/${progress.totalTests})")
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("إيقاف الفحص")
                             } else {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
