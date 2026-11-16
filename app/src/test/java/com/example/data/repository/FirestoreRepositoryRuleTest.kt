@@ -34,6 +34,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import java.lang.reflect.Proxy
@@ -253,10 +254,15 @@ class FirestoreRepositoryRuleTest : FirestoreEmulatorTestBase() {
             }
         }.exceptionOrNull()
         assertNotNull("Expected unauthenticated Firestore read to fail, got: $directFailure", directFailure)
+        val firestoreCode = directFailure!!.unwrapFirestoreException()?.code
+        assumeTrue(
+            "Firestore emulator is unavailable; skipping rules assertion",
+            firestoreCode != FirebaseFirestoreException.Code.UNAVAILABLE
+        )
         assertEquals(
             "Unexpected Firestore failure: $directFailure",
             FirebaseFirestoreException.Code.PERMISSION_DENIED,
-            directFailure!!.unwrapFirestoreException()?.code
+            firestoreCode
         )
     }
 
