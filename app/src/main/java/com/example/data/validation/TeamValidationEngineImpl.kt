@@ -274,9 +274,13 @@ class TeamValidationEngineImpl(
                     )
                     withTemporaryProviders(userId, providers) {
                         providers.forEach { provider ->
-                            val stored = aiModelRepository.getProviderById(userId, provider.id)
-                            check(stored?.userId == userId && stored.id == provider.id) {
+                            val stored = checkNotNull(
+                                aiModelRepository.getProviderById(userId, provider.id)
+                            ) {
                                 "A temporary provider could not be read within its owner scope."
+                            }
+                            check(stored.userId == userId && stored.id == provider.id) {
+                                "A temporary provider was returned outside its owner scope."
                             }
                         }
                     }
