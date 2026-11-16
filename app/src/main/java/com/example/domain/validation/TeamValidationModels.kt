@@ -91,14 +91,19 @@ data class TeamValidationSummaryReport(
     val passedCount: Int = 0,
     val failedCount: Int = 0,
     val skippedCount: Int = 0,
+    val pendingCount: Int = 0,
     val totalDurationMs: Long = 0,
     val modelsContacted: List<ContactedModelSummary> = emptyList(),
     val conflictsDetected: List<ModelConflictItem> = emptyList(),
     val rateLimitsObserved: List<String> = emptyList(),
     val totalActualCostUsd: Double = 0.0,
-    val isFreeOnlyProtected: Boolean = true,
-    val userKeyIsolationVerified: Boolean = true,
-    val isolatedSandboxVerified: Boolean = true,
+    val actualCostMeasured: Boolean = false,
+    val isFreeOnlyProtected: Boolean = false,
+    val userKeyIsolationVerified: Boolean = false,
+    val userKeyIsolationScope: String? = null,
+    val backendUserIsolationVerified: Boolean = false,
+    val isolatedSandboxVerified: Boolean = false,
+    val testResults: List<ValidationTestItem> = emptyList(),
     val actionableErrors: List<String> = emptyList(),
     val markdownReport: String = ""
 )
@@ -120,6 +125,8 @@ data class VibeCodingSandboxProgress(
     val testRunLog: String = "",
     val isComplete: Boolean = false,
     val isRunning: Boolean = false,
+    val isAvailable: Boolean = false,
+    val blockedReason: String? = null,
     val finalVerdict: String = ""
 )
 
@@ -131,5 +138,7 @@ data class CrashInvestigationSandboxProgress(
     val patchDiff: String = "",
     val isComplete: Boolean = false,
     val isRunning: Boolean = false,
+    val isAvailable: Boolean = false,
+    val blockedReason: String? = null,
     val finalVerdict: String = ""
 )
