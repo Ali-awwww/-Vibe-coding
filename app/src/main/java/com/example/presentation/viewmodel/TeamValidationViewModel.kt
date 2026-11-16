@@ -123,7 +123,7 @@ class TeamValidationViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                publishMatrixFailure(userId, null, error)
+                publishMatrixFailure(userId, null)
             }
         }
     }
@@ -181,23 +181,24 @@ class TeamValidationViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                publishMatrixFailure(userId, testId, error)
+                publishMatrixFailure(userId, testId)
             }
         }
     }
 
-    private suspend fun publishMatrixFailure(userId: String, testId: Int?, error: Exception) {
+    private suspend fun publishMatrixFailure(userId: String, testId: Int?) {
         if (getUserId() != userId) return
         val items = _uiState.value.matrixProgress.items.map { item ->
-            if (testId == null || item.id == testId) {
-                if (item.status == ValidationStatus.RUNNING || testId == null) {
-                    item.copy(
-                        status = ValidationStatus.FAILED,
-                        errorMessage = "تعذر إكمال الفحص بسبب خطأ داخلي. حاول مرة أخرى."
-                    )
-                } else {
-                    item
-                }
+            val affected = if (testId == null) {
+                item.status == ValidationStatus.RUNNING
+            } else {
+                item.id == testId
+            }
+            if (affected) {
+                item.copy(
+                    status = ValidationStatus.FAILED,
+                    errorMessage = "تعذر إكمال الفحص بسبب خطأ داخلي. حاول مرة أخرى."
+                )
             } else {
                 item
             }
@@ -314,7 +315,7 @@ class TeamValidationViewModel(
         _uiState.update { it.copy(exportSuccessMessage = null, errorMessage = null) }
     }
 
-    override fun onCleared() {
+    protected override fun onCleared() {
         cancelUserScopedJobs()
         super.onCleared()
     }
