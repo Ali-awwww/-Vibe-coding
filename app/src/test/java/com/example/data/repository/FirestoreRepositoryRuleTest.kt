@@ -21,6 +21,7 @@ import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.GitHubRepository
 import com.example.domain.repository.SymbolicationRepository
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -248,7 +249,7 @@ class FirestoreRepositoryRuleTest : FirestoreEmulatorTestBase() {
         val directFailure = runCatching {
             withTimeout(FLOW_TIMEOUT_MS) {
                 firestore.collection("users").document("someone")
-                    .collection("projects").get().await()
+                    .collection("projects").get(Source.SERVER).await()
             }
         }.exceptionOrNull()
         assertNotNull(directFailure)
