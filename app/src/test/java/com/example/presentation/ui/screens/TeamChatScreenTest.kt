@@ -186,7 +186,7 @@ class TeamChatScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("empty_consensus_message").assertIsDisplayed()
-        composeRule.onNodeWithTag("empty_disagreements_message").assertIsDisplayed()
+        composeRule.onNodeWithTag("empty_consensus_message").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("empty_disagreements_message").performScrollTo().assertIsDisplayed()
     }
 }
