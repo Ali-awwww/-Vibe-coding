@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,4 +58,29 @@ class TeamDetailScreenTest {
         composeRule.onNodeWithText("يلزم تسجيل الدخول").assertIsDisplayed()
         composeRule.onNodeWithText("إعادة المحاولة").assertDoesNotExist()
     }
+
+    @Test
+    fun memberCardShowsConfiguredModelInstructionsAndRemovalAction() {
+        var removeRequested = false
+        val member = com.example.domain.model.TeamMember(
+            id = "member-1",
+            name = "Reviewer",
+            modelId = "openrouter/free-model",
+            providerId = "openrouter",
+            instructions = "Review every proposed diff."
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                MemberStatusCard(member = member, onRemove = { removeRequested = true })
+            }
+        }
+
+        composeRule.onNodeWithText("النموذج: openrouter/free-model").assertIsDisplayed()
+        composeRule.onNodeWithText("المزود: openrouter").assertIsDisplayed()
+        composeRule.onNodeWithText("التعليمات: Review every proposed diff.").assertIsDisplayed()
+        composeRule.onNodeWithTag("team_detail_remove_member_member-1").performClick()
+        assertTrue(removeRequested)
+    }
+
 }

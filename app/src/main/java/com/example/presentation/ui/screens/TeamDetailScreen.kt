@@ -44,6 +44,7 @@ fun TeamDetailScreen(navController: NavController, teamId: String) {
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var memberPendingRemoval by remember { mutableStateOf<TeamMember?>(null) }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -146,7 +147,11 @@ fun TeamDetailScreen(navController: NavController, teamId: String) {
                             }
                         } else {
                             items(team.members, key = { it.id }) { member ->
-                                MemberStatusCard(member)
+                                MemberStatusCard(
+                                    member = member,
+                                    onRemove = { memberPendingRemoval = member },
+                                    removeEnabled = !uiState.isMutating
+                                )
                             }
                         }
 
@@ -213,7 +218,35 @@ fun TeamDetailScreen(navController: NavController, teamId: String) {
         TeamGovernanceDialog(
             currentSettings = uiState.team!!.governance,
             onSave = { viewModel.updateGovernance(it) },
-            onDismiss = { viewModel.setGovernanceDialogVisible(false) }
+            onDismiss = { viewModel.setGovernanceDialogVisible(false) },
+            isSaving = uiState.isMutating
+        )
+    }
+
+    memberPendingRemoval?.let { member ->
+        AlertDialog(
+            onDismissRequest = { if (!uiState.isMutating) memberPendingRemoval = null },
+            title = { Text("إزالة عضو الفريق") },
+            text = { Text("هل تريد إزالة ${member.name} من هذا الفريق؟") },
+            confirmButton = {
+                TextButton(
+                    enabled = !uiState.isMutating,
+                    onClick = {
+                        viewModel.removeMember(member.id)
+                        memberPendingRemoval = null
+                    }
+                ) {
+                    Text("إزالة")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !uiState.isMutating,
+                    onClick = { memberPendingRemoval = null }
+                ) {
+                    Text("إلغاء")
+                }
+            }
         )
     }
 }
@@ -361,13 +394,23 @@ fun LabelValue(label: String, value: String) {
 }
 
 @Composable
-fun MemberStatusCard(member: TeamMember) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+fun MemberStatusCard(
+    member: TeamMember,
+    onRemove: (() -> Unit)? = null,
+    removeEnabled: Boolean = true
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.VibeDesignTokens.Color.SpacePanel)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Surface(
-                color = when(member.status) {
-                    MemberStatus.WORKING -> MaterialTheme.colorScheme.primary
-                    MemberStatus.COMPLETED -> Color(0xFF2E7D32)
+                color = when (member.status) {
+                    MemberStatus.WORKING -> com.example.ui.theme.VibeDesignTokens.Color.Cyan
+                    MemberStatus.COMPLETED -> com.example.ui.theme.VibeDesignTokens.Color.Success
                     MemberStatus.FAILED -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.outline
                 },
@@ -376,30 +419,80 @@ fun MemberStatusCard(member: TeamMember) {
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        when(member.status) {
+                        when (member.status) {
                             MemberStatus.WORKING -> Icons.Default.Autorenew
                             MemberStatus.COMPLETED -> Icons.Default.Check
                             MemberStatus.FAILED -> Icons.Default.ErrorOutline
                             else -> Icons.Default.Person
                         },
-                        null,
-                        tint = Color.White
+                        contentDescription = null,
+                        tint = com.example.ui.theme.VibeDesignTokens.Color.OnCyan
                     )
                 }
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(member.name, fontWeight = FontWeight.Bold)
-                Text("${member.role.labelAr} • ${member.status.name}", style = MaterialTheme.typography.labelSmall)
+                Text(member.name, fontWeight = FontWeight.Bold, color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary)
+                Text(
+                    "${member.role.labelAr} • ${member.status.name}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted
+                )
+                if (member.modelId.isNotBlank()) {
+                    Text(
+                        "النموذج: ${member.modelId}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (member.providerId.isNotBlank()) {
+                    Text(
+                        "المزود: ${member.providerId}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (member.instructions.isNotBlank()) {
+                    Text(
+                        "التعليمات: ${member.instructions}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (member.status == MemberStatus.WORKING) {
-                    Text("المهمة: ${member.currentTask ?: "جاري التنفيذ..."}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                    Text(
+                        "المهمة: ${member.currentTask ?: "جاري التنفيذ..."}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = com.example.ui.theme.VibeDesignTokens.Color.Cyan
+                    )
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        color = com.example.ui.theme.VibeDesignTokens.Color.Cyan
+                    )
+                }
+            }
+            if (onRemove != null) {
+                IconButton(
+                    onClick = onRemove,
+                    enabled = removeEnabled,
+                    modifier = Modifier.testTag("team_detail_remove_member_${member.id}")
+                ) {
+                    Icon(
+                        Icons.Default.PersonRemove,
+                        contentDescription = "إزالة ${member.name}",
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
     }
 }
-
 @Composable
 fun ExecutionInputSection(
     prompt: String,

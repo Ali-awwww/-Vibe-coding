@@ -1923,18 +1923,20 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Team and execution collectors had no error boundary and did not clear state on sign-out or account switch.
 - Estimation and execution failures could escape the ViewModel without user feedback; concurrent calls were not guarded.
 - Reworked TeamDetailViewModel to scope its stream to the authenticated account, clear/cancel user-scoped work on sign-out/account change, preserve state on failed writes, validate task prompts, expose loading/mutation flags and map low-level failures to safe user messages.
-- Updated TeamDetailScreen with explicit loading, signed-out, unavailable and retry states, Vibe design tokens, stable list keys, empty-member guidance and estimation progress.
+- Updated TeamDetailScreen with explicit loading, signed-out, unavailable and retry states, Vibe design tokens, stable list keys, empty-member guidance, member removal confirmation and estimation progress.
 
 ### Files and commits
 - app/src/main/java/com/example/presentation/viewmodel/TeamDetailViewModel.kt
 - app/src/main/java/com/example/presentation/ui/screens/TeamDetailScreen.kt
+- app/src/main/java/com/example/presentation/ui/components/TeamGovernanceDialog.kt
 - app/src/test/java/com/example/presentation/viewmodel/TeamDetailViewModelTest.kt
 - app/src/test/java/com/example/presentation/ui/screens/TeamDetailScreenTest.kt
+- app/src/test/java/com/example/presentation/ui/components/TeamGovernanceDialogTest.kt
 - Implementation commits: 692eb7769f2a5029de4e31e1fcd13f8046466ade and 983a780f915128b1b28041b53d510a6572d84643.
 
 ### Verification
 - Added seven ViewModel regression tests covering signed-out isolation, sign-out clearing, governance write failure/success, member write failure/success, estimation/execution errors, cancellation during sign-out, and invalid team IDs.
-- Added two Robolectric Compose tests for the unavailable/retry and signed-out states.
+- Added three TeamDetail Robolectric Compose tests for unavailable/retry, signed-out and member details/removal; added three governance-dialog Compose tests for invalid limits, save gating and valid values.
 - GitHub Actions for the latest code commits are still running/queued; no Gradle, test, lint or APK result for the final commit is recorded yet.
 - No emulator/device screenshots, rendered RTL/LTR review or live team-backend/RLS validation are claimed.
 - TeamDetail still uses the existing Firebase/local team repository path; Supabase team persistence is not claimed.
@@ -1942,3 +1944,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Continuity
 - TeamDetail remains OPEN until final CI passes and rendered device verification is completed.
 - Exact next step: inspect the three push-triggered workflows for the final HEAD and fix any reported failures. Then continue TeamUsage telemetry correctness; missing usage telemetry must remain unavailable rather than being rendered as zero.
+### TeamDetail follow-up — member operations and governance validation
+- Added a confirmed member-removal flow; member cards now expose configured model/provider identity and member instructions.
+- Hardened the shared TeamGovernanceDialog: invalid, negative or zero limits are rejected rather than silently replaced with old values; saving disables duplicate submission/dismissal and shows progress.
+- TeamDetail binds dialog saving state to the repository mutation state.
+- Added Compose regression coverage for member detail/removal and governance validation/saving.
+- Additional files: app/src/main/java/com/example/presentation/ui/components/TeamGovernanceDialog.kt and app/src/test/java/com/example/presentation/ui/components/TeamGovernanceDialogTest.kt.
+- Verification for this follow-up is pending the latest push-triggered Actions runs; no device or live backend verification is claimed.

@@ -13,13 +13,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import com.example.domain.model.TeamGovernanceSettings
 
 @Composable
 fun TeamGovernanceDialog(
     currentSettings: TeamGovernanceSettings,
     onSave: (TeamGovernanceSettings) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isSaving: Boolean = false
 ) {
     var freeOnly by remember { mutableStateOf(currentSettings.freeOnly) }
     var maxCost by remember { mutableStateOf(currentSettings.maxTeamCostUsd.toString()) }
@@ -30,9 +32,10 @@ fun TeamGovernanceDialog(
     var maxTimeoutMinutes by remember { mutableStateOf(currentSettings.maxExecutionTimeMinutes.toString()) }
     var enableLoadBalancing by remember { mutableStateOf(currentSettings.enableLoadBalancing) }
     var autoFallbackToFree by remember { mutableStateOf(currentSettings.autoFallbackToFree) }
+    var validationError by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSaving) onDismiss() },
         icon = {
             Icon(
                 Icons.Default.Security,
@@ -104,7 +107,7 @@ fun TeamGovernanceDialog(
                     onValueChange = { maxCost = it },
                     label = { Text("أقصى تكلفة للفريق (USD $)") },
                     enabled = !freeOnly,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().testTag("team_governance_max_cost"),
                     singleLine = true,
                     supportingText = {
                         if (freeOnly) Text("معطل لأن وضع Free Only نشط (0.00$)")
@@ -115,7 +118,7 @@ fun TeamGovernanceDialog(
                     value = maxTokens,
                     onValueChange = { maxTokens = it },
                     label = { Text("الحد الأقصى للرموز (Tokens)") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().testTag("team_governance_max_tokens"),
                     singleLine = true
                 )
 
@@ -192,30 +195,65 @@ fun TeamGovernanceDialog(
                         onCheckedChange = { enableLoadBalancing = it }
                     )
                 }
+
+                validationError?.let { message ->
+                    Text(
+                        message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("team_governance_validation_error")
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val updated = currentSettings.copy(
-                        freeOnly = freeOnly,
-                        maxTeamCostUsd = maxCost.toDoubleOrNull() ?: currentSettings.maxTeamCostUsd,
-                        maxTotalTokens = maxTokens.toIntOrNull() ?: currentSettings.maxTotalTokens,
-                        maxApiRequests = maxRequests.toIntOrNull() ?: currentSettings.maxApiRequests,
-                        maxParallelRequests = maxParallel.toIntOrNull() ?: currentSettings.maxParallelRequests,
-                        maxRetryAttempts = maxRetries.toIntOrNull() ?: currentSettings.maxRetryAttempts,
-                        maxExecutionTimeMinutes = maxTimeoutMinutes.toIntOrNull() ?: currentSettings.maxExecutionTimeMinutes,
-                        enableLoadBalancing = enableLoadBalancing,
-                        autoFallbackToFree = autoFallbackToFree
+                    val parsedCost = if (freeOnly) {
+                        currentSettings.maxTeamCostUsd
+                    } else {
+                        maxCost.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+                    }
+                    val parsedTokens = maxTokens.toIntOrNull()?.takeIf { it > 0 }
+                    val parsedRequests = maxRequests.toIntOrNull()?.takeIf { it > 0 }
+                    val parsedParallel = maxParallel.toIntOrNull()?.takeIf { it > 0 }
+                    val parsedRetries = maxRetries.toIntOrNull()?.takeIf { it >= 0 }
+                    val parsedTimeout = maxTimeoutMinutes.toIntOrNull()?.takeIf { it > 0 }
+
+                    if (parsedCost == null || parsedTokens == null || parsedRequests == null ||
+                        parsedParallel == null || parsedRetries == null || parsedTimeout == null
+                    ) {
+                        validationError = "أدخل قيماً رقمية صالحة؛ يجب أن تكون الحدود موجبة ومحاولات الإعادة صفراً أو أكثر."
+                        return@Button
+                    }
+
+                    validationError = null
+                    onSave(
+                        currentSettings.copy(
+                            freeOnly = freeOnly,
+                            maxTeamCostUsd = parsedCost,
+                            maxTotalTokens = parsedTokens,
+                            maxApiRequests = parsedRequests,
+                            maxParallelRequests = parsedParallel,
+                            maxRetryAttempts = parsedRetries,
+                            maxExecutionTimeMinutes = parsedTimeout,
+                            enableLoadBalancing = enableLoadBalancing,
+                            autoFallbackToFree = autoFallbackToFree
+                        )
                     )
-                    onSave(updated)
-                }
+                },
+                enabled = !isSaving,
+                modifier = Modifier.testTag("team_governance_save_button")
             ) {
-                Text("حفظ السياسات")
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("حفظ السياسات")
+                }
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
+            OutlinedButton(onClick = onDismiss, enabled = !isSaving) {
                 Text("إلغاء")
             }
         }
