@@ -128,6 +128,48 @@ class TeamValidationViewModel(
         }
     }
 
+    fun cancelMatrixTests() {
+        val current = _uiState.value.matrixProgress
+        if (!current.isRunning) return
+
+        val userId = getUserId()
+        matrixJob?.cancel()
+        matrixJob = null
+
+        val items = current.items.toMutableList()
+        val activeIndex = items.indexOfFirst { it.status == ValidationStatus.RUNNING }
+            .takeIf { it >= 0 }
+            ?: items.indexOfFirst { it.status == ValidationStatus.PENDING }
+        if (activeIndex >= 0) {
+            items[activeIndex] = items[activeIndex].copy(
+                status = ValidationStatus.SKIPPED,
+                errorMessage = "أوقف المستخدم التشغيل قبل اكتمال هذا الفحص."
+            )
+        }
+
+        _uiState.update {
+            it.copy(
+                matrixProgress = current.copy(
+                    items = items,
+                    isRunning = false,
+                    currentTestName = ""
+                ),
+                errorMessage = "تم إيقاف تشغيل مصفوفة التحقق."
+            )
+        }
+
+        viewModelScope.launch {
+            val report = validationEngine.generateValidationReport(
+                testItems = items,
+                vibeProgress = _uiState.value.vibeProgress,
+                crashProgress = _uiState.value.crashProgress
+            )
+            if (getUserId() == userId) {
+                _uiState.update { it.copy(summaryReport = report) }
+            }
+        }
+    }
+
     fun runSingleTest(testId: Int) {
         if (_uiState.value.matrixProgress.isRunning) return
         val userId = requireAuthenticatedUserId() ?: return
