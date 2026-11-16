@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -18,6 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Proxy
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 
 class TeamOrchestratorExecutionFixtureTest {
 
@@ -51,6 +53,7 @@ class TeamOrchestratorExecutionFixtureTest {
                 snapshot.messages.any { it.content == "proposal:model-b" }
         })
         assertEquals(5, provider.calls.size)
+        assertEquals(1, repository.maxConcurrentStatusWrites)
     }
 
     @Test
@@ -338,6 +341,9 @@ class TeamOrchestratorExecutionFixtureTest {
         val executions = linkedMapOf<String, TeamExecution>()
         val snapshots = mutableListOf<TeamExecution>()
         private var logCallCount = 0
+        private val activeStatusWrites = AtomicInteger()
+        var maxConcurrentStatusWrites: Int = 0
+            private set
 
         override fun getTeams(userId: String): Flow<List<ModelTeam>> = flowOf(emptyList())
         override suspend fun getTeamById(teamId: String): ModelTeam? = null
@@ -368,7 +374,18 @@ class TeamOrchestratorExecutionFixtureTest {
             status: MemberStatus,
             currentTask: String?,
             lastResult: String?
-        ): Result<Unit> = Result.success(Unit)
+        ): Result<Unit> {
+            val active = activeStatusWrites.incrementAndGet()
+            synchronized(this) {
+                maxConcurrentStatusWrites = maxOf(maxConcurrentStatusWrites, active)
+            }
+            return try {
+                yield()
+                Result.success(Unit)
+            } finally {
+                activeStatusWrites.decrementAndGet()
+            }
+        }
 
         override fun getTeamUsageRecords(teamId: String): Flow<List<TeamUsageRecord>> = flowOf(emptyList())
         override fun getAllTeamUsageRecords(userId: String): Flow<List<TeamUsageRecord>> = flowOf(emptyList())

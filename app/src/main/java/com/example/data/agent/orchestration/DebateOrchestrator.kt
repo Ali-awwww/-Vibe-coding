@@ -33,16 +33,19 @@ class DebateOrchestrator(
             "Debate mode requires at least one non-leader participant."
         }
 
-        // Round 1: collect independent proposals without shared mutable state or polling.
+        // Persist status changes sequentially; the repository replaces the full team document.
+        participants.forEach { member ->
+            teamRepository.updateMemberStatus(
+                team.id,
+                member.id,
+                MemberStatus.WORKING,
+                "Formulating initial proposal"
+            ).getOrThrow()
+        }
+
+        // Provider calls remain parallel, but no concurrent whole-team status writes occur.
         val initialProposals = participants.map { member ->
             async {
-                teamRepository.updateMemberStatus(
-                    team.id,
-                    member.id,
-                    MemberStatus.WORKING,
-                    "Formulating initial proposal"
-                ).getOrThrow()
-
                 val output = aiModelRepository.generateResponse(
                     userId = userId,
                     modelId = member.modelId,
@@ -51,13 +54,6 @@ class DebateOrchestrator(
                     taskType = AITaskType.AGENT_TEAM_TASK
                 ).getOrThrow()
                 check(output.isNotBlank()) { "A debate participant returned an empty proposal." }
-
-                teamRepository.updateMemberStatus(
-                    team.id,
-                    member.id,
-                    MemberStatus.WAITING,
-                    "Proposal submitted"
-                ).getOrThrow()
 
                 AgentMessage(
                     id = UUID.randomUUID().toString(),
@@ -69,6 +65,15 @@ class DebateOrchestrator(
                 )
             }
         }.awaitAll()
+
+        participants.forEach { member ->
+            teamRepository.updateMemberStatus(
+                team.id,
+                member.id,
+                MemberStatus.WAITING,
+                "Proposal submitted"
+            ).getOrThrow()
+        }
 
         val round1Summary = initialProposals.joinToString("\n---\n") {
             it.fromMemberId + ": " + it.content
@@ -85,16 +90,18 @@ class DebateOrchestrator(
         )
         onUpdate(execution)
 
-        // Round 2: retain each participant's actual critique in the execution record.
+        // Round 2: serialize team status writes while keeping provider inference parallel.
+        participants.forEach { member ->
+            teamRepository.updateMemberStatus(
+                team.id,
+                member.id,
+                MemberStatus.WORKING,
+                "Critiquing other proposals"
+            ).getOrThrow()
+        }
+
         val critiques = participants.map { member ->
             async {
-                teamRepository.updateMemberStatus(
-                    team.id,
-                    member.id,
-                    MemberStatus.WORKING,
-                    "Critiquing other proposals"
-                ).getOrThrow()
-
                 val output = aiModelRepository.generateResponse(
                     userId = userId,
                     modelId = member.modelId,

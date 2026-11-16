@@ -2071,6 +2071,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### Implementation
 - Replaced debate polling and shared mutable collections with structured `async/awaitAll` execution. Provider and member-status failures now propagate to the orchestration boundary instead of leaving a polling loop waiting.
+- Serialized member-status writes around parallel inference because the current team repository replaces the full team document; concurrent status writes could otherwise overwrite each other's member state.
 - Persisted each participant proposal, each critique, and the leader's consensus as typed `AgentMessage` records. Empty proposals, critiques, consensus, missing leaders, and leader-only teams fail explicitly.
 - The primary execution path now checks each execution-log `Result` and persists before emitting that state. Cancellation is rethrown rather than converted into an ordinary failed execution.
 - Added `TeamOrchestratorExecutionFixtureTest`, a test-only deterministic provider adapter plus recording repository around the actual `TeamOrchestratorImpl` and `DebateOrchestrator`. It covers persisted proposal/critique/consensus evidence, provider failure, missing participants, initial persistence failure, and a final persistence failure that must never emit COMPLETED.
@@ -2084,7 +2085,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - No `AGENTS.md` or `agents.md` files exist in the current repository tree.
 
 ### Verification for this batch
-- Source and regression tests are committed; CI status for the new commit is pending and must be checked to terminal state before treating the tests as passed.
+- Commit `e6ebb88dd23930cd47ecbfc10d9f8dc569650138`: Android CI run `43977660630` completed SUCCESS; `testDebugUnitTest` and `assembleDebug` both completed successfully. Debug APK artifact `app-debug-apk` (artifact `14282691179`) was uploaded.
+- APK workflow `43977660816`: unit tests, debug build, and `CrashIntelligence-Debug-APK` upload succeeded; artifacts `14282106142` (Debug APK) and `14280979341` (unit-test reports) exist. Release build was still IN_PROGRESS when this follow-up was prepared.
+- Code Quality workflow `43977660615` had `lintDebug` IN_PROGRESS; do not mark lint PASS until the run reaches a terminal conclusion.
+- This follow-up serializes member-status writes and adds a regression assertion for the maximum concurrent status writes. Its own CI runs must be checked to terminal state.
 - No local Gradle execution, emulator/device run, rendered RTL/LTR review, or screenshot is claimed from this automation environment.
 
 ### Persistent continuity
