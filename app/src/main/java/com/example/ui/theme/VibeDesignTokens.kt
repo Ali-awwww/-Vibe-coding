@@ -18,6 +18,7 @@ object VibeDesignTokens {
         val TextMuted = androidx.compose.ui.graphics.Color(0xFF9CB1C8)
         val Grid = androidx.compose.ui.graphics.Color(0x1A8B949E)
         val Success = androidx.compose.ui.graphics.Color(0xFF36E6A0)
+        val Warning = androidx.compose.ui.graphics.Color(0xFFFFB74D)
         val Error = androidx.compose.ui.graphics.Color(0xFFFF5875)
     }
 

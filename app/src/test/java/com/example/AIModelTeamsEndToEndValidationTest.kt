@@ -261,8 +261,10 @@ class AIModelTeamsEndToEndValidationTest {
 
         val md = validationEngine.buildMarkdownReport(report)
         assertTrue(md.contains("تقرير التحقق الشامل لنظام فرق نماذج الذكاء الاصطناعي"))
-        assertTrue(md.contains("Google Gemini 1.5 Flash"))
-        assertTrue(md.contains("OpenRouter Auto Free"))
+        assertTrue(md.contains("SANDBOX DEMO"))
+        assertTrue(md.contains("Google Gemini 3.8 Flash [Sandbox Demo]"))
+        assertTrue(md.contains("OpenRouter Auto Free [Sandbox Demo]"))
+        assertFalse(md.contains("gemini-1.5"))
     }
 
     @Test

@@ -43,15 +43,21 @@ class AIModelsViewModelTest {
         }
         val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
         advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isAuthenticated)
         assertEquals(listOf(provider), viewModel.uiState.value.providers)
         assertEquals(listOf(model), viewModel.uiState.value.models)
 
         users.value = null
         advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isAuthenticated)
         assertTrue(viewModel.uiState.value.providers.isEmpty())
         assertTrue(viewModel.uiState.value.models.isEmpty())
         assertNull(viewModel.uiState.value.defaultModelId)
         assertFalse(viewModel.uiState.value.isLoading)
+
+        viewModel.addProvider("OpenRouter", AIProviderType.OPEN_ROUTER, "sk-test")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.error.orEmpty().contains("تسجيل الدخول"))
     }
 
     @Test

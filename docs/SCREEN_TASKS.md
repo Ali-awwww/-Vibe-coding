@@ -1785,3 +1785,42 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 
 - CI follow-up: commit `a3e904aa87d83fc3407d17ab990b8ef84787db36` exposed an `isSupported` scope error in `AIProviderCard`; the first attempted move placed the declaration in the cost-settings card. It has now been moved into the `AIProviderCard` column itself, where the status badge, warning and disabled actions share its scope. Recheck the current HEAD before treating this UI change as compiled.
+
+
+## 2026-11-16 — AIModels Vibe Design System slice, legacy `gemini-1.5` cleanup, and Sandbox isolation
+
+### Observed gaps before changes
+- `AIModelsScreen.kt` still used generic uncustomized Material 3 cards/surfaces instead of the `VibeDesignTokens` / `JetBrainsMono` Cosmic Cyber engineering style (`docs/DESIGN_SYSTEM.md`), lacked an explicit unauthenticated gate card when `user == null`, lacked Compose `testTag` hooks on interactive controls/lists, and used deprecated `Icons.Filled.FactCheck` / `ArrowBack`.
+- `AIModelsViewModel` cleared state on sign-out, but did not expose an explicit `isAuthenticated: Boolean` flag or surface a clear authentication-required error when provider/settings mutations were invoked while signed out.
+- `AIModelRepositoryImpl.prioritizeModelsForTask` still boosted retired `gemini-1.5-flash`, while `TeamValidationEngineImpl` and `ValidationReportTab` contained synthetic `gemini-1.5-flash` / `gemini-1.5-pro` references and sample billing/masked-key strings without a prominent `SANDBOX DEMO` disclaimer.
+- Missing `.env` values in `.env.example` (`KEY=`) caused `secrets-gradle-plugin` to emit invalid `BuildConfig.java` syntax during local Gradle test runs, and `DependencyProvider.supabaseRetrofit` needed an HTTP fallback when `BuildConfig.SUPABASE_URL` is blank/non-HTTP.
+
+### Concrete changes implemented
+- **Missing-config & Supabase guards:** populated valid placeholder values in `.env.example` (`YOUR_GITHUB_CLIENT_ID`, `YOUR_GITHUB_CLIENT_SECRET`, `YOUR_SUPABASE_PUBLISHABLE_KEY`, `https://your-project.supabase.co`) and added URL scheme validation with safe fallback in `DependencyProvider.kt` (`supabaseBaseUrl`).
+- **Retired model cleanup & TeamValidation sandbox isolation:**
+  - `app/src/main/java/com/example/data/repository/AIModelRepositoryImpl.kt` — `prioritizeModelsForTask` now prefers `GeminiModelCatalog.CONNECTION_MODEL_ID` (`gemini-3.8-flash`) and `gemini-3.5-flash-lite` for planning/root-cause diagnosis.
+  - `app/src/main/java/com/example/data/validation/TeamValidationEngineImpl.kt` — replaced synthetic `gemini-1.5-*` identifiers with `sandbox/gemini-3.8-flash` / `Gemini 3.8 Flash (Paid Tier Fixture)` / `Google Gemini 3.8 Flash [Sandbox Demo]`, replaced fake key strings with `[SANDBOX_KEY_FIXTURE]`, and added explicit `SANDBOX DEMO` headers/labels in `generateValidationReport` and `buildMarkdownReport`.
+  - `app/src/main/java/com/example/presentation/ui/screens/validation/ValidationReportTab.kt` — added prominent `validation_sandbox_disclaimer` banner clarifying that report tokens/costs are isolated demo fixtures rather than live billing.
+- **AIModels ViewModel & UI slice (`VibeDesignTokens`):**
+  - `app/src/main/java/com/example/presentation/viewmodel/AIModelsViewModel.kt` — added `isAuthenticated: Boolean` to `AIModelsUiState` and `requireAuthenticatedUserId()` so unauthenticated mutations surface `AUTH_REQUIRED_ERROR` rather than failing silently.
+  - `app/src/main/java/com/example/presentation/ui/screens/aimodels/AIModelsComponents.kt` — extracted modular components styled with `VibeDesignTokens` (`SpaceBackground`, `SpacePanel`, `SpacePanelRaised`, `Cyan`, `Violet`, `Success`, `Error`) and `JetBrainsMono`: `VibeSpaceBackdrop`, `VibeSectionHeader`, `AIAuthRequiredCard`, `AISettingsDashboard` (`TELEMETRY • LOCAL LOGS`), `AICostSettingsCard`, `AIModelSelectionSection`, `AIModelItem`, `AIProviderCard` (keystore-safe `runCatching { SecurityUtils.maskSecret(...) }` fallback for JVM tests, paired icon+text `ProviderStatusBadge` with `Modifier.semantics(mergeDescendants = true) {}` for all 5 `AIProviderStatus` values, 48dp minimum touch targets), and `AddAIProviderDialog`.
+  - `app/src/main/java/com/example/presentation/ui/screens/AIModelsScreen.kt` — refactored into `AIModelsScreen` + stateless `AIModelsScreenContent(...)` with `WindowInsets.safeDrawing`, cosmic gradient + backdrop, `widthIn(max = 720.dp)` tablet centering, unauthenticated gate, retry/delete confirmation dialogs, and `testTag` hooks (`ai_models_lazy_column`, `ai_models_add_provider_button`, `delete_provider_confirm_button`, etc.).
+- **Regression & UI tests:**
+  - `app/src/test/java/com/example/AIModelsViewModelTest.kt` — added `isAuthenticated` assertions and unauthenticated `addProvider` error feedback assertion.
+  - `app/src/test/java/com/example/AIFreeSystemValidationTest.kt` — added `prioritization prefers gemini-3_8-flash over generic models for diagnosis`.
+  - `app/src/test/java/com/example/AIModelTeamsEndToEndValidationTest.kt` — asserted `SANDBOX DEMO` report headers, updated demo model names, and `assertFalse(md.contains("gemini-1.5"))`.
+  - `app/src/test/java/com/example/presentation/ui/screens/AIModelsScreenTest.kt` — added Robolectric Compose UI tests covering the unauthenticated gate, authenticated provider badges (`CONNECTED`, stale DB `UNSUPPORTED` override), disabled Test/Sync on unsupported providers, delete confirmation flow, and Add Provider dialog credential trimming/validation.
+
+### Verification evidence
+- **Legacy model grep:** `grep -rnI --exclude-dir=.gradle --exclude-dir=build "gemini-1\.5" app/src || true` returned zero matches in `app/src/main` and only the negative regression assertion `assertFalse(md.contains("gemini-1.5"))` in `AIModelTeamsEndToEndValidationTest.kt:267`.
+- **Unit & Robolectric tests (PASS — 35/35 passed, 0 failed, 0 skipped):**
+  - Command: `gradle :app:testDebugUnitTest --tests "com.example.ExampleRobolectricTest" --tests "com.example.AIModelsViewModelTest" --tests "com.example.AIFreeSystemValidationTest" --tests "com.example.AIModelTeamsEndToEndValidationTest" --tests "com.example.presentation.ui.screens.AIModelsScreenTest"`
+  - Result: `BUILD SUCCESSFUL in 2m 25s` (`AIModelsScreenTest` 3/3 PASSED, `AIFreeSystemValidationTest` 11/11 PASSED, `AIModelTeamsEndToEndValidationTest` 11/11 PASSED, `AIModelsViewModelTest` 7/7 PASSED, `ExampleRobolectricTest` 3/3 PASSED).
+- **Android APK compilation (PASS):** `compile_applet` succeeded (`Build succeeded - the applet is compiled`).
+- **Not run / blocked:**
+  - Full-project unit test suite across all unrelated test files was not executed in this turn (targeted verification focused on the 5 suites above).
+  - No Android emulator, ADB, or physical device is available in the execution environment; visual screenshot inspection, Arabic RTL / English LTR layout check, font-scale/IME behavior, TalkBack announcement on-device, and live OpenRouter/Gemini API calls remain unverified.
+
+### Continuity
+- **Active screens:** `AIModels` and `TeamValidation` remain **`[ ]` OPEN** until rendered device/emulator visual verification and live API credential checks are completed.
+- **Next step:** Visually inspect `AIModelsScreen` and `TeamValidation` (`ValidationReportTab`) on the streaming emulator / physical device (RTL & LTR, small width, font scaling, live OpenRouter/Gemini keys), then proceed to the next screen slice in Priority 1 (`Login` / `Projects` / `Dashboard`).

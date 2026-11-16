@@ -279,6 +279,31 @@ class AIFreeSystemValidationTest {
         assertTrue(log.isSuccess)
     }
 
+    @Test
+    fun `prioritization prefers gemini-3_8-flash over generic models for diagnosis`() = runTest {
+        val userId = "diag_user"
+        val provider = AIProvider(id = "p_or", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, apiKey = "key")
+        aiProviderDao.insertProvider(provider)
+        aiProviderDao.insertUserSettings(AIUserSettings(userId = userId, freeOnly = true, autoSelectFree = true))
+        aiProviderDao.insertModels(
+            listOf(
+                AIModel(id = "p_or:generic", providerId = "p_or", apiId = "generic-reasoning-model", name = "Generic", isFree = true, capabilities = listOf(AICapability.REASONING)),
+                AIModel(id = "p_or:g38", providerId = "p_or", apiId = "gemini-3.8-flash", name = "Gemini 3.8 Flash", isFree = true, capabilities = listOf(AICapability.REASONING))
+            )
+        )
+
+        fakeOpenRouterApi.responseContent = "Diagnosis ok"
+        val result = repository.generateResponse(
+            userId = userId,
+            modelId = "ignored-when-auto-select",
+            prompt = "diagnose",
+            taskType = AITaskType.ROOT_CAUSE_DIAGNOSIS
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("gemini-3.8-flash", fakeOpenRouterApi.lastRequestedModel)
+    }
+
     // Fakes
     class FakeOpenRouterApi : OpenRouterApi {
         var models = emptyList<OpenRouterModelData>()

@@ -98,7 +98,11 @@ fun AppNavigation(
                     projectsViewModel.selectProject(route.projectId)
                 }
             }
-            ProjectsScreen(navController = navController, viewModel = projectsViewModel)
+            ProjectsScreen(
+                navController = navController,
+                viewModel = projectsViewModel,
+                initialTab = 1
+            )
         }
         
         composable<Screen.CrashDetail> { backStackEntry ->

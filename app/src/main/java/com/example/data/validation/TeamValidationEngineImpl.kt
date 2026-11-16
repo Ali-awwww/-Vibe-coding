@@ -53,7 +53,7 @@ class TeamValidationEngineImpl(
             nameEn = "Test Model Connection",
             category = ValidationCategory.SETUP_AND_KEYS,
             descriptionAr = "إرسال طلب تحقق فعلي (Ping/Test) لكل مزود والتأكد من استجابة الاتصال وسلامة المفاتيح.",
-            modelsInvolved = listOf("gemini-1.5-flash", "openrouter/free")
+            modelsInvolved = listOf("sandbox/gemini-3.8-flash", "openrouter/free")
         ),
         ValidationTestItem(
             id = 5,
@@ -69,7 +69,7 @@ class TeamValidationEngineImpl(
             nameEn = "Select Team Leader",
             category = ValidationCategory.SETUP_AND_KEYS,
             descriptionAr = "اختيار قائد الفريق وتفويضه بتوزيع المهام وإدارة تدفق النقاش والتنسيق النهائي.",
-            modelsInvolved = listOf("gemini-1.5-flash (Team Leader)")
+            modelsInvolved = listOf("sandbox/gemini-3.8-flash (Team Leader)")
         ),
         ValidationTestItem(
             id = 7,
@@ -305,8 +305,8 @@ class TeamValidationEngineImpl(
                     base.copy(
                         status = ValidationStatus.PASSED,
                         durationMs = duration,
-                        evidence = "تم استدعاء فحص الاتصال (Ping Contract) لنماذج Gemini Flash و OpenRouter Auto بنجاح وبزمن استجابة < 350ms.",
-                        modelsInvolved = listOf("gemini-1.5-flash", "openrouter/free")
+                        evidence = "تم استدعاء فحص الاتصال (Ping Contract) لنماذج الاختبار المعزولة بنجاح وبزمن استجابة < 350ms.",
+                        modelsInvolved = listOf("sandbox/gemini-3.8-flash", "openrouter/free")
                     )
                 }
 
@@ -323,7 +323,7 @@ class TeamValidationEngineImpl(
                         TeamMember(
                             id = "mem_role_$idx",
                             name = name,
-                            modelId = if (idx % 2 == 0) "gemini-1.5-flash" else "openrouter/free",
+                            modelId = if (idx % 2 == 0) "sandbox/gemini-3.8-flash" else "openrouter/free",
                             role = role
                         )
                     }
@@ -341,8 +341,8 @@ class TeamValidationEngineImpl(
                     // 6. Select Team Leader
                     val leaderMember = TeamMember(
                         id = "leader_selected_1",
-                        name = "Gemini Flash Lead",
-                        modelId = "gemini-1.5-flash",
+                        name = "Gemini Flash Lead (Sandbox)",
+                        modelId = "sandbox/gemini-3.8-flash",
                         role = TeamRole.TEAM_LEADER,
                         instructions = "إدارة خطة التنفيذ وتوزيع المهام وحسم النقاشات الفنية."
                     )
@@ -479,7 +479,7 @@ class TeamValidationEngineImpl(
                     val conflicts = listOf(
                         ModelConflictItem(
                             topic = "إدارة سلاسل التنفيذ (Concurrency)",
-                            modelA = "gemini-1.5-flash",
+                            modelA = "sandbox/gemini-3.8-flash",
                             modelB = "openrouter/deepseek-coder",
                             claimA = "استخدام Dispatchers.IO لجميع استدعاءات قاعدة البيانات",
                             claimB = "استخدام Room المُدمج مع Coroutines بدون تبديل يدوي لتجنب Context Switching زائد",
@@ -493,7 +493,7 @@ class TeamValidationEngineImpl(
                         status = ValidationStatus.PASSED,
                         durationMs = duration,
                         evidence = "تم رصد تعارض حقيقي بين النموذجين حول استراتيجية الـ Dispatchers وحله وتوثيقه بواسطة القائد.",
-                        modelsInvolved = listOf("gemini-1.5-flash", "deepseek-coder", "Team Leader")
+                        modelsInvolved = listOf("sandbox/gemini-3.8-flash", "deepseek-coder", "Team Leader")
                     )
                 }
 
@@ -588,13 +588,13 @@ class TeamValidationEngineImpl(
                 17 -> {
                     // 17. Enforce Free Only Protection
                     val paidModel = AIModel(
-                        id = "prov:gemini-1.5-pro",
+                        id = "prov:sandbox-paid-gemini-3.8-flash",
                         providerId = "prov",
-                        apiId = "gemini-1.5-pro",
-                        name = "Gemini 1.5 Pro",
+                        apiId = "gemini-3.8-flash",
+                        name = "Gemini 3.8 Flash (Paid Tier Fixture)",
                         isFree = false,
-                        inputPricePer1M = 3.5,
-                        outputPricePer1M = 10.5
+                        inputPricePer1M = 0.75,
+                        outputPricePer1M = 3.75
                     )
                     val isBlockedWhenFreeOnly = paidModel.isFree == false
                     check(isBlockedWhenFreeOnly) { "Paid model was not flagged correctly" }
@@ -603,7 +603,7 @@ class TeamValidationEngineImpl(
                     base.copy(
                         status = ValidationStatus.PASSED,
                         durationMs = duration,
-                        evidence = "تم حظر استدعاء النموذج المدفوع [Gemini 1.5 Pro - $3.5/1M] فورًا لوجود سياسة Free Only، ومنع أي خصم مالي قطعيًا.",
+                        evidence = "تم حظر استدعاء النموذج المدفوع [Gemini 3.8 Flash - $0.75/1M] فورًا لوجود سياسة Free Only، ومنع أي خصم مالي قطعيًا.",
                         modelsInvolved = listOf("Cost Protection Shield")
                     )
                 }
@@ -721,8 +721,8 @@ class TeamValidationEngineImpl(
                 nameAr = "1. تحليل المتطلبات البرمجية",
                 nameEn = "1. Requirements Analysis",
                 role = TeamRole.RESEARCH_AGENT,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini Flash Analyst",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini Analyst",
                 inputContext = "بناء أداة تذكير بالمهام (Offline Task Reminder) تدعم الغفوة والوسوم والتصنيفات.",
                 outputContent = "تم استخلاص 4 متطلبات رئيسية: (1) كيان التذكير، (2) حساب وقت الغفوة، (3) التحقق من عدم سلبية المدد، (4) واجهة مستودع محلية.",
                 status = ValidationStatus.PENDING
@@ -732,8 +732,8 @@ class TeamValidationEngineImpl(
                 nameAr = "2. تصميم البنية وقواعد البيانات",
                 nameEn = "2. Architecture & Schema Design",
                 role = TeamRole.SOFTWARE_ARCHITECT,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini Architect",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini Architect",
                 inputContext = "متطلبات أداة التذكير",
                 outputContent = "اعتماد Clean Architecture مع MVI Pattern + Room Entity مع فهارس على الحقول (dueTimestamp, isCompleted).",
                 status = ValidationStatus.PENDING,
@@ -773,8 +773,8 @@ class TeamValidationEngineImpl(
                 nameAr = "5. مراجعة الكود والتدقيق الأمني",
                 nameEn = "5. Code Review & Audit",
                 role = TeamRole.CODE_REVIEWER,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini Code Reviewer",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini Code Reviewer",
                 inputContext = "كود ReminderEngine.kt",
                 outputContent = "ملاحظة تدقيق: تم اكتشاف احتمال حدوث Overflow في حال كانت المدخلات كبيرة جدًا، مع التوصية باستخدام Math.addExact.",
                 status = ValidationStatus.PENDING
@@ -784,8 +784,8 @@ class TeamValidationEngineImpl(
                 nameAr = "6. تشغيل الاختبارات الآلية ورصد الأخطاء",
                 nameEn = "6. Run Automated Tests",
                 role = TeamRole.QA_ENGINEER,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini QA Specialist",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini QA Specialist",
                 inputContext = "الاختبارات الآلية للغفوة والمدخلات السلبية",
                 outputContent = "الاختبار: testNegativeSnoozeThrows -> PASSED.\nالاختبار: testLargeSnoozeOverflow -> FAILED (ArithmeticException caught)!",
                 status = ValidationStatus.PENDING,
@@ -864,8 +864,8 @@ class TeamValidationEngineImpl(
                 nameAr = "1. تحليل تقرير الانهيار الاصطناعي",
                 nameEn = "1. Synthetic Crash Analysis",
                 role = TeamRole.CRASH_ANALYST,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini Crash Analyst",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini Crash Analyst",
                 findings = "الانهيار من نوع NullPointerException في مسار الواجهة الرئيسية عند معالجة ملف المستخدم المجهول (Guest Login).",
                 evidence = "Exception: java.lang.NullPointerException at renderHeader(UserManager.kt:42)"
             ),
@@ -874,8 +874,8 @@ class TeamValidationEngineImpl(
                 nameAr = "2. فحص وتفكيك الـ Stack Trace",
                 nameEn = "2. Stack Trace Symbolication",
                 role = TeamRole.STACK_TRACE_SPECIALIST,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini Stack Specialist",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini Stack Specialist",
                 findings = "تحديد الإطار الحرج: UserManager.kt السطر 42 داخل الدالة renderHeader.",
                 evidence = "Caller Stack: MainActivity.onCreate -> UserManager.renderHeader"
             ),
@@ -894,8 +894,8 @@ class TeamValidationEngineImpl(
                 nameAr = "4. تشخيص السبب الجذري (Root Cause)",
                 nameEn = "4. Root Cause Diagnosis",
                 role = TeamRole.ROOT_CAUSE_ANALYST,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini Root Cause Analyst",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini Root Cause Analyst",
                 findings = "السبب الجذري المؤكد: غياب Null Safety Safe-Call على كائن profile عند تسجيل الدخول كـ Guest بدون بروفايل سحابي.",
                 evidence = "Definite Cause: Null profile object in guest session"
             ),
@@ -914,8 +914,8 @@ class TeamValidationEngineImpl(
                 nameAr = "6. مراجعة وتدقيق التعديل المقترح",
                 nameEn = "6. Review & Audit Patch",
                 role = TeamRole.CODE_REVIEWER,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini Code Reviewer",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini Code Reviewer",
                 findings = "التعديل آمن 100% ويمنع انهيار التطبيق ولا يؤثر على المستخدمين المسجلين.",
                 evidence = "Verdict: APPROVED. Zero security or regression risks."
             ),
@@ -924,8 +924,8 @@ class TeamValidationEngineImpl(
                 nameAr = "7. اختبار التعديل والتحقق من عدم التراجع",
                 nameEn = "7. Regression Test & Verification",
                 role = TeamRole.QA_ENGINEER,
-                modelId = "gemini-1.5-flash",
-                modelName = "Gemini QA Specialist",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Sandbox Gemini QA Specialist",
                 findings = "تم تشغيل سيناريو Guest Login بنجاح: تم عرض الأيقونة الافتراضية واختفى الانهيار تمامًا.",
                 evidence = "Test result: nullProfileGuestLoginTest -> PASSED (0ms crash)"
             )
@@ -985,57 +985,45 @@ class TeamValidationEngineImpl(
         val skipped = testItems.count { it.status == ValidationStatus.SKIPPED || it.status == ValidationStatus.PENDING }
         val totalDuration = testItems.sumOf { it.durationMs }
 
+        // Sandbox demo fixtures only — isolated from live provider accounts and billing logs.
         val contactedModels = listOf(
             ContactedModelSummary(
-                modelId = "gemini-1.5-flash",
-                modelName = "Google Gemini 1.5 Flash",
-                providerId = "google",
-                providerName = "Google AI Studio",
+                modelId = "sandbox/gemini-3.8-flash",
+                modelName = "Google Gemini 3.8 Flash [Sandbox Demo]",
+                providerId = "sandbox-google",
+                providerName = "Google AI Studio (Sandbox Fixture)",
                 tasksExecuted = listOf("Team Leadership", "Requirements Analysis", "Code Review", "Debate Consensus", "Root Cause Analysis"),
                 successCount = 14,
                 failureCount = 0,
                 totalTokens = 4280,
                 costUsd = 0.0,
-                isFree = true,
-                apiKeyMasked = "AIzaSy...7x9Q"
+                isFree = false,
+                apiKeyMasked = "[SANDBOX_KEY_FIXTURE]"
             ),
             ContactedModelSummary(
                 modelId = "openrouter/free",
-                modelName = "OpenRouter Auto Free",
-                providerId = "openrouter",
-                providerName = "OpenRouter API Hub",
+                modelName = "OpenRouter Auto Free [Sandbox Demo]",
+                providerId = "sandbox-openrouter",
+                providerName = "OpenRouter API Hub (Sandbox Fixture)",
                 tasksExecuted = listOf("Code Authoring", "Parallel Developer Task", "Code Patch Generation", "Unit Test Fix"),
                 successCount = 9,
                 failureCount = 0,
                 totalTokens = 3120,
                 costUsd = 0.0,
                 isFree = true,
-                apiKeyMasked = "sk-or-v1...3bF2"
-            ),
-            ContactedModelSummary(
-                modelId = "huggingface/deepseek",
-                modelName = "HuggingFace Open Model",
-                providerId = "huggingface",
-                providerName = "Hugging Face Inference",
-                tasksExecuted = listOf("Debate Rebuttal", "Syntax Verification"),
-                successCount = 3,
-                failureCount = 0,
-                totalTokens = 980,
-                costUsd = 0.0,
-                isFree = true,
-                apiKeyMasked = "hf_...98K1"
+                apiKeyMasked = "[SANDBOX_KEY_FIXTURE]"
             )
         )
 
         val conflicts = listOf(
             ModelConflictItem(
-                topic = "استراتيجية إدارة التزامن وقواعد البيانات",
-                modelA = "gemini-1.5-flash",
+                topic = "استراتيجية إدارة التزامن وقواعد البيانات (مثال تجريبي)",
+                modelA = "sandbox/gemini-3.8-flash",
                 modelB = "openrouter/free (DeepSeek)",
                 claimA = "استخدام Room Database مع تدفق StateFlow فقط لتبسيط المعمارية",
                 claimB = "إضافة DataStore للتفضيلات الخفيفة مع Room لتقليل overhead قراءة الجداول",
                 resolution = "اعتماد الجمع بين الاثنين: Room للبيانات العلائقية و DataStore للإعدادات الخفيفة",
-                resolvedBy = "قائد الفريق (Gemini Leader)"
+                resolvedBy = "قائد الفريق (Sandbox Leader)"
             )
         )
 
@@ -1048,7 +1036,7 @@ class TeamValidationEngineImpl(
             totalDurationMs = totalDuration,
             modelsContacted = contactedModels,
             conflictsDetected = conflicts,
-            rateLimitsObserved = listOf("No rate limits violated during test run; Exponential backoff validated on mock 429"),
+            rateLimitsObserved = listOf("Sandbox fixture: simulated 429 exponential backoff verification (not live provider traffic)"),
             totalActualCostUsd = 0.0,
             isFreeOnlyProtected = true,
             userKeyIsolationVerified = true,
@@ -1065,17 +1053,19 @@ class TeamValidationEngineImpl(
         return """
             # تقرير التحقق الشامل لنظام فرق نماذج الذكاء الاصطناعي (AI Model Teams E2E Validation)
             
+            > **تنبيه عزل البيانات (SANDBOX DEMO):** بيانات النماذج، أعداد التوكنز، وسجلات التكلفة المعروضة أدناه هي **عينات تحقق مخبرية معزولة** ولا تمثل فواتير أو استهلاكًا فعليًا من حسابات المزودين الحية.
+            
             **تاريخ الفحص:** $dateStr  
-            **الحالة الإجمالية:** ${if (report.failedCount == 0) "✅ تم التحقق والاعتماد بنجاح (All Passed)" else "⚠️ يوجد اختبارات تحتاج مراجعة"}  
+            **الحالة الإجمالية:** ${if (report.failedCount == 0) "✅ اكتملت اختبارات المصفوفة المعزولة (All Passed)" else "⚠️ يوجد اختبارات تحتاج مراجعة"}  
             **إجمالي الاختبارات:** ${report.totalTests} | **الناجحة:** ${report.passedCount} | **الفاشلة:** ${report.failedCount} | **المتخطاة:** ${report.skippedCount}  
             **الزمن الإجمالي للتنفيذ:** ${report.totalDurationMs} ms  
-            **التكلفة الفعلية:** $${String.format(java.util.Locale.US, "%.2f", report.totalActualCostUsd)} (وضع Free Only مفعل ومحمي 100%)  
+            **تكلفة المحاكاة (Sandbox Fixture):** $${String.format(java.util.Locale.US, "%.2f", report.totalActualCostUsd)} (وضع Free Only مفعل ومحمي)  
             
             ---
             
-            ## 1. النماذج التي تم الاتصال بها فعليًا (Contacted Models)
+            ## 1. نماذج بيئة التحقق المعزولة (Sandbox Demo Fixtures)
             
-            | النموذج | المزود | المفتاح المشفر | المهام المنفذة | الطلبات الناجحة | التوكنز | التكلفة |
+            | النموذج | المزود | معرّف العينة | المهام المنفذة | الطلبات الناجحة | التوكنز (تقدير مخبري) | التكلفة (عينة) |
             |---|---|---|---|---|---|---|
             ${report.modelsContacted.joinToString("\n") { m ->
                 "| **${m.modelName}** | ${m.providerName} | `${m.apiKeyMasked}` | ${m.tasksExecuted.joinToString(", ")} | ${m.successCount}/${m.successCount + m.failureCount} | ${m.totalTokens} | $${String.format(java.util.Locale.US, "%.2f", m.costUsd)} |"
@@ -1143,9 +1133,9 @@ class TeamValidationEngineImpl(
             
             ---
             
-            ## 6. الخلاصة والاعتماد الهندسي
+            ## 6. خلاصة التحقق المخبري
             
-            تم إثبات تعاون النماذج الفعلي وانتقال البيانات بينها، مع الامتثال الكامل لسياسات الأمان والتكلفة الصفرية وعزل البيانات. النظام جاهز للتشغيل والإنتاج.
+            اكتملت اختبارات مصفوفة التحقق المعزولة بنجاح، مع تطبيق سياسات حماية Free Only وعزل مفاتيح المستخدمين. هذا التقرير خاص ببيئة التحقق المعزولة ولا يغني عن اختبار المفاتيح الحية على جهاز فعلي.
         """.trimIndent()
     }
 }

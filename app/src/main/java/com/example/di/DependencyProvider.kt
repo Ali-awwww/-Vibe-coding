@@ -11,6 +11,7 @@ import com.example.domain.repository.CrashRepository
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.remote.supabase.SupabaseAuthApi
+import com.example.data.remote.supabase.SupabaseConfig
 import com.example.data.remote.supabase.SupabasePostgrestApi
 import com.example.data.remote.supabase.SupabaseProjectDataSource
 import com.example.data.remote.supabase.SupabaseSessionStore
@@ -98,8 +99,10 @@ object DependencyProvider {
         .addConverterFactory(MoshiConverterFactory.create())
         .build()
 
+    private val supabaseBaseUrl = SupabaseConfig.normalizeBaseUrl(BuildConfig.SUPABASE_URL)
+
     private val supabaseRetrofit = Retrofit.Builder()
-        .baseUrl(BuildConfig.SUPABASE_URL.trimEnd('/') + "/")
+        .baseUrl(supabaseBaseUrl)
         .addConverterFactory(MoshiConverterFactory.create())
         .build()
 
@@ -169,7 +172,11 @@ object DependencyProvider {
             aiModelRepository = provideAIModelRepository(context),
             auth = getFirebaseAuth(context),
             authRepository = provideAuthRepository(context),
-            supabaseProjectDataSource = provideSupabaseProjectDataSource(context)
+            supabaseProjectDataSource = if (SupabaseConfig.isConfigured()) {
+                provideSupabaseProjectDataSource(context)
+            } else {
+                null
+            }
         ).also { crashRepository = it }
     }
 

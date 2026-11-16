@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 data class AIModelsUiState(
+    val isAuthenticated: Boolean = false,
     val providers: List<AIProvider> = emptyList(),
     val models: List<AIModel> = emptyList(),
     val selectedProvider: AIProvider? = null,
@@ -46,7 +47,7 @@ class AIModelsViewModel(
                 .distinctUntilChangedBy { it?.id }
                 .flatMapLatest { user ->
                     if (user == null) {
-                        flowOf(AIModelsUiState())
+                        flowOf(AIModelsUiState(isAuthenticated = false))
                     } else {
                         refreshTrigger.flatMapLatest {
                             val userId = user.id
@@ -65,6 +66,7 @@ class AIModelsViewModel(
                                     ?.takeIf { savedId -> models.any { it.id == savedId } }
                                     ?: models.firstOrNull { it.isFree }?.id
                                 AIModelsUiState(
+                                    isAuthenticated = true,
                                     providers = providers,
                                     models = models,
                                     recentLogs = logs,
@@ -77,8 +79,8 @@ class AIModelsViewModel(
                                     lastSuccessAt = logs.firstOrNull { it.isSuccess }?.timestamp
                                 )
                             }
-                                .onStart { emit(AIModelsUiState(isLoading = true)) }
-                                .catch { emit(AIModelsUiState(isLoadError = true, error = LOAD_ERROR)) }
+                                .onStart { emit(AIModelsUiState(isAuthenticated = true, isLoading = true)) }
+                                .catch { emit(AIModelsUiState(isAuthenticated = true, isLoadError = true, error = LOAD_ERROR)) }
 
                             combine(source, activeOperations) { state, count ->
                                 state.copy(isLoading = state.isLoading || count > 0)
@@ -106,7 +108,7 @@ class AIModelsViewModel(
     }
 
     fun addProvider(name: String, type: AIProviderType, apiKey: String, baseUrl: String? = null) {
-        val userId = currentUserId() ?: return
+        val userId = requireAuthenticatedUserId() ?: return
         val normalizedName = name.trim()
         val normalizedKey = apiKey.trim()
         if (normalizedName.isEmpty() || normalizedKey.isEmpty()) {
@@ -139,7 +141,7 @@ class AIModelsViewModel(
     }
 
     fun deleteProvider(providerId: String) {
-        val userId = currentUserId() ?: return
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             runOperation(userId, "تم حذف المزود ونماذجه.", "تعذر حذف المزود. أعد المحاولة.") {
                 aiModelRepository.deleteProvider(userId, providerId)
@@ -148,7 +150,7 @@ class AIModelsViewModel(
     }
 
     fun syncModels(providerId: String) {
-        val userId = currentUserId() ?: return
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             runOperation(userId, "تم تحديث قائمة النماذج.", "تعذر تحديث النماذج. تحقق من اتصال المزود.") {
                 val result = aiModelRepository.syncModels(userId, providerId)
@@ -161,7 +163,7 @@ class AIModelsViewModel(
     }
 
     fun testConnection(providerId: String) {
-        val userId = currentUserId() ?: return
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             runOperation(userId, "نجح اختبار الاتصال الفعلي بالمزود.", "تعذر اختبار اتصال المزود. تحقق من المفتاح والاتصال.") {
                 val result = aiModelRepository.testConnection(userId, providerId)
@@ -177,7 +179,7 @@ class AIModelsViewModel(
     }
 
     fun setDefaultModel(modelId: String) {
-        val userId = currentUserId() ?: return
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             runOperation(userId, "تم حفظ النموذج الافتراضي.", "تعذر حفظ النموذج الافتراضي.") {
                 aiModelRepository.setDefaultModel(userId, modelId)
@@ -186,7 +188,7 @@ class AIModelsViewModel(
     }
 
     fun toggleFreeOnly(freeOnly: Boolean) {
-        val userId = currentUserId() ?: return
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             runOperation(userId, "تم تحديث إعداد النماذج المجانية.", "تعذر حفظ إعداد النماذج المجانية.") {
                 val current = aiModelRepository.getUserSettings(userId).first()
@@ -201,7 +203,7 @@ class AIModelsViewModel(
     }
 
     fun toggleAutoSelect(autoSelect: Boolean) {
-        val userId = currentUserId() ?: return
+        val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
             runOperation(userId, "تم تحديث إعداد الاختيار الذكي.", "تعذر حفظ إعداد الاختيار الذكي.") {
                 val current = aiModelRepository.getUserSettings(userId).first()
@@ -222,6 +224,13 @@ class AIModelsViewModel(
     fun clearError() = clearFeedback()
 
     private fun currentUserId(): String? = currentUser.value?.id?.takeIf { it.isNotBlank() }
+    private fun requireAuthenticatedUserId(): String? {
+        val userId = currentUserId()
+        if (userId == null) {
+            _uiState.update { it.copy(error = AUTH_REQUIRED_ERROR, message = null) }
+        }
+        return userId
+    }
     private fun isCurrentUser(userId: String): Boolean = currentUserId() == userId
 
     private suspend fun markProviderFailure(userId: String, providerId: String, failure: Throwable?) {
@@ -281,5 +290,6 @@ class AIModelsViewModel(
     private companion object {
         const val LOAD_ERROR = "تعذر تحميل إعدادات مزودي الذكاء الاصطناعي."
         const val INPUT_ERROR = "أدخل اسم المزود ومفتاح API."
+        const val AUTH_REQUIRED_ERROR = "يرجى تسجيل الدخول لإدارة مزودي الذكاء الاصطناعي."
     }
 }

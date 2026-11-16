@@ -410,7 +410,8 @@ class AIModelRepositoryImpl(
                 }
                 AITaskType.VIBE_AGENT_PLANNING, AITaskType.ROOT_CAUSE_DIAGNOSIS -> {
                     if (model.capabilities.contains(AICapability.REASONING)) score += 12
-                    if (model.apiId.contains("gemini-1.5-flash", ignoreCase = true)) score += 8
+                    if (model.apiId.contains(GeminiModelCatalog.CONNECTION_MODEL_ID, ignoreCase = true)) score += 8
+                    if (model.apiId.contains("gemini-3.5-flash-lite", ignoreCase = true)) score += 5
                 }
                 AITaskType.VIBE_AGENT_REVIEW -> {
                     if (model.capabilities.contains(AICapability.REASONING)) score += 10
