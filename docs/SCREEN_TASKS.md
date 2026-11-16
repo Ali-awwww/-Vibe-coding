@@ -1915,3 +1915,30 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - **Next step:** Await user command to run compilation and test validation (`gradle :app:testDebugUnitTest`), or proceed with remaining collaboration screens (`TeamDetail`, `TeamUsage`, `TeamValidation`).
 
 
+
+## 2026-11-17 — TeamDetail lifecycle, mutation integrity and recovery states
+
+### Confirmed defects and implementation
+- TeamDetail previously treated failed repository Result values as successful writes, so governance/member UI could claim a change that was not persisted.
+- Team and execution collectors had no error boundary and did not clear state on sign-out or account switch.
+- Estimation and execution failures could escape the ViewModel without user feedback; concurrent calls were not guarded.
+- Reworked TeamDetailViewModel to scope its stream to the authenticated account, clear/cancel user-scoped work on sign-out/account change, preserve state on failed writes, validate task prompts, expose loading/mutation flags and map low-level failures to safe user messages.
+- Updated TeamDetailScreen with explicit loading, signed-out, unavailable and retry states, Vibe design tokens, stable list keys, empty-member guidance and estimation progress.
+
+### Files and commits
+- app/src/main/java/com/example/presentation/viewmodel/TeamDetailViewModel.kt
+- app/src/main/java/com/example/presentation/ui/screens/TeamDetailScreen.kt
+- app/src/test/java/com/example/presentation/viewmodel/TeamDetailViewModelTest.kt
+- app/src/test/java/com/example/presentation/ui/screens/TeamDetailScreenTest.kt
+- Implementation commits: 692eb7769f2a5029de4e31e1fcd13f8046466ade and 983a780f915128b1b28041b53d510a6572d84643.
+
+### Verification
+- Added seven ViewModel regression tests covering signed-out isolation, sign-out clearing, governance write failure/success, member write failure/success, estimation/execution errors, cancellation during sign-out, and invalid team IDs.
+- Added two Robolectric Compose tests for the unavailable/retry and signed-out states.
+- GitHub Actions for the latest code commits are still running/queued; no Gradle, test, lint or APK result for the final commit is recorded yet.
+- No emulator/device screenshots, rendered RTL/LTR review or live team-backend/RLS validation are claimed.
+- TeamDetail still uses the existing Firebase/local team repository path; Supabase team persistence is not claimed.
+
+### Continuity
+- TeamDetail remains OPEN until final CI passes and rendered device verification is completed.
+- Exact next step: inspect the three push-triggered workflows for the final HEAD and fix any reported failures. Then continue TeamUsage telemetry correctness; missing usage telemetry must remain unavailable rather than being rendered as zero.

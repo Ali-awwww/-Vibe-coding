@@ -220,7 +220,7 @@ fun TeamDetailScreen(navController: NavController, teamId: String) {
 
 
 @Composable
-private fun TeamDetailStatePanel(
+internal fun TeamDetailStatePanel(
     title: String,
     message: String,
     onRetry: (() -> Unit)?

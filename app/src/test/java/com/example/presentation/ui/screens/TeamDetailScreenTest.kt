@@ -1,0 +1,60 @@
+package com.example.presentation.ui.screens
+
+import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.junit4.createComposeRule
+import com.example.ui.theme.CrashIntelligenceTheme
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
+class TeamDetailScreenTest {
+
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Test
+    fun unavailableTeamStateShowsRetryAndInvokesIt() {
+        var retryCount = 0
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                TeamDetailStatePanel(
+                    title = "الفريق غير متاح",
+                    message = "تعذر تحميل بيانات الفريق.",
+                    onRetry = { retryCount++ }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("team_detail_unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText("تعذر تحميل بيانات الفريق.").assertIsDisplayed()
+        composeRule.onNodeWithText("إعادة المحاولة").performClick()
+
+        assertEquals(1, retryCount)
+    }
+
+    @Test
+    fun signedOutTeamStateDoesNotOfferRetryAction() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                TeamDetailStatePanel(
+                    title = "يلزم تسجيل الدخول",
+                    message = "يجب تسجيل الدخول بحساب صالح لعرض الفريق أو تعديله.",
+                    onRetry = null
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("team_detail_unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText("يلزم تسجيل الدخول").assertIsDisplayed()
+        composeRule.onNodeWithText("إعادة المحاولة").assertDoesNotExist()
+    }
+}
