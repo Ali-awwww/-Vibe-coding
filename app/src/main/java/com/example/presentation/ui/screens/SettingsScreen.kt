@@ -38,7 +38,6 @@ fun SettingsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val currentUser by viewModel.currentUser.collectAsState()
-    var showPasswordChangeDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showSandboxDialog by remember { mutableStateOf(false) }
     var sandboxLoadedMessage by remember { mutableStateOf<String?>(null) }
@@ -126,10 +125,22 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.outline
                         )
 
-                        TextButton(onClick = { showPasswordChangeDialog = true }) {
-                            Icon(Icons.Default.LockReset, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("تغيير كلمة المرور")
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(Icons.Default.VerifiedUser, null, modifier = Modifier.size(14.dp))
+                                Text(
+                                    "Google / Firebase",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
@@ -269,73 +280,6 @@ fun SettingsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showSandboxDialog = false }) {
-                        Text("إلغاء")
-                    }
-                }
-            )
-        }
-
-        // Password change dialog
-        if (showPasswordChangeDialog && currentUser != null) {
-            var newPass by remember { mutableStateOf("") }
-            var confirmNewPass by remember { mutableStateOf("") }
-            var errorMsg by remember { mutableStateOf<String?>(null) }
-
-            AlertDialog(
-                onDismissRequest = { showPasswordChangeDialog = false },
-                title = { Text("تغيير كلمة المرور") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        errorMsg?.let {
-                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                        }
-                        OutlinedTextField(
-                            value = newPass,
-                            onValueChange = {
-                                newPass = it
-                                errorMsg = null
-                            },
-                            label = { Text("كلمة المرور الجديدة") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = confirmNewPass,
-                            onValueChange = {
-                                confirmNewPass = it
-                                errorMsg = null
-                            },
-                            label = { Text("تأكيد كلمة المرور") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (newPass.length < 6) {
-                                errorMsg = "كلمة المرور يجب أن لا تقل عن 6 أحرف"
-                                return@Button
-                            }
-                            if (newPass != confirmNewPass) {
-                                errorMsg = "كلمات المرور غير متطابقة"
-                                return@Button
-                            }
-                            viewModel.resetPassword(currentUser!!.email, newPass) { success ->
-                                if (success) {
-                                    showPasswordChangeDialog = false
-                                } else {
-                                    errorMsg = "حدث خطأ أثناء التحديث"
-                                }
-                            }
-                        }
-                    ) {
-                        Text("تحديث")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showPasswordChangeDialog = false }) {
                         Text("إلغاء")
                     }
                 }

@@ -3,6 +3,7 @@ package com.example.domain.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
+import com.google.firebase.firestore.PropertyName
 import java.util.Date
 
 @Entity(tableName = "projects")
@@ -41,6 +42,7 @@ data class CrashReport(
     val osVersion: String = "",
     val appVersion: String = "",
     val timestamp: Long = System.currentTimeMillis(),
+    @get:PropertyName("isResolved") @field:PropertyName("isResolved")
     val isResolved: Boolean = false,
     val severity: Severity = Severity.MEDIUM,
     val userId: String = "",
@@ -184,7 +186,7 @@ data class AIProvider(
 )
 
 enum class AIProviderType {
-    GOOGLE_GEMINI, OPEN_ROUTER, HUGGING_FACE, CUSTOM
+    GOOGLE_GEMINI, OPEN_ROUTER, HUGGING_FACE, CUSTOM, FIREBASE_AI_LOGIC
 }
 
 enum class AIProviderStatus {
@@ -535,6 +537,7 @@ data class SystemNotification(
     val message: String = "",
     val type: NotificationType = NotificationType.CRASH_ALERT,
     val targetCrashId: String? = null,
+    @get:PropertyName("isRead") @field:PropertyName("isRead")
     val isRead: Boolean = false,
     val timestamp: Long = System.currentTimeMillis()
 )

@@ -3,40 +3,30 @@ package com.example.util
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.example.R
+import com.example.BuildConfig
 import com.google.firebase.FirebaseApp
-import com.google.firebase.FirebaseOptions
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
+import com.google.firebase.appcheck.recaptcha.RecaptchaAppCheckProviderFactory
 
-private const val TAG = "FirebaseInit"
+private const val TAG = "AppCheckInit"
+
+private const val DEBUG_TOKEN_EXTRA = "FIREBASE_APPCHECK_DEBUG_TOKEN"
+private const val DEBUG_STORE_PREFIX = "com.google.firebase.appcheck.debug.store."
+private const val DEBUG_SECRET_KEY = "com.google.firebase.appcheck.debug.DEBUG_SECRET"
+private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
 
 fun ensureFirebaseInitialized(context: Context): FirebaseApp? {
     return try {
         if (FirebaseApp.getApps(context).isNotEmpty()) {
             FirebaseApp.getInstance()
         } else {
-            // First attempt: initialize from auto-generated Android resources
-            val defaultApp = try {
-                FirebaseApp.initializeApp(context)
-            } catch (_: Throwable) {
-                null
-            }
-            if (defaultApp != null) {
+            FirebaseApp.initializeApp(context)?.also {
                 Log.d(TAG, "FirebaseApp initialized from system resources.")
-                defaultApp
-            } else {
-                // Second attempt: programmatic options fallback to prevent uninitialized exceptions
-                val options = FirebaseOptions.Builder()
-                    .setApplicationId("1:1234567890:android:remixedappid")
-                    .setApiKey("remixed-api-key")
-                    .setProjectId("remixed-project-id")
-                    .build()
-                val app = FirebaseApp.initializeApp(context, options)
-                Log.d(TAG, "FirebaseApp initialized with fallback options.")
-                app
             }
         }
     } catch (e: Throwable) {
-        Log.w(TAG, "Firebase initialization warning: proceeding in resilient local mode", e)
+        Log.w(TAG, "Firebase initialization warning: ${e.message}", e)
         null
     }
 }
@@ -44,13 +34,63 @@ fun ensureFirebaseInitialized(context: Context): FirebaseApp? {
 fun isFirebaseConfigured(context: Context): Boolean {
     val app = ensureFirebaseInitialized(context) ?: return false
     val projectId = app.options.projectId
-    return !projectId.isNullOrBlank() && projectId != "remixed-project-id" && projectId != "placeholder"
+    return !projectId.isNullOrBlank() &&
+        projectId != "remixed-project-id" &&
+        projectId != "placeholder"
 }
 
 fun configureAppCheck(context: Context, intent: Intent?) {
     try {
-        ensureFirebaseInitialized(context)
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        val app = FirebaseApp.getApps(context).firstOrNull() ?: run {
+            Log.e(TAG, "FirebaseApp is not configured; skipping App Check installation.")
+            return
+        }
+
+        if (BuildConfig.DEBUG) {
+            val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA)
+            if (!debugToken.isNullOrEmpty()) {
+                val persistenceKey = app.persistenceKey
+                val prefs = context.getSharedPreferences(
+                    "$DEBUG_STORE_PREFIX$persistenceKey",
+                    Context.MODE_PRIVATE
+                )
+                // Synchronously commit before DebugAppCheckProviderFactory reads the secret.
+                prefs.edit()
+                    .putString(DEBUG_SECRET_KEY, debugToken)
+                    .commit()
+                Log.d(TAG, "App Check debug secret configured successfully.")
+            } else {
+                Log.w(TAG, "No debug token found in Intent extra.")
+            }
+
+            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                DebugAppCheckProviderFactory.getInstance()
+            )
+            Log.d(TAG, "DebugAppCheckProviderFactory installed.")
+        } else {
+            val resId = context.resources.getIdentifier(
+                RECAPTCHA_SITE_KEY_RES,
+                "string",
+                context.packageName
+            )
+            if (resId != 0) {
+                val siteKey = context.getString(resId)
+                if (siteKey.isNotBlank()) {
+                    FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                        RecaptchaAppCheckProviderFactory.getInstance(siteKey)
+                    )
+                    Log.d(TAG, "RecaptchaAppCheckProviderFactory installed.")
+                } else {
+                    Log.e(TAG, "recaptcha_site_key resource string is blank.")
+                }
+            } else {
+                Log.e(TAG, "recaptcha_site_key string resource not found in package.")
+            }
+        }
     } catch (e: Exception) {
-        Log.e(TAG, "Failed to initialize FirebaseApp", e)
+        Log.e(TAG, "Failed to initialize Firebase App Check", e)
     }
 }

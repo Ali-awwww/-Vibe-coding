@@ -17,8 +17,8 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    enableEdgeToEdge()
     com.example.util.configureAppCheck(this, intent)
+    enableEdgeToEdge()
     passwordRecoveryLink.value = intent?.dataString
 
     setContent {

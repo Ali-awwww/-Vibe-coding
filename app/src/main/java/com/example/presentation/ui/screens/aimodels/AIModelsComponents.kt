@@ -378,7 +378,7 @@ internal fun AICostSettingsCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "قد تُحاسب حسابات Google المدفوعة على استخدام Gemini؛ لذلك تُستبعد نماذجه من وضع المجاني المضمون.",
+                        text = "نماذج Firebase AI المدمجة مجانية عبر المنصة، بينما قد تُحاسب مفاتيح Google AI Studio الشخصية (BYOK) لذلك تُستبعد من وضع المجاني المضمون.",
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeDesignTokens.Color.TextPrimary.copy(alpha = 0.9f)
                     )
@@ -672,8 +672,10 @@ internal fun AIProviderCard(
     onDelete: (String) -> Unit,
     isLoading: Boolean
 ) {
+    val isBuiltInPlatform = provider.type == AIProviderType.FIREBASE_AI_LOGIC
     val isSupported = provider.type == AIProviderType.GOOGLE_GEMINI ||
-        provider.type == AIProviderType.OPEN_ROUTER
+        provider.type == AIProviderType.OPEN_ROUTER ||
+        isBuiltInPlatform
     val displayedStatus = if (isSupported) provider.status else AIProviderStatus.UNSUPPORTED
     val maskedKey = remember(provider.apiKey) {
         val raw = provider.apiKey ?: ""
@@ -713,6 +715,7 @@ internal fun AIProviderCard(
                 ) {
                     Icon(
                         imageVector = when (provider.type) {
+                            AIProviderType.FIREBASE_AI_LOGIC -> Icons.Default.Bolt
                             AIProviderType.GOOGLE_GEMINI -> Icons.Default.AutoAwesome
                             AIProviderType.OPEN_ROUTER -> Icons.Default.Hub
                             else -> Icons.Default.CloudQueue
@@ -750,7 +753,11 @@ internal fun AIProviderCard(
                 border = BorderStroke(1.dp, VibeDesignTokens.Color.Grid)
             ) {
                 Text(
-                    text = "API Key: $maskedKey",
+                    text = if (isBuiltInPlatform) {
+                        "مدمج عبر المنصة • Firebase AI Logic + App Check"
+                    } else {
+                        "API Key: $maskedKey"
+                    },
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = JetBrainsMono,
@@ -825,20 +832,22 @@ internal fun AIProviderCard(
                     Text("تحديث")
                 }
 
-                Spacer(Modifier.weight(1f))
+                if (!isBuiltInPlatform) {
+                    Spacer(Modifier.weight(1f))
 
-                IconButton(
-                    onClick = { onDelete(provider.id) },
-                    enabled = !isLoading,
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .testTag("ai_provider_delete_${provider.id}")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "حذف المزود ${provider.name}",
-                        tint = VibeDesignTokens.Color.Error
-                    )
+                    IconButton(
+                        onClick = { onDelete(provider.id) },
+                        enabled = !isLoading,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("ai_provider_delete_${provider.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "حذف المزود ${provider.name}",
+                            tint = VibeDesignTokens.Color.Error
+                        )
+                    }
                 }
             }
         }

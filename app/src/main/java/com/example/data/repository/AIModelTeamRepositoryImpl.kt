@@ -7,15 +7,17 @@ import com.example.di.DependencyProvider
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelTeamRepository
 import com.example.domain.repository.AuthRepository
+import com.example.util.OperationType
+import com.example.util.handleFirestoreError
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
 import com.google.firebase.firestore.toObject
-import com.google.firebase.firestore.toObjects
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -54,7 +56,7 @@ class AIModelTeamRepositoryImpl(
                 null
             }
             if (dbId.isNullOrBlank()) {
-                FirebaseFirestore.getInstance()
+                null
             } else {
                 FirebaseFirestore.getInstance(dbId)
             }
@@ -90,6 +92,7 @@ class AIModelTeamRepositoryImpl(
         val uid = resolveAuthenticatedUserId(userId)
         val firestoreDb = db
         if (firestoreDb != null) {
+            val collectionPath = "users/$uid/model_teams"
             emitAll(
                 firestoreDb.collection("users").document(uid).collection("model_teams")
                     .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -101,6 +104,10 @@ class AIModelTeamRepositoryImpl(
                             withoutOwner + remoteTeams.associateBy { it.id }
                         }
                         remoteTeams
+                    }
+                    .catch { error ->
+                        handleFirestoreError(error, OperationType.LIST, collectionPath)
+                        throw error
                     }
             )
             return@flow
@@ -123,6 +130,7 @@ class AIModelTeamRepositoryImpl(
         }
 
         val firestoreDb = db ?: return null
+        val docPath = "users/$uid/model_teams/$teamId"
         return try {
             val remote = firestoreDb.collection("users").document(uid)
                 .collection("model_teams").document(teamId)
@@ -137,6 +145,9 @@ class AIModelTeamRepositoryImpl(
         } catch (e: CancellationException) {
             throw e
         } catch (e: SecurityException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.GET, docPath)
             throw e
         }
     }
@@ -210,6 +221,7 @@ class AIModelTeamRepositoryImpl(
         val uid = resolveAuthenticatedUserId()
         val firestoreDb = db
         if (firestoreDb != null) {
+            val collectionPath = "users/$uid/team_executions"
             emitAll(
                 firestoreDb.collection("users").document(uid).collection("team_executions")
                     .whereEqualTo("teamId", teamId)
@@ -221,6 +233,10 @@ class AIModelTeamRepositoryImpl(
                             current + remote.associateBy { it.id }
                         }
                         remote
+                    }
+                    .catch { error ->
+                        handleFirestoreError(error, OperationType.LIST, collectionPath)
+                        throw error
                     }
             )
             return@flow
@@ -243,6 +259,7 @@ class AIModelTeamRepositoryImpl(
         }
 
         val firestoreDb = db ?: return null
+        val docPath = "users/$uid/team_executions/$executionId"
         return try {
             val remote = firestoreDb.collection("users").document(uid)
                 .collection("team_executions").document(executionId)
@@ -257,6 +274,9 @@ class AIModelTeamRepositoryImpl(
         } catch (e: CancellationException) {
             throw e
         } catch (e: SecurityException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.GET, docPath)
             throw e
         }
     }

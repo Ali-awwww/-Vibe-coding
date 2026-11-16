@@ -1,5 +1,8 @@
 package com.example.presentation.viewmodel
 
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.UserAccount
@@ -9,8 +12,10 @@ import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.domain.repository.SupabaseHttpException
 import com.example.domain.repository.SupabaseUnconfiguredException
 import com.example.presentation.auth.PasswordRecoveryLinkResult
-import com.example.presentation.auth.parsePasswordRecoveryLink
 import com.example.presentation.auth.isVerifiedEmailConfirmationLink
+import com.example.presentation.auth.parsePasswordRecoveryLink
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.auth.FirebaseAuthException
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketException
@@ -40,6 +45,10 @@ enum class AuthUiMessage {
     PASSWORD_RECOVERY_FAILED,
     PASSWORD_UPDATE_FAILED,
     SUPABASE_NOT_CONFIGURED,
+    FIREBASE_NOT_CONFIGURED,
+    GOOGLE_SIGN_IN_CANCELLED,
+    GOOGLE_NO_CREDENTIAL,
+    GOOGLE_CREDENTIAL_UNAVAILABLE,
     NETWORK_UNAVAILABLE,
     NETWORK_DNS_FAILED,
     NETWORK_TIMEOUT,
@@ -94,6 +103,11 @@ class MainViewModel(
     private val _actionState = MutableStateFlow(AuthActionState())
     val actionState: StateFlow<AuthActionState> = _actionState.asStateFlow()
 
+    private val _networkSnapshot = MutableStateFlow(
+        runCatching { networkDiagnosticProvider() }.getOrDefault(AuthNetworkSnapshot())
+    )
+    val networkSnapshot: StateFlow<AuthNetworkSnapshot> = _networkSnapshot.asStateFlow()
+
     private val _passwordRecoveryState = MutableStateFlow(PasswordRecoveryUiState())
     val passwordRecoveryState: StateFlow<PasswordRecoveryUiState> = _passwordRecoveryState.asStateFlow()
     private var pendingPasswordRecovery: PasswordRecoveryCredentials? = null
@@ -101,20 +115,65 @@ class MainViewModel(
     private var passwordRecoveryLinkGeneration = 0L
     private var passwordRecoveryJob: Job? = null
 
+    fun refreshNetworkDiagnostics() {
+        _networkSnapshot.value = runCatching { networkDiagnosticProvider() }
+            .getOrDefault(AuthNetworkSnapshot())
+    }
+
+    fun setAuthLoading(loading: Boolean) {
+        if (loading) {
+            refreshNetworkDiagnostics()
+            _actionState.value = AuthActionState(isLoading = true)
+        } else {
+            _actionState.value = _actionState.value.copy(isLoading = false)
+        }
+    }
+
+    fun signInWithGoogleIdToken(idToken: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            _actionState.value = AuthActionState(isLoading = true)
+            val result = authRepository.signInWithGoogle(idToken)
+            if (result.isSuccess) {
+                _actionState.value = AuthActionState(
+                    isLoading = false,
+                    successMessage = AuthUiMessage.SIGN_IN_SUCCEEDED
+                )
+                onComplete(true)
+            } else {
+                _actionState.value = resolveFailureState(
+                    result.exceptionOrNull(),
+                    AuthUiMessage.SIGN_IN_FAILED
+                )
+                onComplete(false)
+            }
+        }
+    }
+
+    fun handleGoogleSignInFailure(error: Throwable, onComplete: (Boolean) -> Unit = {}) {
+        _actionState.value = resolveFailureState(error, AuthUiMessage.SIGN_IN_FAILED)
+        onComplete(false)
+    }
+
     private fun resolveFailureState(
         error: Throwable?,
         fallback: AuthUiMessage
     ): AuthActionState {
         if (error is CancellationException) throw error
         val snapshot = runCatching { networkDiagnosticProvider() }.getOrDefault(AuthNetworkSnapshot())
+        _networkSnapshot.value = snapshot
         val causeChain = collectCauseChain(error)
 
         val unconfigured = causeChain.filterIsInstance<SupabaseUnconfiguredException>().firstOrNull()
+        val credentialCancelled = causeChain.filterIsInstance<GetCredentialCancellationException>().firstOrNull()
+        val noCredential = causeChain.filterIsInstance<NoCredentialException>().firstOrNull()
         val dnsError = causeChain.filterIsInstance<UnknownHostException>().firstOrNull()
         val timeoutError = causeChain.filterIsInstance<SocketTimeoutException>().firstOrNull()
         val sslError = causeChain.filterIsInstance<SSLException>().firstOrNull()
         val connectionError = causeChain.firstOrNull { it is ConnectException || it is SocketException }
+        val firebaseNetworkError = causeChain.filterIsInstance<FirebaseNetworkException>().firstOrNull()
         val genericIoError = causeChain.filterIsInstance<IOException>().firstOrNull()
+        val credentialError = causeChain.filterIsInstance<GetCredentialException>().firstOrNull()
+        val firebaseAuthError = causeChain.filterIsInstance<FirebaseAuthException>().firstOrNull()
         val httpError = causeChain.filterIsInstance<SupabaseHttpException>().firstOrNull()
 
         val message: AuthUiMessage
@@ -126,6 +185,16 @@ class MainViewModel(
                 message = AuthUiMessage.SUPABASE_NOT_CONFIGURED
                 code = "SUPABASE_UNCONFIGURED"
                 reportedException = unconfigured
+            }
+            credentialCancelled != null -> {
+                message = AuthUiMessage.GOOGLE_SIGN_IN_CANCELLED
+                code = "GOOGLE_SIGN_IN_CANCELLED"
+                reportedException = credentialCancelled
+            }
+            noCredential != null -> {
+                message = AuthUiMessage.GOOGLE_NO_CREDENTIAL
+                code = "GOOGLE_NO_CREDENTIAL"
+                reportedException = noCredential
             }
             dnsError != null -> {
                 message = AuthUiMessage.NETWORK_DNS_FAILED
@@ -147,10 +216,33 @@ class MainViewModel(
                 code = "CONNECTION_FAILED"
                 reportedException = connectionError
             }
+            firebaseNetworkError != null -> {
+                message = if (snapshot.networkValidated == false) {
+                    AuthUiMessage.NETWORK_UNAVAILABLE
+                } else {
+                    AuthUiMessage.NETWORK_CONNECTION_FAILED
+                }
+                code = "FIREBASE_NETWORK_ERROR"
+                reportedException = firebaseNetworkError
+            }
             genericIoError != null -> {
                 message = AuthUiMessage.NETWORK_UNAVAILABLE
                 code = "NETWORK_IO_ERROR"
                 reportedException = genericIoError
+            }
+            credentialError != null -> {
+                message = AuthUiMessage.GOOGLE_CREDENTIAL_UNAVAILABLE
+                code = if (snapshot.vpnActive == true || snapshot.networkValidated == false) {
+                    "CREDENTIAL_MANAGER_NETWORK"
+                } else {
+                    "CREDENTIAL_MANAGER_ERROR"
+                }
+                reportedException = credentialError
+            }
+            firebaseAuthError != null -> {
+                message = fallback
+                code = "FIREBASE_${firebaseAuthError.errorCode}"
+                reportedException = firebaseAuthError
             }
             httpError != null -> {
                 message = fallback
@@ -195,8 +287,6 @@ class MainViewModel(
     }
 
     fun acceptPasswordRecoveryLink(rawLink: String) {
-        // A second link can arrive while the form is already in password-setup mode.
-        // A distinct generation makes that replacement observable to Compose.
         val linkGeneration = ++passwordRecoveryLinkGeneration
         if (isVerifiedEmailConfirmationLink(rawLink)) {
             invalidatePasswordRecoveryAttempt()
@@ -346,7 +436,6 @@ class MainViewModel(
             } else {
                 val failure = result.exceptionOrNull()
                 if (failure is EmailConfirmationRequiredException) {
-                    // Supabase accepted signup but did not issue a session; stay on auth screen.
                     _actionState.value = AuthActionState(
                         isLoading = false,
                         successMessage = AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED

@@ -153,7 +153,7 @@ internal fun AIModelsScreenContent(
                         }
                     } else {
                         item {
-                            VibeSectionHeader(title = "لوحة التحكم", badge = "BYOK")
+                            VibeSectionHeader(title = "لوحة التحكم", badge = "Firebase AI + BYOK")
                             Spacer(Modifier.height(10.dp))
                             AISettingsDashboard(uiState)
                         }
@@ -190,7 +190,7 @@ internal fun AIModelsScreenContent(
 
                         item {
                             VibeSectionHeader(
-                                title = "المزودون (BYOK)",
+                                title = "المزودون (المدمج + BYOK)",
                                 badge = "${uiState.providers.size}"
                             )
                             Spacer(Modifier.height(10.dp))

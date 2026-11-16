@@ -1,5 +1,8 @@
 package com.example.presentation.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -8,9 +11,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -19,33 +19,36 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
 import com.example.R
 import com.example.presentation.viewmodel.AuthDiagnosticInfo
 import com.example.presentation.viewmodel.AuthUiMessage
 import com.example.presentation.viewmodel.MainViewModel
 import com.example.ui.theme.JetBrainsMono
 import com.example.ui.theme.VibeDesignTokens
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 private val SpaceBackground = VibeDesignTokens.Color.SpaceBackground
 private val SpacePanel = VibeDesignTokens.Color.SpacePanel
@@ -84,6 +87,10 @@ private fun authMessageResource(message: AuthUiMessage): Int = when (message) {
     AuthUiMessage.PASSWORD_RECOVERY_FAILED -> R.string.auth_error_password_recovery
     AuthUiMessage.PASSWORD_UPDATE_FAILED -> R.string.auth_error_password_update
     AuthUiMessage.SUPABASE_NOT_CONFIGURED -> R.string.auth_error_supabase_unconfigured
+    AuthUiMessage.FIREBASE_NOT_CONFIGURED -> R.string.auth_error_firebase_unconfigured
+    AuthUiMessage.GOOGLE_SIGN_IN_CANCELLED -> R.string.auth_error_google_cancelled
+    AuthUiMessage.GOOGLE_NO_CREDENTIAL -> R.string.auth_error_google_no_credential
+    AuthUiMessage.GOOGLE_CREDENTIAL_UNAVAILABLE -> R.string.auth_error_google_unavailable
     AuthUiMessage.NETWORK_UNAVAILABLE -> R.string.auth_error_network
     AuthUiMessage.NETWORK_DNS_FAILED -> R.string.auth_error_network_dns
     AuthUiMessage.NETWORK_TIMEOUT -> R.string.auth_error_network_timeout
@@ -145,92 +152,109 @@ internal fun validateAuthForm(
     return null
 }
 
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+private fun resolveWebClientId(context: Context): String? {
+    val resId = context.resources.getIdentifier(
+        "default_web_client_id",
+        "string",
+        context.packageName
+    )
+    if (resId == 0) return null
+    return runCatching { context.getString(resId) }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() }
+}
+
 @Composable
 fun LoginScreen(
     viewModel: MainViewModel,
     onAuthSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val actionState by viewModel.actionState.collectAsState()
-    val passwordRecoveryState by viewModel.passwordRecoveryState.collectAsState()
-    var mode by remember { mutableStateOf(AuthMode.SIGN_IN) }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var displayName by remember { mutableStateOf("") }
-    var organization by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var validationError by remember { mutableStateOf<AuthFormValidationError?>(null) }
+    val networkSnapshot by viewModel.networkSnapshot.collectAsState()
 
-    val focusManager = LocalFocusManager.current
-    val displayNameFocusRequester = remember { FocusRequester() }
-    val organizationFocusRequester = remember { FocusRequester() }
-    val emailFocusRequester = remember { FocusRequester() }
-    val passwordFocusRequester = remember { FocusRequester() }
-    val confirmPasswordFocusRequester = remember { FocusRequester() }
-
-    LaunchedEffect(
-        passwordRecoveryState.isReadyForNewPassword,
-        passwordRecoveryState.linkGeneration
-    ) {
-        val nextMode = resolvePasswordRecoveryMode(
-            currentMode = mode,
-            isReadyForNewPassword = passwordRecoveryState.isReadyForNewPassword
-        )
-        if (passwordRecoveryState.isReadyForNewPassword) {
-            mode = nextMode
-            email = ""
-            password = ""
-            confirmPassword = ""
-            passwordVisible = false
-            validationError = null
-            viewModel.clearMessages()
-        } else if (mode == AuthMode.SET_NEW_PASSWORD) {
-            // A rejected/expired replacement link must not leave the form in a
-            // password-update mode after its one-time credentials were discarded.
-            mode = nextMode
-            password = ""
-            confirmPassword = ""
-            passwordVisible = false
-            validationError = null
-        }
-    }
-
-    val canSubmit = !actionState.isLoading
-
-    val emailError = validationError?.takeIf { it.field == AuthFormField.EMAIL }?.let { stringResource(it.messageRes) }
-    val passwordError = validationError?.takeIf { it.field == AuthFormField.PASSWORD }?.let { stringResource(it.messageRes) }
-    val displayNameError = validationError?.takeIf { it.field == AuthFormField.DISPLAY_NAME }?.let { stringResource(it.messageRes) }
-    val confirmPasswordError = validationError?.takeIf { it.field == AuthFormField.CONFIRM_PASSWORD }?.let { stringResource(it.messageRes) }
     val actionErrorMessage = actionState.errorMessage?.let(::authMessageResource)?.let { stringResource(it) }
     val actionSuccessMessage = actionState.successMessage?.let(::authMessageResource)?.let { stringResource(it) }
 
-    val submit: () -> Unit = {
-        if (!actionState.isLoading) {
-            val error = validateAuthForm(mode, email, password, displayName, confirmPassword)
-            validationError = error
-            if (error == null) {
-                focusManager.clearFocus()
-                when (mode) {
-                    AuthMode.SIGN_IN -> viewModel.signIn(email.trim(), password) { success ->
-                        if (success) onAuthSuccess()
-                    }
-                    AuthMode.SIGN_UP -> viewModel.signUp(
-                        email.trim(), password, displayName.trim(), organization.trim()
-                    ) { success ->
-                        if (success) onAuthSuccess()
-                    }
-                    AuthMode.RECOVER_PASSWORD -> viewModel.requestPasswordRecovery(email.trim())
-                    AuthMode.SET_NEW_PASSWORD -> viewModel.completePasswordRecovery(password) { success ->
-                        if (success) onAuthSuccess()
-                    }
+    LaunchedEffect(Unit) {
+        viewModel.refreshNetworkDiagnostics()
+        val webClientId = resolveWebClientId(context) ?: return@LaunchedEffect
+        val activityContext = context.findActivity() ?: context
+        try {
+            val googleIdOption = GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(true)
+                .setAutoSelectEnabled(true)
+                .setServerClientId(webClientId)
+                .build()
+            val request = GetCredentialRequest.Builder()
+                .addCredentialOption(googleIdOption)
+                .build()
+            val result = CredentialManager.create(activityContext)
+                .getCredential(request = request, context = activityContext)
+            val credential = result.credential
+            if (credential is CustomCredential &&
+                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+            ) {
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                viewModel.signInWithGoogleIdToken(googleIdTokenCredential.idToken) { success ->
+                    if (success) onAuthSuccess()
                 }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: GetCredentialException) {
+            // Silent auto sign-in found no eligible credential; allow manual tap cleanly.
+        } catch (_: Exception) {
+            // Do not surface noisy startup error before user triggers sign-in.
+        }
+    }
+
+    val launchGoogleSignIn: () -> Unit = {
+        if (!actionState.isLoading) {
+            val webClientId = resolveWebClientId(context)
+            if (webClientId == null) {
+                viewModel.handleGoogleSignInFailure(
+                    IllegalStateException("Firebase default_web_client_id is missing.")
+                )
             } else {
-                when (error.field) {
-                    AuthFormField.EMAIL -> emailFocusRequester.requestFocus()
-                    AuthFormField.PASSWORD -> passwordFocusRequester.requestFocus()
-                    AuthFormField.DISPLAY_NAME -> displayNameFocusRequester.requestFocus()
-                    AuthFormField.CONFIRM_PASSWORD -> confirmPasswordFocusRequester.requestFocus()
-                    AuthFormField.FORM -> focusManager.clearFocus()
+                val activityContext = context.findActivity() ?: context
+                viewModel.setAuthLoading(true)
+                coroutineScope.launch {
+                    try {
+                        val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(webClientId)
+                            .build()
+                        val request = GetCredentialRequest.Builder()
+                            .addCredentialOption(signInWithGoogleOption)
+                            .build()
+                        val result = CredentialManager.create(activityContext)
+                            .getCredential(request = request, context = activityContext)
+                        val credential = result.credential
+                        if (credential is CustomCredential &&
+                            credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                        ) {
+                            val googleIdTokenCredential =
+                                GoogleIdTokenCredential.createFrom(credential.data)
+                            viewModel.signInWithGoogleIdToken(googleIdTokenCredential.idToken) { success ->
+                                if (success) onAuthSuccess()
+                            }
+                        } else {
+                            viewModel.handleGoogleSignInFailure(
+                                IllegalStateException("Unexpected credential type: ${credential.type}")
+                            )
+                        }
+                    } catch (cancelled: CancellationException) {
+                        viewModel.setAuthLoading(false)
+                        throw cancelled
+                    } catch (e: Exception) {
+                        viewModel.handleGoogleSignInFailure(e)
+                    }
                 }
             }
         }
@@ -296,8 +320,7 @@ fun LoginScreen(
             Text(
                 text = stringResource(R.string.auth_brand_eyebrow),
                 style = MaterialTheme.typography.labelSmall,
-                color = CyberCyan,
-                letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified
+                color = CyberCyan
             )
             Spacer(Modifier.height(8.dp))
             Text(
@@ -357,14 +380,7 @@ fun LoginScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = stringResource(
-                                    when (mode) {
-                                        AuthMode.SIGN_IN -> R.string.auth_sign_in_title
-                                        AuthMode.SIGN_UP -> R.string.auth_sign_up_title
-                                        AuthMode.RECOVER_PASSWORD -> R.string.auth_recovery_title
-                                        AuthMode.SET_NEW_PASSWORD -> R.string.auth_new_password_title
-                                    }
-                                ),
+                                text = stringResource(R.string.auth_sign_in_title),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = VibeDesignTokens.Color.TextPrimary
@@ -390,9 +406,82 @@ fun LoginScreen(
                         }
                     }
 
-                    AnimatedVisibility(visible = validationError != null || actionErrorMessage != null) {
-                        val message = validationError?.let { stringResource(it.messageRes) } ?: actionErrorMessage.orEmpty()
-                        val diagnostic = if (validationError == null) actionState.diagnostic else null
+                    Text(
+                        text = stringResource(R.string.auth_google_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MutedText
+                    )
+
+                    val networkSummary = networkSnapshot.transportSummary
+                        ?.takeIf(String::isNotBlank)
+                        ?: stringResource(R.string.auth_diag_unknown)
+                    Surface(
+                        color = VibeDesignTokens.Color.SpaceBackground.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (networkSnapshot.vpnActive == true) {
+                                VibeDesignTokens.Color.Warning.copy(alpha = 0.65f)
+                            } else {
+                                CyberCyan.copy(alpha = 0.25f)
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("auth_network_status_strip")
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (networkSnapshot.vpnActive == true) Icons.Default.VpnKey else Icons.Default.Wifi,
+                                    contentDescription = null,
+                                    tint = if (networkSnapshot.vpnActive == true) {
+                                        VibeDesignTokens.Color.Warning
+                                    } else {
+                                        CyberCyan
+                                    },
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "${stringResource(R.string.auth_network_status_prefix)} $networkSummary",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = JetBrainsMono,
+                                    color = VibeDesignTokens.Color.TextPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { viewModel.refreshNetworkDiagnostics() },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .testTag("refresh_network_diagnostics_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = stringResource(R.string.auth_network_status_prefix),
+                                        tint = CyberCyan,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            if (networkSnapshot.vpnActive == true) {
+                                Text(
+                                    text = stringResource(R.string.auth_vpn_notice),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = VibeDesignTokens.Color.Warning
+                                )
+                            }
+                        }
+                    }
+
+                    AnimatedVisibility(visible = actionErrorMessage != null) {
+                        val diagnostic = actionState.diagnostic
                         Surface(
                             color = Color(0x33FF4565),
                             shape = RoundedCornerShape(10.dp),
@@ -413,7 +502,11 @@ fun LoginScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = Color(0xFFFF7189))
-                                    Text(message, color = Color(0xFFFFC1CC), style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        actionErrorMessage.orEmpty(),
+                                        color = Color(0xFFFFC1CC),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                 }
                                 if (diagnostic != null) {
                                     AuthDiagnosticPanel(diagnostic = diagnostic)
@@ -446,168 +539,13 @@ fun LoginScreen(
                         }
                     }
 
-                    if (mode == AuthMode.SIGN_UP) {
-                        CyberTextField(
-                            value = displayName,
-                            onValueChange = {
-                                displayName = it
-                                validationError = null
-                                viewModel.clearMessages()
-                            },
-                            label = stringResource(R.string.auth_developer_name),
-                            icon = Icons.Default.Person,
-                            focusRequester = displayNameFocusRequester,
-                            imeAction = ImeAction.Next,
-                            onNext = { organizationFocusRequester.requestFocus() },
-                            enabled = !actionState.isLoading,
-                            isError = displayNameError != null,
-                            errorMessage = displayNameError
-                        )
-                        CyberTextField(
-                            value = organization,
-                            onValueChange = {
-                                organization = it
-                                validationError = null
-                                viewModel.clearMessages()
-                            },
-                            label = stringResource(R.string.auth_organization_optional),
-                            icon = Icons.Default.Business,
-                            focusRequester = organizationFocusRequester,
-                            imeAction = ImeAction.Next,
-                            onNext = { emailFocusRequester.requestFocus() },
-                            enabled = !actionState.isLoading
-                        )
-                    }
-
-                    if (mode != AuthMode.SET_NEW_PASSWORD) CyberTextField(
-                        value = email,
-                        onValueChange = {
-                            email = it
-                            validationError = null
-                            viewModel.clearMessages()
-                        },
-                        label = stringResource(R.string.auth_email),
-                        icon = Icons.Default.Email,
-                        focusRequester = emailFocusRequester,
-                        keyboardType = KeyboardType.Email,
-                        imeAction = if (mode == AuthMode.RECOVER_PASSWORD) ImeAction.Done else ImeAction.Next,
-                        onNext = { passwordFocusRequester.requestFocus() },
-                        onDone = {
-                            if (shouldSubmitOnEmailIme(mode)) submit() else focusManager.clearFocus()
-                        },
-                        enabled = !actionState.isLoading,
-                        isError = emailError != null,
-                        errorMessage = emailError
-                    )
-
-                    if (mode == AuthMode.RECOVER_PASSWORD) {
-                        Text(
-                            text = stringResource(R.string.auth_recovery_instructions),
-                            color = MutedText,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    } else {
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = {
-                                password = it
-                                validationError = null
-                                viewModel.clearMessages()
-                            },
-                            enabled = !actionState.isLoading,
-                            isError = passwordError != null,
-                            supportingText = passwordError?.let { message -> { Text(message) } },
-                            label = {
-                                Text(
-                                    stringResource(
-                                        if (mode == AuthMode.SET_NEW_PASSWORD) {
-                                            R.string.auth_new_password
-                                        } else {
-                                            R.string.auth_password
-                                        }
-                                    )
-                                )
-                            },
-                            leadingIcon = { Icon(Icons.Default.Lock, null, tint = CyberCyan) },
-                            trailingIcon = {
-                                IconButton(
-                                    onClick = { passwordVisible = !passwordVisible },
-                                    enabled = !actionState.isLoading
-                                ) {
-                                    Icon(
-                                        if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = stringResource(
-                                            if (passwordVisible) R.string.auth_hide_password else R.string.auth_show_password
-                                        ),
-                                        tint = MutedText
-                                    )
-                                }
-                            },
-                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Password,
-                                imeAction = if (mode == AuthMode.SIGN_UP || mode == AuthMode.SET_NEW_PASSWORD) ImeAction.Next else ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onNext = { confirmPasswordFocusRequester.requestFocus() },
-                                onDone = { submit() }
-                            ),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                                .focusRequester(passwordFocusRequester)
-                                .semantics { passwordError?.let { error(it) } },
-                            shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
-                            colors = cyberFieldColors()
-                        )
-                    }
-
-                    if (mode == AuthMode.SIGN_UP || mode == AuthMode.SET_NEW_PASSWORD) {
-                        OutlinedTextField(
-                            value = confirmPassword,
-                            onValueChange = {
-                                confirmPassword = it
-                                validationError = null
-                                viewModel.clearMessages()
-                            },
-                            enabled = !actionState.isLoading,
-                            isError = confirmPasswordError != null,
-                            supportingText = confirmPasswordError?.let { message -> { Text(message) } },
-                            label = {
-                                Text(
-                                    stringResource(
-                                        if (mode == AuthMode.SET_NEW_PASSWORD) {
-                                            R.string.auth_confirm_new_password
-                                        } else {
-                                            R.string.auth_confirm_password
-                                        }
-                                    )
-                                )
-                            },
-                            leadingIcon = { Icon(Icons.Default.LockReset, null, tint = CyberCyan) },
-                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Password,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(onDone = { submit() }),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                                .focusRequester(confirmPasswordFocusRequester)
-                                .semantics { confirmPasswordError?.let { error(it) } },
-                            shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
-                            colors = cyberFieldColors()
-                        )
-                        Text(
-                            text = stringResource(R.string.auth_password_requirements),
-                            color = MutedText,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
                     Button(
-                        onClick = submit,
-                        enabled = canSubmit,
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        onClick = launchGoogleSignIn,
+                        enabled = !actionState.isLoading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .testTag("google_sign_in_button"),
                         shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = VibeDesignTokens.Color.Cyan,
@@ -632,68 +570,20 @@ fun LoginScreen(
                                 )
                             }
                         } else {
-                            Text(
-                                stringResource(
-                                    when (mode) {
-                                        AuthMode.SIGN_IN -> R.string.auth_submit_sign_in
-                                        AuthMode.SIGN_UP -> R.string.auth_submit_sign_up
-                                        AuthMode.RECOVER_PASSWORD -> R.string.auth_submit_recovery
-                                        AuthMode.SET_NEW_PASSWORD -> R.string.auth_submit_new_password
-                                    }
-                                ),
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountCircle,
+                                    contentDescription = null
+                                )
+                                Text(
+                                    stringResource(R.string.auth_google_sign_in),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                    }
-
-                    if (mode == AuthMode.SIGN_IN) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(
-                                onClick = {
-                                    mode = AuthMode.RECOVER_PASSWORD
-                                    password = ""
-                                    confirmPassword = ""
-                                    passwordVisible = false
-                                    validationError = null
-                                    viewModel.clearMessages()
-                                },
-                                enabled = !actionState.isLoading
-                            ) { Text(stringResource(R.string.auth_forgot_password), color = CyberCyan) }
-
-                            TextButton(
-                                onClick = {
-                                    mode = AuthMode.SIGN_UP
-                                    password = ""
-                                    confirmPassword = ""
-                                    passwordVisible = false
-                                    validationError = null
-                                    viewModel.clearMessages()
-                                },
-                                enabled = !actionState.isLoading
-                            ) { Text(stringResource(R.string.auth_create_account), color = CyberCyan, fontWeight = FontWeight.Bold) }
-                        }
-                    } else {
-                        TextButton(
-                            onClick = {
-                                if (mode == AuthMode.SET_NEW_PASSWORD) {
-                                    viewModel.cancelPasswordRecovery()
-                                    password = ""
-                                    passwordVisible = false
-                                }
-                                mode = AuthMode.SIGN_IN
-                                password = ""
-                                confirmPassword = ""
-                                passwordVisible = false
-                                validationError = null
-                                viewModel.clearMessages()
-                            },
-                            enabled = !actionState.isLoading,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) { Text(stringResource(R.string.auth_back_to_sign_in), color = CyberCyan) }
                     }
                 }
             }
@@ -855,56 +745,6 @@ private fun DiagnosticLine(label: String, value: String) {
         )
     }
 }
-
-@Composable
-private fun CyberTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    focusRequester: FocusRequester,
-    keyboardType: KeyboardType = KeyboardType.Text,
-    imeAction: ImeAction = ImeAction.Next,
-    onNext: (() -> Unit)? = null,
-    onDone: (() -> Unit)? = null,
-    enabled: Boolean = true,
-    isError: Boolean = false,
-    errorMessage: String? = null
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        enabled = enabled,
-        isError = isError,
-        supportingText = errorMessage?.let { message -> { Text(message) } },
-        label = { Text(label) },
-        leadingIcon = { Icon(icon, null, tint = CyberCyan) },
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
-        keyboardActions = KeyboardActions(
-            onNext = { onNext?.invoke() },
-            onDone = { onDone?.invoke() }
-        ),
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth()
-            .focusRequester(focusRequester)
-            .semantics { if (isError && errorMessage != null) error(errorMessage) },
-        shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
-        colors = cyberFieldColors()
-    )
-}
-
-@Composable
-private fun cyberFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = VibeDesignTokens.Color.TextPrimary,
-    unfocusedTextColor = VibeDesignTokens.Color.TextPrimary,
-    focusedContainerColor = VibeDesignTokens.Color.SpaceBackground,
-    unfocusedContainerColor = VibeDesignTokens.Color.SpaceBackground,
-    focusedBorderColor = VibeDesignTokens.Color.Cyan,
-    unfocusedBorderColor = Color(0xFF38536B),
-    focusedLabelColor = CyberCyan,
-    unfocusedLabelColor = MutedText,
-    cursorColor = VibeDesignTokens.Color.Cyan
-)
 
 @Composable
 private fun SpaceGridBackground(modifier: Modifier = Modifier) {

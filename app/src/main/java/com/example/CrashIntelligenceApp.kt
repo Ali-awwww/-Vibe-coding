@@ -6,7 +6,6 @@ class CrashIntelligenceApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        com.example.util.ensureFirebaseInitialized(this)
     }
 
     companion object {

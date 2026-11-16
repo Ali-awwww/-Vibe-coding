@@ -3,6 +3,9 @@ package com.example.data.repository
 import com.example.domain.model.AICapability
 import com.example.domain.model.AIModel
 import com.example.domain.model.AIModelCategory
+import com.example.domain.model.AIProvider
+import com.example.domain.model.AIProviderStatus
+import com.example.domain.model.AIProviderType
 
 internal object AIModelPricing {
     fun estimateCost(model: AIModel, inputTokens: Int, outputTokens: Int): Double {
@@ -62,6 +65,66 @@ internal object GeminiModelCatalog {
                 AICapability.AGENTIC
             ),
             category = AIModelCategory.GENERAL_PURPOSE
+        )
+    )
+}
+
+internal object FirebaseAiModelCatalog {
+    const val DEFAULT_MODEL_ID = "gemini-3.8-flash"
+    const val LITE_MODEL_ID = "gemini-3.5-flash-lite"
+
+    fun platformProviderId(userId: String): String = "firebase_ai_platform:$userId"
+
+    fun platformProvider(userId: String): AIProvider = AIProvider(
+        id = platformProviderId(userId),
+        userId = userId,
+        name = "Firebase AI Logic (Gemini)",
+        type = AIProviderType.FIREBASE_AI_LOGIC,
+        status = AIProviderStatus.CONNECTED,
+        apiKey = null,
+        baseUrl = null,
+        createdAt = 0L,
+        lastSyncAt = null
+    )
+
+    fun models(providerId: String): List<AIModel> = listOf(
+        AIModel(
+            id = "$providerId:$DEFAULT_MODEL_ID",
+            providerId = providerId,
+            apiId = DEFAULT_MODEL_ID,
+            name = "Gemini 3.8 Flash (Firebase AI)",
+            isFree = true,
+            contextWindow = 1_048_576,
+            inputPricePer1M = 0.0,
+            outputPricePer1M = 0.0,
+            capabilities = listOf(
+                AICapability.CODING,
+                AICapability.REASONING,
+                AICapability.LONG_CONTEXT,
+                AICapability.VISION,
+                AICapability.FUNCTION_CALLING,
+                AICapability.AGENTIC
+            ),
+            category = AIModelCategory.FREE
+        ),
+        AIModel(
+            id = "$providerId:$LITE_MODEL_ID",
+            providerId = providerId,
+            apiId = LITE_MODEL_ID,
+            name = "Gemini 3.5 Flash-Lite (Firebase AI)",
+            isFree = true,
+            contextWindow = 1_048_576,
+            inputPricePer1M = 0.0,
+            outputPricePer1M = 0.0,
+            capabilities = listOf(
+                AICapability.CODING,
+                AICapability.REASONING,
+                AICapability.LONG_CONTEXT,
+                AICapability.VISION,
+                AICapability.FUNCTION_CALLING,
+                AICapability.AGENTIC
+            ),
+            category = AIModelCategory.FREE
         )
     )
 }

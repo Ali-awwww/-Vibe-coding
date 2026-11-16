@@ -7,19 +7,19 @@ import com.example.data.remote.*
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.CrashRepository
+import com.example.util.OperationType
 import com.example.util.SecurityUtils
-import com.google.ai.client.generativeai.GenerativeModel
+import com.example.util.handleFirestoreError
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import java.security.MessageDigest
 import java.util.UUID
 
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
@@ -147,18 +147,32 @@ class CrashRepositoryImpl(
         }
 
         firestore?.let { fs ->
+            val projectPath = "users/$uid/projects/$id"
             val projectRef = fs.collection("users").document(uid).collection("projects").document(id)
-            projectRef.set(newProject).await()
+            try {
+                projectRef.set(newProject).await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.CREATE, projectPath)
+                throw e
+            }
 
             val auditRef = fs.collection("users").document(uid).collection("audit_logs").document()
-            auditRef.set(mapOf(
-                "id" to auditRef.id,
-                "projectId" to id,
-                "userId" to uid,
-                "action" to "PROJECT_CREATED",
-                "details" to "Project ${newProject.name} created",
-                "timestamp" to FieldValue.serverTimestamp()
-            ))
+            try {
+                auditRef.set(mapOf(
+                    "id" to auditRef.id,
+                    "projectId" to id,
+                    "userId" to uid,
+                    "action" to "PROJECT_CREATED",
+                    "details" to "Project ${newProject.name} created",
+                    "timestamp" to FieldValue.serverTimestamp()
+                )).await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.CREATE, auditRef.path)
+            }
         }
 
         crashDao.insertProject(newProject)
@@ -230,6 +244,10 @@ class CrashRepositoryImpl(
                     .whereEqualTo("ownerId", uid)
                     .snapshots()
                     .map { it.toObjects(Application::class.java) }
+                    .catch { e ->
+                        handleFirestoreError(e, OperationType.LIST, "collectionGroup/applications")
+                        throw e
+                    }
             )
         } else {
             val projectIds = crashDao.getProjectsForUser(uid).first().map { it.id }.toSet()
@@ -285,21 +303,33 @@ class CrashRepositoryImpl(
         if (fs != null) {
             val uid = requireUserId()
             if (projectId != null) {
+                val collectionPath = "users/$uid/projects/$projectId/crashes"
                 val query = fs.collection("users").document(uid).collection("projects").document(projectId)
                     .collection("crashes")
                     .orderBy("timestamp", Query.Direction.DESCENDING)
                     .limit(100)
                 
                 val filteredQuery = if (applicationId != null) query.whereEqualTo("applicationId", applicationId) else query
-                emitAll(filteredQuery.snapshots().map { it.toObjects(CrashReport::class.java) })
+                emitAll(
+                    filteredQuery.snapshots()
+                        .map { it.toObjects(CrashReport::class.java) }
+                        .catch { e ->
+                            handleFirestoreError(e, OperationType.LIST, collectionPath)
+                            throw e
+                        }
+                )
             } else {
                 emitAll(
                     fs.collectionGroup("crashes")
-                        .whereEqualTo("ownerId", uid)
+                        .whereEqualTo("userId", uid)
                         .orderBy("timestamp", Query.Direction.DESCENDING)
                         .limit(100)
                         .snapshots()
                         .map { it.toObjects(CrashReport::class.java) }
+                        .catch { e ->
+                            handleFirestoreError(e, OperationType.LIST, "collectionGroup/crashes")
+                            throw e
+                        }
                 )
             }
         } else {
@@ -317,9 +347,13 @@ class CrashRepositoryImpl(
             val uid = requireUserId()
             emitAll(
                 fs.collectionGroup("crashes")
-                    .whereEqualTo("ownerId", uid)
+                    .whereEqualTo("userId", uid)
                     .snapshots()
                     .map { it.toObjects(CrashReport::class.java) }
+                    .catch { e ->
+                        handleFirestoreError(e, OperationType.LIST, "collectionGroup/crashes")
+                        throw e
+                    }
             )
         } else {
             emitAll(crashDao.getAllCrashes())
@@ -329,11 +363,17 @@ class CrashRepositoryImpl(
     override fun getCrashDetails(crashId: String): Flow<CrashReport?> = flow {
         val fs = firestore
         if (fs != null) {
+            val uid = requireUserId()
             emitAll(
                 fs.collectionGroup("crashes")
+                    .whereEqualTo("userId", uid)
                     .whereEqualTo("id", crashId)
                     .snapshots()
                     .map { it.toObjects(CrashReport::class.java).firstOrNull() }
+                    .catch { e ->
+                        handleFirestoreError(e, OperationType.GET, "collectionGroup/crashes/$crashId")
+                        throw e
+                    }
             )
         } else {
             emitAll(crashDao.getCrashDetails(crashId))
@@ -361,39 +401,45 @@ class CrashRepositoryImpl(
         val newCrash = (if (crash.id.isEmpty()) crash.copy(id = UUID.randomUUID().toString()) else crash)
             .copy(message = scrubbedMsg, stackTrace = scrubbedStack)
             
-        // We add ownerId to facilitate collection group queries
+        // We attach userId to facilitate collection group queries and security rules
         val crashWithAuth = newCrash.copy(userId = uid)
 
         firestore?.let { fs ->
             if (crash.projectId.isNotBlank()) {
-                fs.collection("users").document(uid).collection("projects").document(crash.projectId)
-                    .collection("crashes").document(newCrash.id).set(crashWithAuth).await()
+                val docRef = fs.collection("users").document(uid).collection("projects").document(crash.projectId)
+                    .collection("crashes").document(newCrash.id)
+                try {
+                    docRef.set(crashWithAuth).await()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    handleFirestoreError(e, OperationType.CREATE, docRef.path)
+                    throw e
+                }
             }
         }
         
-        crashDao.insertCrash(newCrash)
+        crashDao.insertCrash(crashWithAuth)
 
         // 3. Issue Aggregation: Group crash reports by unique fingerprint
         val fingerprint = generateFingerprint("${newCrash.exceptionType}:${newCrash.stackTrace.lines().firstOrNull() ?: newCrash.message}")
         val projectIssues = crashDao.getIssues(newCrash.projectId).first()
         val existingIssue = projectIssues.find { it.fingerprint == fingerprint }
-        if (existingIssue != null) {
+        val aggregatedIssue = if (existingIssue != null) {
             val updatedVersions = if (newCrash.appVersion.isNotBlank() && !existingIssue.affectedVersions.contains(newCrash.appVersion)) {
                 if (existingIssue.affectedVersions.isBlank()) newCrash.appVersion else "${existingIssue.affectedVersions}, ${newCrash.appVersion}"
             } else {
                 existingIssue.affectedVersions
             }
-            crashDao.insertIssue(
-                existingIssue.copy(
-                    occurrenceCount = existingIssue.occurrenceCount + 1,
-                    lastOccurrence = newCrash.timestamp,
-                    affectedVersions = updatedVersions,
-                    mostAffectedOs = newCrash.osVersion.ifBlank { existingIssue.mostAffectedOs },
-                    mostAffectedDevice = newCrash.deviceModel.ifBlank { existingIssue.mostAffectedDevice }
-                )
+            existingIssue.copy(
+                occurrenceCount = existingIssue.occurrenceCount + 1,
+                lastOccurrence = newCrash.timestamp,
+                affectedVersions = updatedVersions,
+                mostAffectedOs = newCrash.osVersion.ifBlank { existingIssue.mostAffectedOs },
+                mostAffectedDevice = newCrash.deviceModel.ifBlank { existingIssue.mostAffectedDevice }
             )
         } else {
-            val newIssue = Issue(
+            Issue(
                 id = UUID.randomUUID().toString(),
                 projectId = newCrash.projectId,
                 applicationId = newCrash.applicationId,
@@ -411,7 +457,21 @@ class CrashRepositoryImpl(
                 mostAffectedOs = newCrash.osVersion,
                 mostAffectedDevice = newCrash.deviceModel
             )
-            crashDao.insertIssue(newIssue)
+        }
+        crashDao.insertIssue(aggregatedIssue)
+        firestore?.let { fs ->
+            if (newCrash.projectId.isNotBlank()) {
+                val issueRef = fs.collection("users").document(uid)
+                    .collection("projects").document(newCrash.projectId)
+                    .collection("issues").document(aggregatedIssue.id)
+                try {
+                    issueRef.set(issueToFirestoreMap(aggregatedIssue, uid)).await()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    handleFirestoreError(e, OperationType.WRITE, issueRef.path)
+                }
+            }
         }
 
         // 4. Live Test Session Correlation: Link crash to any ongoing live test session
@@ -469,7 +529,16 @@ class CrashRepositoryImpl(
         val crash = crashes.find { it.id == crashId } ?: return
         
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(crash.projectId)
-            ?.collection("crashes")?.document(crashId)?.update("resolved", isResolved)?.await()
+            ?.collection("crashes")?.document(crashId)?.let { ref ->
+                try {
+                    ref.update("isResolved", isResolved).await()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    handleFirestoreError(e, OperationType.UPDATE, ref.path)
+                    throw e
+                }
+            }
             
         crashDao.updateCrashStatus(crashId, isResolved)
     }
@@ -680,12 +749,17 @@ class CrashRepositoryImpl(
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
+            val collectionPath = "users/$uid/projects/$projectId/issues"
             emitAll(
                 fs.collection("users").document(uid).collection("projects").document(projectId)
                     .collection("issues")
                     .orderBy("lastOccurrence", Query.Direction.DESCENDING)
                     .snapshots()
                     .map { it.toObjects(Issue::class.java) }
+                    .catch { e ->
+                        handleFirestoreError(e, OperationType.LIST, collectionPath)
+                        throw e
+                    }
             )
         } else {
             emitAll(crashDao.getIssues(projectId))
@@ -701,6 +775,10 @@ class CrashRepositoryImpl(
                     .whereEqualTo("ownerId", uid)
                     .snapshots()
                     .map { it.toObjects(Issue::class.java) }
+                    .catch { e ->
+                        handleFirestoreError(e, OperationType.LIST, "collectionGroup/issues")
+                        throw e
+                    }
             )
         } else {
             emitAll(crashDao.getAllIssues())
@@ -710,11 +788,17 @@ class CrashRepositoryImpl(
     override fun getIssueDetails(issueId: String): Flow<Issue?> = flow {
         val fs = firestore
         if (fs != null) {
+            val uid = requireUserId()
             emitAll(
                 fs.collectionGroup("issues")
+                    .whereEqualTo("ownerId", uid)
                     .whereEqualTo("id", issueId)
                     .snapshots()
                     .map { it.toObjects(Issue::class.java).firstOrNull() }
+                    .catch { e ->
+                        handleFirestoreError(e, OperationType.GET, "collectionGroup/issues/$issueId")
+                        throw e
+                    }
             )
         } else {
             emitAll(crashDao.getIssueDetails(issueId))
@@ -727,8 +811,16 @@ class CrashRepositoryImpl(
         val issueWithAuth = issue.copy(id = id)
         
         firestore?.let { fs ->
-            fs.collection("users").document(uid).collection("projects").document(issue.projectId)
-                .collection("issues").document(id).set(issueWithAuth).await()
+            val issueRef = fs.collection("users").document(uid).collection("projects").document(issue.projectId)
+                .collection("issues").document(id)
+            try {
+                issueRef.set(issueToFirestoreMap(issueWithAuth, uid)).await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.CREATE, issueRef.path)
+                throw e
+            }
         }
             
         crashDao.insertIssue(issueWithAuth)
@@ -739,9 +831,40 @@ class CrashRepositoryImpl(
         val issue = getAllIssues().first().find { it.id == issueId } ?: return
         
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(issue.projectId)
-            ?.collection("issues")?.document(issueId)?.update("status", status.name)?.await()
+            ?.collection("issues")?.document(issueId)?.let { ref ->
+                try {
+                    ref.update("status", status.name).await()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    handleFirestoreError(e, OperationType.UPDATE, ref.path)
+                    throw e
+                }
+            }
             
         crashDao.updateIssueStatus(issueId, status)
+    }
+
+    private fun issueToFirestoreMap(issue: Issue, ownerId: String): Map<String, Any?> = buildMap {
+        put("id", issue.id)
+        put("projectId", issue.projectId)
+        put("applicationId", issue.applicationId)
+        put("ownerId", ownerId)
+        put("title", issue.title)
+        put("subtitle", issue.subtitle)
+        put("fingerprint", issue.fingerprint)
+        put("severity", issue.severity.name)
+        put("status", issue.status.name)
+        put("occurrenceCount", issue.occurrenceCount)
+        put("affectedUsers", issue.affectedUsers)
+        put("firstSeen", issue.firstSeen)
+        put("lastOccurrence", issue.lastOccurrence)
+        put("affectedVersions", issue.affectedVersions)
+        issue.source?.let { put("source", it.name) }
+        issue.diagnosisResult?.let { put("diagnosisResult", it) }
+        put("trend", issue.trend)
+        put("mostAffectedOs", issue.mostAffectedOs)
+        put("mostAffectedDevice", issue.mostAffectedDevice)
     }
 
     override suspend fun getVersionStats(projectId: String, version: String): VersionStats {
@@ -900,9 +1023,19 @@ class CrashRepositoryImpl(
     override suspend fun logAuditEvent(auditLog: AuditLog) {
         val uid = requireUserId()
         val id = if (auditLog.id.isEmpty()) UUID.randomUUID().toString() else auditLog.id
+        val scopedLog = auditLog.copy(id = id, userId = uid)
         firestore?.collection("users")?.document(uid)?.collection("audit_logs")?.document(id)
-            ?.set(auditLog)?.await()
-        crashDao.insertAuditLog(auditLog)
+            ?.let { ref ->
+                try {
+                    ref.set(scopedLog).await()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    handleFirestoreError(e, OperationType.CREATE, ref.path)
+                    throw e
+                }
+            }
+        crashDao.insertAuditLog(scopedLog)
     }
 
     // Sync from Sentry / Bugsnag
@@ -1357,26 +1490,53 @@ class CrashRepositoryImpl(
     override suspend fun addNotification(notification: SystemNotification) {
         val uid = requireUserId()
         val id = if (notification.id.isEmpty()) UUID.randomUUID().toString() else notification.id
+        val scopedNotification = notification.copy(id = id)
         firestore?.collection("users")?.document(uid)?.collection("notifications")?.document(id)
-            ?.set(notification)?.await()
-        crashDao.insertNotification(notification)
+            ?.let { ref ->
+                try {
+                    ref.set(scopedNotification).await()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    handleFirestoreError(e, OperationType.CREATE, ref.path)
+                    throw e
+                }
+            }
+        crashDao.insertNotification(scopedNotification)
     }
 
     override suspend fun markNotificationAsRead(id: String) {
         val uid = requireUserId()
         firestore?.collection("users")?.document(uid)?.collection("notifications")?.document(id)
-            ?.update("isRead", true)?.await()
+            ?.let { ref ->
+                try {
+                    ref.update("isRead", true).await()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    handleFirestoreError(e, OperationType.UPDATE, ref.path)
+                    throw e
+                }
+            }
         crashDao.markNotificationAsRead(id)
     }
 
     override suspend fun markAllNotificationsAsRead() {
         val uid = requireUserId()
         firestore?.let { fs ->
-            val unread = fs.collection("users").document(uid).collection("notifications")
-                .whereEqualTo("isRead", false).get().await()
-            val batch = fs.batch()
-            unread.documents.forEach { batch.update(it.reference, "isRead", true) }
-            batch.commit().await()
+            val collectionPath = "users/$uid/notifications"
+            try {
+                val unread = fs.collection("users").document(uid).collection("notifications")
+                    .whereEqualTo("isRead", false).get().await()
+                val batch = fs.batch()
+                unread.documents.forEach { batch.update(it.reference, "isRead", true) }
+                batch.commit().await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.UPDATE, collectionPath)
+                throw e
+            }
         }
         crashDao.markAllNotificationsAsRead()
     }
@@ -1384,10 +1544,18 @@ class CrashRepositoryImpl(
     override suspend fun clearNotifications() {
         val uid = requireUserId()
         firestore?.let { fs ->
-            val all = fs.collection("users").document(uid).collection("notifications").get().await()
-            val batch = fs.batch()
-            all.documents.forEach { batch.delete(it.reference) }
-            batch.commit().await()
+            val collectionPath = "users/$uid/notifications"
+            try {
+                val all = fs.collection("users").document(uid).collection("notifications").get().await()
+                val batch = fs.batch()
+                all.documents.forEach { batch.delete(it.reference) }
+                batch.commit().await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.DELETE, collectionPath)
+                throw e
+            }
         }
         crashDao.clearNotifications()
     }

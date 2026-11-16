@@ -2,21 +2,21 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile information",
+      "description": "User profile information synced from Firebase Auth",
       "type": "object",
       "properties": {
         "userId": { "type": "string", "description": "Unique user ID from Firebase Auth" },
         "email": { "type": "string", "description": "User email address" },
         "displayName": { "type": "string", "description": "User display name" },
         "photoUrl": { "type": "string", "description": "User profile photo URL" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" },
-        "updatedAt": { "type": "string", "format": "date-time", "description": "Last profile update timestamp" }
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last profile update server timestamp" }
       },
       "required": ["userId", "email", "createdAt"]
     },
     "Project": {
       "title": "Project",
-      "description": "A project containing multiple applications",
+      "description": "A crash-intelligence project containing applications and crashes",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -25,13 +25,13 @@
         "ownerId": { "type": "string" },
         "dataRetentionDays": { "type": "integer" },
         "piiScrubbingEnabled": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "integer", "description": "Epoch milliseconds" }
       },
       "required": ["id", "name", "ownerId", "createdAt"]
     },
     "Application": {
       "title": "Application",
-      "description": "An application within a project",
+      "description": "An application registered within a project",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -42,7 +42,7 @@
         "ownerId": { "type": "string" },
         "sdkSetupStatus": { "type": "string" },
         "agentConnectionStatus": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "integer", "description": "Epoch milliseconds" }
       },
       "required": ["id", "projectId", "name", "ownerId", "createdAt"]
     },
@@ -60,22 +60,23 @@
         "deviceModel": { "type": "string" },
         "osVersion": { "type": "string" },
         "appVersion": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
+        "timestamp": { "type": "integer", "description": "Epoch milliseconds" },
         "isResolved": { "type": "boolean" },
         "severity": { "type": "string" },
         "userId": { "type": "string" },
         "source": { "type": "string" }
       },
-      "required": ["id", "applicationId", "projectId", "exceptionType", "timestamp"]
+      "required": ["id", "applicationId", "projectId", "exceptionType", "userId", "isResolved", "timestamp"]
     },
     "Issue": {
       "title": "Issue",
-      "description": "Grouped crashes forming a single issue",
+      "description": "Grouped crashes forming a single tracked issue",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "projectId": { "type": "string" },
         "applicationId": { "type": "string" },
+        "ownerId": { "type": "string" },
         "title": { "type": "string" },
         "subtitle": { "type": "string" },
         "fingerprint": { "type": "string" },
@@ -83,8 +84,8 @@
         "status": { "type": "string" },
         "occurrenceCount": { "type": "integer" },
         "affectedUsers": { "type": "integer" },
-        "firstSeen": { "type": "string", "format": "date-time" },
-        "lastOccurrence": { "type": "string", "format": "date-time" },
+        "firstSeen": { "type": "integer", "description": "Epoch milliseconds" },
+        "lastOccurrence": { "type": "integer", "description": "Epoch milliseconds" },
         "affectedVersions": { "type": "string" },
         "source": { "type": "string" },
         "diagnosisResult": { "type": "string" },
@@ -92,11 +93,11 @@
         "mostAffectedOs": { "type": "string" },
         "mostAffectedDevice": { "type": "string" }
       },
-      "required": ["id", "projectId", "applicationId", "title", "fingerprint", "firstSeen"]
+      "required": ["id", "projectId", "ownerId", "title", "fingerprint", "firstSeen", "lastOccurrence"]
     },
     "AIDiagnosis": {
       "title": "AI Diagnosis",
-      "description": "AI-generated diagnosis for a crash",
+      "description": "AI-generated root-cause diagnosis for a crash",
       "type": "object",
       "properties": {
         "crashId": { "type": "string" },
@@ -115,13 +116,77 @@
         "confidence": { "type": "number" },
         "category": { "type": "string" },
         "modelId": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "modelName": { "type": "string" },
+        "providerName": { "type": "string" },
+        "createdAt": { "type": "integer", "description": "Epoch milliseconds" }
       },
       "required": ["crashId", "summary", "rootCause", "certainty", "createdAt"]
     },
+    "Integration": {
+      "title": "Integration",
+      "description": "External crash/webhook integration for a project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "lastSyncedAt": { "type": "integer" },
+        "configJson": { "type": "string" },
+        "webhookSecret": { "type": "string" },
+        "createdAt": { "type": "integer", "description": "Epoch milliseconds" }
+      },
+      "required": ["id", "projectId", "name", "type", "createdAt"]
+    },
+    "ProjectMember": {
+      "title": "Project Member",
+      "description": "Collaborator role assignment within a project",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "addedAt": { "type": "integer", "description": "Epoch milliseconds" }
+      },
+      "required": ["projectId", "userId", "userEmail", "role", "addedAt"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Immutable security and lifecycle audit log entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "integer", "description": "Epoch milliseconds or server timestamp" }
+      },
+      "required": ["id", "userId", "action", "timestamp"]
+    },
+    "SystemNotification": {
+      "title": "System Notification",
+      "description": "Crash/ANR/Fix alert for a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "targetCrashId": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "timestamp": { "type": "integer", "description": "Epoch milliseconds" }
+      },
+      "required": ["id", "title", "isRead", "timestamp"]
+    },
     "AIProvider": {
       "title": "AI Provider",
-      "description": "Configured AI provider for a user",
+      "description": "Configured BYOK AI provider metadata for a user",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -131,14 +196,14 @@
         "status": { "type": "string" },
         "apiKey": { "type": "string" },
         "baseUrl": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "lastSyncAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "integer", "description": "Epoch milliseconds" },
+        "lastSyncAt": { "type": "integer" }
       },
       "required": ["id", "userId", "name", "type", "createdAt"]
     },
     "ModelTeam": {
       "title": "Model Team",
-      "description": "A team of AI models",
+      "description": "A multi-agent AI model team",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -151,14 +216,14 @@
         "usageLimitMonthly": { "type": "number" },
         "isPublic": { "type": "boolean" },
         "isTemplate": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "integer", "description": "Epoch milliseconds" },
+        "updatedAt": { "type": "integer", "description": "Epoch milliseconds" }
       },
-      "required": ["id", "name", "ownerId", "createdAt"]
+      "required": ["id", "name", "ownerId", "createdAt", "updatedAt"]
     },
     "TeamExecution": {
       "title": "Team Execution",
-      "description": "A task execution by a model team",
+      "description": "A task execution by an AI model team",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -172,10 +237,31 @@
         "totalCost": { "type": "number" },
         "totalRequests": { "type": "integer" },
         "projectId": { "type": "string" },
-        "startedAt": { "type": "string", "format": "date-time" },
-        "completedAt": { "type": "string", "format": "date-time" }
+        "startedAt": { "type": "integer", "description": "Epoch milliseconds" },
+        "completedAt": { "type": "integer" }
       },
       "required": ["id", "teamId", "userId", "prompt", "status", "startedAt"]
+    },
+    "TeamUsageRecord": {
+      "title": "Team Usage Record",
+      "description": "Token and cost usage record for a team execution",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "executionId": { "type": "string" },
+        "memberId": { "type": "string" },
+        "modelId": { "type": "string" },
+        "tokensInput": { "type": "integer" },
+        "tokensOutput": { "type": "integer" },
+        "totalTokens": { "type": "integer" },
+        "costUsd": { "type": "number" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "integer", "description": "Epoch milliseconds" }
+      },
+      "required": ["id", "userId", "teamId", "modelId", "timestamp"]
     }
   },
   "firestore": {
@@ -203,17 +289,37 @@
       "schema": "AIDiagnosis",
       "description": "AI diagnoses for crashes"
     },
+    "/users/{userId}/projects/{projectId}/integrations/{integrationId}": {
+      "schema": "Integration",
+      "description": "Project webhook and tracker integrations"
+    },
+    "/users/{userId}/projects/{projectId}/members/{memberId}": {
+      "schema": "ProjectMember",
+      "description": "Project collaborator roles"
+    },
+    "/users/{userId}/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Security and project audit logs"
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": "SystemNotification",
+      "description": "User notifications"
+    },
     "/users/{userId}/ai_providers/{providerId}": {
       "schema": "AIProvider",
       "description": "Configured AI providers (BYOK)"
     },
     "/users/{userId}/model_teams/{teamId}": {
       "schema": "ModelTeam",
-      "description": "User's AI model teams"
+      "description": "User AI model teams"
     },
     "/users/{userId}/team_executions/{executionId}": {
       "schema": "TeamExecution",
       "description": "Team execution logs"
+    },
+    "/users/{userId}/team_usage_records/{recordId}": {
+      "schema": "TeamUsageRecord",
+      "description": "Team token and cost usage records"
     }
   }
 }

@@ -60,11 +60,11 @@ object DependencyProvider {
                 } catch (_: Exception) {
                     null
                 }
-                val instance = if (dbId.isNullOrBlank()) {
-                    FirebaseFirestore.getInstance()
-                } else {
-                    FirebaseFirestore.getInstance(dbId)
+                if (dbId.isNullOrBlank()) {
+                    android.util.Log.w("DependencyProvider", "firestore_database_id missing/blank: running in local mode")
+                    return@synchronized null
                 }
+                val instance = FirebaseFirestore.getInstance(dbId)
                 firestore = instance
                 instance
             } catch (e: Throwable) {
@@ -108,17 +108,16 @@ object DependencyProvider {
         .addConverterFactory(MoshiConverterFactory.create())
         .build()
 
+    private const val FIREBASE_AUTH_ENDPOINT_HOST = "firebaseauth.googleapis.com"
     private val supabaseBaseUrl = SupabaseConfig.normalizeBaseUrl(BuildConfig.SUPABASE_URL)
-    private val supabaseEndpointHost = supabaseBaseUrl
-        .substringAfter("://", "")
-        .substringBefore('/')
-        .trim()
 
-    private val vpnResilientDns = Dns { hostname ->
-        val addresses = Dns.SYSTEM.lookup(hostname)
-        val ipv4 = addresses.filterIsInstance<Inet4Address>()
-        val ipv6 = addresses.filterIsInstance<Inet6Address>()
-        if (ipv4.isNotEmpty()) ipv4 + ipv6 else addresses
+    private val vpnResilientDns = object : Dns {
+        override fun lookup(hostname: String): List<java.net.InetAddress> {
+            val addresses = Dns.SYSTEM.lookup(hostname)
+            val ipv4 = addresses.filterIsInstance<Inet4Address>()
+            val ipv6 = addresses.filterIsInstance<Inet6Address>()
+            return if (ipv4.isNotEmpty()) ipv4 + ipv6 else addresses
+        }
     }
 
     private val supabaseOkHttpClient = OkHttpClient.Builder()
@@ -171,18 +170,12 @@ object DependencyProvider {
     fun provideDatabase(context: Context): AppDatabase = getDatabase(context)
 
     fun provideAuthRepository(context: Context): AuthRepository {
+        val appContext = context.applicationContext
         return authRepository ?: synchronized(this) {
-            authRepository ?: AuthRepositoryImpl(
-                api = supabaseAuthApi,
-                publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
-                sessionStore = SupabaseSessionStore(context.applicationContext),
-                endpointHost = supabaseEndpointHost,
-                isBackendConfigured = {
-                    SupabaseConfig.isConfigured(
-                        rawUrl = BuildConfig.SUPABASE_URL,
-                        publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
-                    )
-                }
+            authRepository ?: FirebaseAuthRepository(
+                context = appContext,
+                firestoreProvider = { getFirestore(appContext) },
+                firebaseAuthProvider = { getFirebaseAuth(appContext) }
             ).also { authRepository = it }
         }
     }
@@ -195,7 +188,7 @@ object DependencyProvider {
             val caps = if (network != null) cm.getNetworkCapabilities(network) else null
             if (caps == null) {
                 AuthNetworkSnapshot(
-                    endpointHost = supabaseEndpointHost,
+                    endpointHost = FIREBASE_AUTH_ENDPOINT_HOST,
                     vpnActive = false,
                     networkValidated = false,
                     transportSummary = "No active network"
@@ -210,14 +203,14 @@ object DependencyProvider {
                     if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) add("Ethernet")
                 }
                 AuthNetworkSnapshot(
-                    endpointHost = supabaseEndpointHost,
+                    endpointHost = FIREBASE_AUTH_ENDPOINT_HOST,
                     vpnActive = hasVpn,
                     networkValidated = validated,
                     transportSummary = transports.ifEmpty { listOf("Other") }.joinToString(" + ")
                 )
             }
         }.getOrElse {
-            AuthNetworkSnapshot(endpointHost = supabaseEndpointHost)
+            AuthNetworkSnapshot(endpointHost = FIREBASE_AUTH_ENDPOINT_HOST)
         }
     }
 
@@ -233,30 +226,29 @@ object DependencyProvider {
     }
 
     fun provideCrashRepository(context: Context): CrashRepository {
-        val db = getDatabase(context)
+        val appContext = context.applicationContext
+        val db = getDatabase(appContext)
         return crashRepository ?: CrashRepositoryImpl(
-            firestore = getFirestore(context),
+            firestore = getFirestore(appContext),
             crashDao = db.crashDao(),
             sentryApi = sentryApi,
             bugsnagApi = bugsnagApi,
-            githubRepository = provideGitHubRepository(context),
-            symbolicationRepository = provideSymbolicationRepository(context),
-            aiModelRepository = provideAIModelRepository(context),
-            auth = getFirebaseAuth(context),
-            authRepository = provideAuthRepository(context),
-            supabaseProjectDataSource = if (SupabaseConfig.isConfigured()) {
-                provideSupabaseProjectDataSource(context)
-            } else {
-                null
-            }
+            githubRepository = provideGitHubRepository(appContext),
+            symbolicationRepository = provideSymbolicationRepository(appContext),
+            aiModelRepository = provideAIModelRepository(appContext),
+            auth = getFirebaseAuth(appContext),
+            authRepository = provideAuthRepository(appContext),
+            supabaseProjectDataSource = null
         ).also { crashRepository = it }
     }
 
     fun provideAIModelRepository(context: Context): AIModelRepository {
+        val appContext = context.applicationContext
         return aiModelRepository ?: AIModelRepositoryImpl(
-            getDatabase(context).aiProviderDao(),
-            openRouterApi,
-            huggingFaceApi
+            aiProviderDao = getDatabase(appContext).aiProviderDao(),
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            enablePlatformFirebaseAi = com.example.util.isFirebaseConfigured(appContext)
         ).also { aiModelRepository = it }
     }
 

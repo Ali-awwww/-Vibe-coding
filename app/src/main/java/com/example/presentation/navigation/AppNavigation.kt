@@ -6,8 +6,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +33,7 @@ fun AppNavigation(
     val navController = rememberNavController()
     val currentUser by mainViewModel.currentUser.collectAsState()
     val recoveryLink by passwordRecoveryLink.collectAsState()
+    val backStackEntry by navController.currentBackStackEntryAsState()
 
     LaunchedEffect(recoveryLink) {
         val link = recoveryLink ?: return@LaunchedEffect
@@ -40,6 +43,16 @@ fun AppNavigation(
             launchSingleTop = true
         }
         onPasswordRecoveryLinkConsumed()
+    }
+
+    LaunchedEffect(currentUser, backStackEntry) {
+        val entry = backStackEntry ?: return@LaunchedEffect
+        if (currentUser == null && !entry.destination.hasRoute<Screen.Login>()) {
+            navController.navigate(Screen.Login) {
+                popUpTo(0) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
     }
 
     val startDestination = if (currentUser == null) Screen.Login else Screen.Dashboard
@@ -54,6 +67,7 @@ fun AppNavigation(
                 onAuthSuccess = {
                     navController.navigate(Screen.Dashboard) {
                         popUpTo(Screen.Login) { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
             )

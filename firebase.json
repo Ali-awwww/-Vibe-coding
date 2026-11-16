@@ -1,7 +1,7 @@
 {
   "firestore": [
     {
-      "database": "ai-studio-android-crashint-6818dd3b-7fac-4ddf-bced-4d984d0e5441",
+      "database": "ai-studio-android-vibecodi-e4471e48-df5a-44fd-adfd-c9cc33662178",
       "rules": "firestore.rules"
     }
   ],

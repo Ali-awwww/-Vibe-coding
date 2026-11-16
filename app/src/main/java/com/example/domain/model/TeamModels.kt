@@ -2,6 +2,7 @@ package com.example.domain.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.google.firebase.firestore.PropertyName
 import java.util.Date
 
 enum class TeamRole(val labelAr: String, val labelEn: String) {
@@ -101,7 +102,9 @@ data class ModelTeam(
     val settings: TeamSettings = TeamSettings(),
     val governance: TeamGovernanceSettings = TeamGovernanceSettings(),
     val usageLimitMonthly: Double = 10.0,
+    @get:PropertyName("isPublic") @field:PropertyName("isPublic")
     val isPublic: Boolean = false,
+    @get:PropertyName("isTemplate") @field:PropertyName("isTemplate")
     val isTemplate: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
