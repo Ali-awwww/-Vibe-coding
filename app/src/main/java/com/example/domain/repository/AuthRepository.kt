@@ -9,6 +9,24 @@ import kotlinx.coroutines.flow.Flow
  */
 class EmailConfirmationRequiredException(message: String) : Exception(message)
 
+/**
+ * Thrown before issuing network requests when Supabase URL or publishable key
+ * still contains template placeholders or blank configuration.
+ */
+class SupabaseUnconfiguredException(
+    val endpointHost: String,
+    message: String = "Supabase authentication configuration is incomplete."
+) : IllegalStateException(message)
+
+/**
+ * Preserves HTTP status code for diagnostic display without exposing raw
+ * provider response bodies in UI state.
+ */
+class SupabaseHttpException(
+    val statusCode: Int,
+    message: String
+) : IllegalStateException(message)
+
 data class PasswordRecoveryCredentials(
     val tokenHash: String? = null,
     val accessToken: String? = null,

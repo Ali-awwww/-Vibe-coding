@@ -22,7 +22,10 @@ fun AppNavigation(
 ) {
     val context = LocalContext.current
     val mainViewModel: MainViewModel = viewModel {
-        MainViewModel(DependencyProvider.provideAuthRepository(context))
+        MainViewModel(
+            authRepository = DependencyProvider.provideAuthRepository(context),
+            networkDiagnosticProvider = { DependencyProvider.inspectAuthNetwork(context) }
+        )
     }
     
     val navController = rememberNavController()

@@ -11,8 +11,6 @@ jobs:
   build-apk:
     name: Build & Package APK
     runs-on: ubuntu-latest
-    env:
-      ANDROID_SIGNING_BUNDLE: ${{ secrets.ANDROID_SIGNING_BUNDLE }}
 
     steps:
       - name: Checkout Repository
@@ -29,27 +27,6 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Prepare release signing
-        shell: bash
-        run: |
-          if [ -n "${ANDROID_SIGNING_BUNDLE:-}" ]; then
-            python3 - <<'PY'
-            import base64, json, os
-            from pathlib import Path
-            bundle = json.loads(base64.b64decode(os.environ["ANDROID_SIGNING_BUNDLE"]))
-            keystore_path = Path(os.environ["RUNNER_TEMP"]) / "vibe-coding-release.jks"
-            keystore_path.write_bytes(base64.b64decode(bundle["keystore_base64"]))
-            keystore_path.chmod(0o600)
-            with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
-                env.write(f"KEYSTORE_PATH={keystore_path}\n")
-                env.write(f"STORE_PASSWORD={bundle['store_password']}\n")
-                env.write(f"KEY_ALIAS={bundle['key_alias']}\n")
-                env.write(f"KEY_PASSWORD={bundle['key_password']}\n")
-            PY
-          else
-            echo "Release signing secrets are not configured; building unsigned release artifacts."
-          fi
-
       - name: Run Unit Tests
         run: gradle testDebugUnitTest --stacktrace
 
@@ -63,6 +40,29 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
+      - name: Configure Release Signing
+        env:
+          ANDROID_RELEASE_SIGNING: ${{ secrets.ANDROID_RELEASE_SIGNING }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, pathlib
+          raw = os.environ.get("ANDROID_RELEASE_SIGNING", "").strip()
+          if not raw:
+              print("ANDROID_RELEASE_SIGNING not set; release build will remain unsigned.")
+              raise SystemExit(0)
+          data = json.loads(base64.b64decode(raw).decode("utf-8"))
+          for secret_key in ("storePassword", "keyPassword"):
+              print(f"::add-mask::{data[secret_key]}")
+          ks_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "release-keystore.jks"
+          ks_path.write_bytes(base64.b64decode(data["keystoreBase64"]))
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"KEYSTORE_PATH={ks_path}\n")
+              env_file.write(f"STORE_PASSWORD={data['storePassword']}\n")
+              env_file.write(f"KEY_ALIAS={data['keyAlias']}\n")
+              env_file.write(f"KEY_PASSWORD={data['keyPassword']}\n")
+          print("Release signing configured successfully.")
+          PY
+
       - name: Build Release APK
         run: gradle assembleRelease --stacktrace
         continue-on-error: true
@@ -73,3 +73,7 @@ jobs:
           name: CrashIntelligence-Release-APK
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
+
+      - name: Clean Up Release Keystore
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/release-keystore.jks"

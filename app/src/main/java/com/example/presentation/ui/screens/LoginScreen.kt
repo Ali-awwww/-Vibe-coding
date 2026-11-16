@@ -25,12 +25,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -38,8 +41,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.presentation.viewmodel.AuthDiagnosticInfo
 import com.example.presentation.viewmodel.AuthUiMessage
 import com.example.presentation.viewmodel.MainViewModel
+import com.example.ui.theme.JetBrainsMono
 import com.example.ui.theme.VibeDesignTokens
 
 private val SpaceBackground = VibeDesignTokens.Color.SpaceBackground
@@ -78,7 +83,12 @@ private fun authMessageResource(message: AuthUiMessage): Int = when (message) {
     AuthUiMessage.PASSWORD_RECOVERY_REQUEST_FAILED -> R.string.auth_error_recovery_request
     AuthUiMessage.PASSWORD_RECOVERY_FAILED -> R.string.auth_error_password_recovery
     AuthUiMessage.PASSWORD_UPDATE_FAILED -> R.string.auth_error_password_update
+    AuthUiMessage.SUPABASE_NOT_CONFIGURED -> R.string.auth_error_supabase_unconfigured
     AuthUiMessage.NETWORK_UNAVAILABLE -> R.string.auth_error_network
+    AuthUiMessage.NETWORK_DNS_FAILED -> R.string.auth_error_network_dns
+    AuthUiMessage.NETWORK_TIMEOUT -> R.string.auth_error_network_timeout
+    AuthUiMessage.NETWORK_SSL_FAILED -> R.string.auth_error_network_ssl
+    AuthUiMessage.NETWORK_CONNECTION_FAILED -> R.string.auth_error_network_connection
     AuthUiMessage.RECOVERY_LINK_INVALID -> R.string.auth_error_recovery_link_invalid
     AuthUiMessage.RECOVERY_LINK_UNAVAILABLE -> R.string.auth_error_recovery_link_unavailable
     AuthUiMessage.SIGN_IN_SUCCEEDED -> R.string.auth_success_sign_in
@@ -382,21 +392,32 @@ fun LoginScreen(
 
                     AnimatedVisibility(visible = validationError != null || actionErrorMessage != null) {
                         val message = validationError?.let { stringResource(it.messageRes) } ?: actionErrorMessage.orEmpty()
+                        val diagnostic = if (validationError == null) actionState.diagnostic else null
                         Surface(
                             color = Color(0x33FF4565),
                             shape = RoundedCornerShape(10.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, VibeDesignTokens.Color.Error),
-                            modifier = Modifier.fillMaxWidth().semantics {
-                                liveRegion = LiveRegionMode.Polite
-                            }
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("auth_error_banner")
+                                .semantics {
+                                    liveRegion = LiveRegionMode.Polite
+                                }
                         ) {
-                            Row(
-                                Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(Icons.Default.ErrorOutline, null, tint = Color(0xFFFF7189))
-                                Text(message, color = Color(0xFFFFC1CC), style = MaterialTheme.typography.bodySmall)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = Color(0xFFFF7189))
+                                    Text(message, color = Color(0xFFFFC1CC), style = MaterialTheme.typography.bodySmall)
+                                }
+                                if (diagnostic != null) {
+                                    AuthDiagnosticPanel(diagnostic = diagnostic)
+                                }
                             }
                         }
                     }
@@ -687,6 +708,151 @@ fun LoginScreen(
             }
             Spacer(Modifier.height(20.dp))
         }
+    }
+}
+
+@Composable
+private fun AuthDiagnosticPanel(diagnostic: AuthDiagnosticInfo) {
+    val clipboardManager = LocalClipboardManager.current
+    var expanded by remember(diagnostic) { mutableStateOf(true) }
+    var copied by remember(diagnostic) { mutableStateOf(false) }
+
+    val vpnLabel = when (diagnostic.vpnActive) {
+        true -> stringResource(R.string.auth_diag_vpn_active)
+        false -> stringResource(R.string.auth_diag_vpn_inactive)
+        null -> stringResource(R.string.auth_diag_unknown)
+    }
+    val networkText = buildString {
+        append(diagnostic.transportSummary?.takeIf(String::isNotBlank) ?: stringResource(R.string.auth_diag_unknown))
+        if (diagnostic.networkValidated == false) {
+            append(" (")
+            append(stringResource(R.string.auth_diag_unvalidated_warning))
+            append(")")
+        }
+    }
+    val summaryText = buildString {
+        append("code=${diagnostic.code}")
+        append("\nexception=${diagnostic.exceptionType}")
+        diagnostic.httpStatusCode?.let { append("\nhttp=$it") }
+        if (diagnostic.endpointHost.isNotBlank()) {
+            append("\nhost=${diagnostic.endpointHost}")
+        }
+        append("\nvpn=${diagnostic.vpnActive ?: "unknown"}")
+        append("\nnetwork=${diagnostic.transportSummary ?: "unknown"}")
+        if (diagnostic.networkValidated != null) {
+            append("\nvalidated=${diagnostic.networkValidated}")
+        }
+    }
+
+    Surface(
+        color = VibeDesignTokens.Color.SpaceBackground.copy(alpha = 0.85f),
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact),
+        border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.28f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("auth_diagnostic_panel")
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("toggle_auth_diagnostics_button")
+                ) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = stringResource(
+                            if (expanded) R.string.auth_diag_hide else R.string.auth_diag_show
+                        ),
+                        tint = CyberCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(R.string.auth_diag_title),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = CyberCyan,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                TextButton(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(summaryText))
+                        copied = true
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                        .testTag("copy_auth_diagnostics_button")
+                ) {
+                    Icon(
+                        imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                        contentDescription = stringResource(
+                            if (copied) R.string.auth_diag_copied else R.string.auth_diag_copy
+                        ),
+                        tint = if (copied) VibeDesignTokens.Color.Success else CyberCyan,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(if (copied) R.string.auth_diag_copied else R.string.auth_diag_copy),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (copied) VibeDesignTokens.Color.Success else CyberCyan
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    DiagnosticLine(stringResource(R.string.auth_diag_code_label), diagnostic.code)
+                    DiagnosticLine(stringResource(R.string.auth_diag_exception_label), diagnostic.exceptionType)
+                    diagnostic.httpStatusCode?.let {
+                        DiagnosticLine(stringResource(R.string.auth_diag_http_label), it.toString())
+                    }
+                    if (diagnostic.endpointHost.isNotBlank()) {
+                        DiagnosticLine(stringResource(R.string.auth_diag_host_label), diagnostic.endpointHost)
+                    }
+                    DiagnosticLine(stringResource(R.string.auth_diag_vpn_label), vpnLabel)
+                    DiagnosticLine(stringResource(R.string.auth_diag_network_label), networkText)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticLine(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "$label:",
+            style = MaterialTheme.typography.labelSmall,
+            color = MutedText
+        )
+        Text(
+            text = value,
+            fontFamily = JetBrainsMono,
+            style = MaterialTheme.typography.labelMedium,
+            color = VibeDesignTokens.Color.TextPrimary
+        )
     }
 }
 

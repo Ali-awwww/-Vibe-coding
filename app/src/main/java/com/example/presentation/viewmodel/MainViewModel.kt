@@ -6,10 +6,17 @@ import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
 import com.example.domain.repository.PasswordRecoveryCredentials
+import com.example.domain.repository.SupabaseHttpException
+import com.example.domain.repository.SupabaseUnconfiguredException
 import com.example.presentation.auth.PasswordRecoveryLinkResult
 import com.example.presentation.auth.parsePasswordRecoveryLink
 import com.example.presentation.auth.isVerifiedEmailConfirmationLink
 import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -32,7 +39,12 @@ enum class AuthUiMessage {
     PASSWORD_RECOVERY_REQUEST_FAILED,
     PASSWORD_RECOVERY_FAILED,
     PASSWORD_UPDATE_FAILED,
+    SUPABASE_NOT_CONFIGURED,
     NETWORK_UNAVAILABLE,
+    NETWORK_DNS_FAILED,
+    NETWORK_TIMEOUT,
+    NETWORK_SSL_FAILED,
+    NETWORK_CONNECTION_FAILED,
     RECOVERY_LINK_INVALID,
     RECOVERY_LINK_UNAVAILABLE,
     SIGN_IN_SUCCEEDED,
@@ -43,14 +55,33 @@ enum class AuthUiMessage {
     PASSWORD_UPDATED
 }
 
+data class AuthNetworkSnapshot(
+    val endpointHost: String = "",
+    val vpnActive: Boolean? = null,
+    val networkValidated: Boolean? = null,
+    val transportSummary: String? = null
+)
+
+data class AuthDiagnosticInfo(
+    val code: String,
+    val exceptionType: String,
+    val endpointHost: String = "",
+    val vpnActive: Boolean? = null,
+    val networkValidated: Boolean? = null,
+    val transportSummary: String? = null,
+    val httpStatusCode: Int? = null
+)
+
 data class AuthActionState(
     val isLoading: Boolean = false,
     val errorMessage: AuthUiMessage? = null,
-    val successMessage: AuthUiMessage? = null
+    val successMessage: AuthUiMessage? = null,
+    val diagnostic: AuthDiagnosticInfo? = null
 )
 
 class MainViewModel(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val networkDiagnosticProvider: () -> AuthNetworkSnapshot = { AuthNetworkSnapshot() }
 ) : ViewModel() {
 
     val currentUser: StateFlow<UserAccount?> = authRepository.currentUser
@@ -70,9 +101,97 @@ class MainViewModel(
     private var passwordRecoveryLinkGeneration = 0L
     private var passwordRecoveryJob: Job? = null
 
-    private fun resolveFailureMessage(error: Throwable?, fallback: AuthUiMessage): AuthUiMessage {
+    private fun resolveFailureState(
+        error: Throwable?,
+        fallback: AuthUiMessage
+    ): AuthActionState {
         if (error is CancellationException) throw error
-        return if (error is IOException) AuthUiMessage.NETWORK_UNAVAILABLE else fallback
+        val snapshot = runCatching { networkDiagnosticProvider() }.getOrDefault(AuthNetworkSnapshot())
+        val causeChain = collectCauseChain(error)
+
+        val unconfigured = causeChain.filterIsInstance<SupabaseUnconfiguredException>().firstOrNull()
+        val dnsError = causeChain.filterIsInstance<UnknownHostException>().firstOrNull()
+        val timeoutError = causeChain.filterIsInstance<SocketTimeoutException>().firstOrNull()
+        val sslError = causeChain.filterIsInstance<SSLException>().firstOrNull()
+        val connectionError = causeChain.firstOrNull { it is ConnectException || it is SocketException }
+        val genericIoError = causeChain.filterIsInstance<IOException>().firstOrNull()
+        val httpError = causeChain.filterIsInstance<SupabaseHttpException>().firstOrNull()
+
+        val message: AuthUiMessage
+        val code: String
+        val reportedException: Throwable?
+
+        when {
+            unconfigured != null -> {
+                message = AuthUiMessage.SUPABASE_NOT_CONFIGURED
+                code = "SUPABASE_UNCONFIGURED"
+                reportedException = unconfigured
+            }
+            dnsError != null -> {
+                message = AuthUiMessage.NETWORK_DNS_FAILED
+                code = "DNS_RESOLUTION_FAILED"
+                reportedException = dnsError
+            }
+            timeoutError != null -> {
+                message = AuthUiMessage.NETWORK_TIMEOUT
+                code = "CONNECTION_TIMEOUT"
+                reportedException = timeoutError
+            }
+            sslError != null -> {
+                message = AuthUiMessage.NETWORK_SSL_FAILED
+                code = "TLS_HANDSHAKE_FAILED"
+                reportedException = sslError
+            }
+            connectionError != null -> {
+                message = AuthUiMessage.NETWORK_CONNECTION_FAILED
+                code = "CONNECTION_FAILED"
+                reportedException = connectionError
+            }
+            genericIoError != null -> {
+                message = AuthUiMessage.NETWORK_UNAVAILABLE
+                code = "NETWORK_IO_ERROR"
+                reportedException = genericIoError
+            }
+            httpError != null -> {
+                message = fallback
+                code = "AUTH_HTTP_${httpError.statusCode}"
+                reportedException = httpError
+            }
+            else -> {
+                message = fallback
+                code = "AUTH_REJECTED"
+                reportedException = error
+            }
+        }
+
+        val resolvedHost = unconfigured?.endpointHost?.takeIf(String::isNotBlank)
+            ?: snapshot.endpointHost
+
+        return AuthActionState(
+            isLoading = false,
+            errorMessage = message,
+            diagnostic = AuthDiagnosticInfo(
+                code = code,
+                exceptionType = reportedException?.javaClass?.simpleName ?: "UnknownError",
+                endpointHost = resolvedHost,
+                vpnActive = snapshot.vpnActive,
+                networkValidated = snapshot.networkValidated,
+                transportSummary = snapshot.transportSummary,
+                httpStatusCode = httpError?.statusCode
+            )
+        )
+    }
+
+    private fun collectCauseChain(root: Throwable?): List<Throwable> {
+        val result = mutableListOf<Throwable>()
+        var current = root
+        var depth = 0
+        while (current != null && depth < 6 && current !in result) {
+            result += current
+            current = current.cause
+            depth += 1
+        }
+        return result
     }
 
     fun acceptPasswordRecoveryLink(rawLink: String) {
@@ -131,11 +250,9 @@ class MainViewModel(
                 )
                 onComplete(true)
             } else {
-                _actionState.value = AuthActionState(
-                    errorMessage = resolveFailureMessage(
-                        result.exceptionOrNull(),
-                        AuthUiMessage.PASSWORD_RECOVERY_REQUEST_FAILED
-                    )
+                _actionState.value = resolveFailureState(
+                    result.exceptionOrNull(),
+                    AuthUiMessage.PASSWORD_RECOVERY_REQUEST_FAILED
                 )
                 onComplete(false)
             }
@@ -174,11 +291,9 @@ class MainViewModel(
                     )
                     onComplete(true)
                 } else {
-                    _actionState.value = AuthActionState(
-                        errorMessage = resolveFailureMessage(
-                            result.exceptionOrNull(),
-                            AuthUiMessage.PASSWORD_RECOVERY_FAILED
-                        )
+                    _actionState.value = resolveFailureState(
+                        result.exceptionOrNull(),
+                        AuthUiMessage.PASSWORD_RECOVERY_FAILED
                     )
                     onComplete(false)
                 }
@@ -203,12 +318,9 @@ class MainViewModel(
                 )
                 onComplete(true)
             } else {
-                _actionState.value = AuthActionState(
-                    isLoading = false,
-                    errorMessage = resolveFailureMessage(
-                        result.exceptionOrNull(),
-                        AuthUiMessage.SIGN_IN_FAILED
-                    )
+                _actionState.value = resolveFailureState(
+                    result.exceptionOrNull(),
+                    AuthUiMessage.SIGN_IN_FAILED
                 )
                 onComplete(false)
             }
@@ -240,12 +352,9 @@ class MainViewModel(
                         successMessage = AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED
                     )
                 } else {
-                    _actionState.value = AuthActionState(
-                        isLoading = false,
-                        errorMessage = resolveFailureMessage(
-                            failure,
-                            AuthUiMessage.SIGN_UP_FAILED
-                        )
+                    _actionState.value = resolveFailureState(
+                        failure,
+                        AuthUiMessage.SIGN_UP_FAILED
                     )
                 }
                 onComplete(false)
@@ -264,12 +373,9 @@ class MainViewModel(
                 )
                 onComplete(true)
             } else {
-                _actionState.value = AuthActionState(
-                    isLoading = false,
-                    errorMessage = resolveFailureMessage(
-                        result.exceptionOrNull(),
-                        AuthUiMessage.PASSWORD_UPDATE_FAILED
-                    )
+                _actionState.value = resolveFailureState(
+                    result.exceptionOrNull(),
+                    AuthUiMessage.PASSWORD_UPDATE_FAILED
                 )
                 onComplete(false)
             }

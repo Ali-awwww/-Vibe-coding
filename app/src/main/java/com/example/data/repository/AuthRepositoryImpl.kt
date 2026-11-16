@@ -18,6 +18,8 @@ import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.domain.repository.EmailConfirmationRequiredException
+import com.example.domain.repository.SupabaseHttpException
+import com.example.domain.repository.SupabaseUnconfiguredException
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -41,7 +43,11 @@ import java.util.TimeZone
 class AuthRepositoryImpl(
     private val api: SupabaseAuthApi,
     private val publishableKey: String,
-    private val sessionStore: SupabaseSessionStore
+    private val sessionStore: SupabaseSessionStore,
+    private val endpointHost: String = "",
+    private val isBackendConfigured: () -> Boolean = {
+        publishableKey.isNotBlank() && !publishableKey.startsWith("YOUR_", ignoreCase = true)
+    }
 ) : AuthRepository {
 
     // Serialize network auth operations; sessionStateLock protects generation + local identity mutations.
@@ -65,7 +71,7 @@ class AuthRepositoryImpl(
         displayName: String,
         organization: String
     ): Result<UserAccount> = authResult {
-        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        requireConfiguredBackend()
         sessionMutex.withLock {
             val requestGeneration = synchronized(sessionStateLock) { sessionGeneration }
             val response = api.signUp(
@@ -96,7 +102,7 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun signIn(email: String, password: String): Result<UserAccount> = authResult {
-        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        requireConfiguredBackend()
         sessionMutex.withLock {
             val requestGeneration = synchronized(sessionStateLock) { sessionGeneration }
             val response = api.signInWithPassword(
@@ -158,7 +164,7 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun requestPasswordRecovery(email: String): Result<Unit> = authResult {
-        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        requireConfiguredBackend()
         require(email.isNotBlank()) { "أدخل البريد الإلكتروني المرتبط بحسابك." }
         val response = api.requestPasswordRecovery(
             publishableKey = publishableKey,
@@ -166,8 +172,9 @@ class AuthRepositoryImpl(
             request = SupabaseRecoveryRequest(email = email.trim())
         )
         if (!response.isSuccessful) {
-            throw IllegalStateException(
-                response.message().takeIf(String::isNotBlank)
+            throw SupabaseHttpException(
+                statusCode = response.code(),
+                message = response.message().takeIf(String::isNotBlank)
                     ?: "تعذر إرسال طلب استعادة كلمة المرور من Supabase."
             )
         }
@@ -177,7 +184,7 @@ class AuthRepositoryImpl(
         credentials: PasswordRecoveryCredentials,
         newPassword: String
     ): Result<UserAccount> = authResult {
-        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        requireConfiguredBackend()
         require(newPassword.length >= 8) { "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل." }
 
         sessionMutex.withLock {
@@ -212,8 +219,9 @@ class AuthRepositoryImpl(
             )
             operationContext.ensureActive()
             if (!update.isSuccessful) {
-                throw IllegalStateException(
-                    update.message().takeIf(String::isNotBlank)
+                throw SupabaseHttpException(
+                    statusCode = update.code(),
+                    message = update.message().takeIf(String::isNotBlank)
                         ?: "رفض Supabase تحديث كلمة المرور. قد يكون رابط الاستعادة منتهيًا."
                 )
             }
@@ -238,7 +246,7 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> = authResult {
-        require(publishableKey.isNotBlank()) { "إعدادات Supabase غير مكتملة." }
+        requireConfiguredBackend()
         require(newPassword.length >= 8) { "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل." }
         refreshStoredSessionIfNeeded()
 
@@ -262,8 +270,9 @@ class AuthRepositoryImpl(
                 request = SupabaseUpdateUserRequest(password = newPassword)
             )
             if (!response.isSuccessful) {
-                throw IllegalStateException(
-                    response.message().takeIf(String::isNotBlank)
+                throw SupabaseHttpException(
+                    statusCode = response.code(),
+                    message = response.message().takeIf(String::isNotBlank)
                         ?: "تعذر تحديث كلمة المرور."
                 )
             }
@@ -308,6 +317,10 @@ class AuthRepositoryImpl(
                     null
                 }
             }
+            return@withLock
+        }
+
+        if (!isBackendConfigured()) {
             return@withLock
         }
 
@@ -394,13 +407,23 @@ class AuthRepositoryImpl(
         )
     }
 
+    private fun requireConfiguredBackend() {
+        if (!isBackendConfigured()) {
+            throw SupabaseUnconfiguredException(
+                endpointHost = endpointHost.ifBlank { "unconfigured" },
+                message = "إعدادات Supabase غير مكتملة."
+            )
+        }
+    }
+
     private fun requireSuccessfulBody(
         response: Response<SupabaseAuthResponse>
     ): SupabaseAuthResponse {
         if (!response.isSuccessful) {
             val serverError = response.errorBody()?.string()?.let(::parseSupabaseError)
-            throw IllegalStateException(
-                serverError
+            throw SupabaseHttpException(
+                statusCode = response.code(),
+                message = serverError
                     ?: response.message().takeIf(String::isNotBlank)
                     ?: "رفض خادم Supabase طلب المصادقة."
             )

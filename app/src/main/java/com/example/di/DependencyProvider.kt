@@ -18,10 +18,19 @@ import com.example.data.remote.supabase.SupabaseSessionStore
 import com.example.data.remote.*
 import com.example.data.repository.*
 import com.example.domain.repository.*
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import com.example.presentation.viewmodel.AuthNetworkSnapshot
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import okhttp3.ConnectionPool
+import okhttp3.Dns
+import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
+import java.net.Inet4Address
+import java.net.Inet6Address
+import java.util.concurrent.TimeUnit
 
 object DependencyProvider {
     private var authRepository: AuthRepository? = null
@@ -100,9 +109,31 @@ object DependencyProvider {
         .build()
 
     private val supabaseBaseUrl = SupabaseConfig.normalizeBaseUrl(BuildConfig.SUPABASE_URL)
+    private val supabaseEndpointHost = supabaseBaseUrl
+        .substringAfter("://", "")
+        .substringBefore('/')
+        .trim()
+
+    private val vpnResilientDns = Dns { hostname ->
+        val addresses = Dns.SYSTEM.lookup(hostname)
+        val ipv4 = addresses.filterIsInstance<Inet4Address>()
+        val ipv6 = addresses.filterIsInstance<Inet6Address>()
+        if (ipv4.isNotEmpty()) ipv4 + ipv6 else addresses
+    }
+
+    private val supabaseOkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(45, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .connectionPool(ConnectionPool(4, 30, TimeUnit.SECONDS))
+        .dns(vpnResilientDns)
+        .build()
 
     private val supabaseRetrofit = Retrofit.Builder()
         .baseUrl(supabaseBaseUrl)
+        .client(supabaseOkHttpClient)
         .addConverterFactory(MoshiConverterFactory.create())
         .build()
 
@@ -144,8 +175,49 @@ object DependencyProvider {
             authRepository ?: AuthRepositoryImpl(
                 api = supabaseAuthApi,
                 publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
-                sessionStore = SupabaseSessionStore(context.applicationContext)
+                sessionStore = SupabaseSessionStore(context.applicationContext),
+                endpointHost = supabaseEndpointHost,
+                isBackendConfigured = {
+                    SupabaseConfig.isConfigured(
+                        rawUrl = BuildConfig.SUPABASE_URL,
+                        publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
+                    )
+                }
             ).also { authRepository = it }
+        }
+    }
+
+    fun inspectAuthNetwork(context: Context): AuthNetworkSnapshot {
+        return runCatching {
+            val cm = context.applicationContext
+                .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val network = cm?.activeNetwork
+            val caps = if (network != null) cm.getNetworkCapabilities(network) else null
+            if (caps == null) {
+                AuthNetworkSnapshot(
+                    endpointHost = supabaseEndpointHost,
+                    vpnActive = false,
+                    networkValidated = false,
+                    transportSummary = "No active network"
+                )
+            } else {
+                val hasVpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                val transports = buildList {
+                    if (hasVpn) add("VPN")
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) add("Wi-Fi")
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) add("Cellular")
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) add("Ethernet")
+                }
+                AuthNetworkSnapshot(
+                    endpointHost = supabaseEndpointHost,
+                    vpnActive = hasVpn,
+                    networkValidated = validated,
+                    transportSummary = transports.ifEmpty { listOf("Other") }.joinToString(" + ")
+                )
+            }
+        }.getOrElse {
+            AuthNetworkSnapshot(endpointHost = supabaseEndpointHost)
         }
     }
 

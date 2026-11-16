@@ -4,6 +4,9 @@ import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
 import com.example.domain.repository.PasswordRecoveryCredentials
+import com.example.domain.repository.SupabaseHttpException
+import com.example.domain.repository.SupabaseUnconfiguredException
+import com.example.presentation.viewmodel.AuthNetworkSnapshot
 import com.example.presentation.viewmodel.AuthUiMessage
 import com.example.presentation.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
@@ -19,8 +22,13 @@ import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLHandshakeException
 
 class MainViewModelAuthMessageTest {
 
@@ -162,6 +170,80 @@ class MainViewModelAuthMessageTest {
         advanceUntilIdle()
 
         assertEquals(AuthUiMessage.PASSWORD_UPDATE_FAILED, viewModel.actionState.value.errorMessage)
+    }
+
+    @Test
+    fun unconfiguredSupabaseProducesConfigurationMessageAndDiagnostic() = runMainViewModelTest {
+        val repository = RecordingAuthRepository().apply {
+            signInResult = Result.failure(SupabaseUnconfiguredException("your-project.supabase.co"))
+        }
+        val viewModel = MainViewModel(repository) {
+            AuthNetworkSnapshot(
+                endpointHost = "your-project.supabase.co",
+                vpnActive = true,
+                networkValidated = true,
+                transportSummary = "VPN + Cellular"
+            )
+        }
+
+        viewModel.signIn("person@example.com", "password") {}
+        advanceUntilIdle()
+
+        val state = viewModel.actionState.value
+        assertEquals(AuthUiMessage.SUPABASE_NOT_CONFIGURED, state.errorMessage)
+        assertEquals("SUPABASE_UNCONFIGURED", state.diagnostic?.code)
+        assertEquals("your-project.supabase.co", state.diagnostic?.endpointHost)
+        assertEquals(true, state.diagnostic?.vpnActive)
+    }
+
+    @Test
+    fun dnsTimeoutSslAndConnectionFailuresProduceSpecificDiagnosticCodes() = runMainViewModelTest {
+        val snapshot = AuthNetworkSnapshot(
+            endpointHost = "abc.supabase.co",
+            vpnActive = true,
+            networkValidated = true,
+            transportSummary = "VPN + Wi-Fi"
+        )
+
+        val cases = listOf(
+            UnknownHostException("Unable to resolve host") to (AuthUiMessage.NETWORK_DNS_FAILED to "DNS_RESOLUTION_FAILED"),
+            SocketTimeoutException("timeout") to (AuthUiMessage.NETWORK_TIMEOUT to "CONNECTION_TIMEOUT"),
+            SSLHandshakeException("handshake failed") to (AuthUiMessage.NETWORK_SSL_FAILED to "TLS_HANDSHAKE_FAILED"),
+            ConnectException("connection refused") to (AuthUiMessage.NETWORK_CONNECTION_FAILED to "CONNECTION_FAILED")
+        )
+
+        for ((exception, expected) in cases) {
+            val repository = RecordingAuthRepository().apply {
+                signInResult = Result.failure(exception)
+            }
+            val viewModel = MainViewModel(repository) { snapshot }
+            viewModel.signIn("person@example.com", "password") {}
+            advanceUntilIdle()
+
+            val state = viewModel.actionState.value
+            assertEquals(expected.first, state.errorMessage)
+            assertEquals(expected.second, state.diagnostic?.code)
+            assertEquals("abc.supabase.co", state.diagnostic?.endpointHost)
+            assertEquals("VPN + Wi-Fi", state.diagnostic?.transportSummary)
+        }
+    }
+
+    @Test
+    fun httpFailurePreservesStatusCodeWithoutLeakingProviderMessage() = runMainViewModelTest {
+        val repository = RecordingAuthRepository().apply {
+            signInResult = Result.failure(SupabaseHttpException(400, "raw invalid login credentials"))
+        }
+        val viewModel = MainViewModel(repository)
+
+        viewModel.signIn("person@example.com", "password") {}
+        advanceUntilIdle()
+
+        val state = viewModel.actionState.value
+        assertEquals(AuthUiMessage.SIGN_IN_FAILED, state.errorMessage)
+        assertEquals("AUTH_HTTP_400", state.diagnostic?.code)
+        assertEquals(400, state.diagnostic?.httpStatusCode)
+        assertFalse(state.toString().contains("raw invalid login credentials"))
+        assertTrue(state.diagnostic?.exceptionType == "SupabaseHttpException")
     }
 }
 
