@@ -1999,3 +1999,64 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last area worked: TeamUsage telemetry and governance integrity.
 - Next area: TeamValidation after the latest CI runs reach a final state; revisit TeamDetail/TeamUsage Supabase blockers when the project schema contract is available.
 - Latest implementation HEAD before this continuity commit: 0fbf630f52b76c1e431f53f4b9a34d0182731679.
+
+## 2026-11-17 — TeamValidation: remove fabricated evidence and make checks reversible
+
+### Confirmed defects
+- The validation engine marked synthetic in-memory scenarios as PASSED, including sequential/parallel/debate execution, failover, rate limits, Free Only, usage tracking, restart recovery and cross-user isolation.
+- The generated report injected fictional provider/model names, token counts, a resolved conflict, a simulated 429 event, zero cost and three security/sandbox guarantees. Those values were not linked to real jobs or telemetry.
+- The Vibe sandbox generated a fictional workspace/file/test sequence. The Crash sandbox displayed a fixed NullPointerException and an unexecuted patch as a verified fix.
+- Several checks wrote temporary provider/team/usage records without a consistent cleanup contract. The usage test had no reversible deletion path.
+- Single-test execution could overlap, user-scoped work was not cancelled on account changes, and the report was written only into app-private storage while the UI described it as exported.
+
+### Implementation
+- Replaced the simulated engine with repository-backed, reversible checks:
+  - #1 creates, reads and deletes a temporary team.
+  - #2 creates, reads and deletes temporary provider configuration records; it does not claim provider connectivity.
+  - #3 performs an in-memory secret-encryption round trip with ephemeral values; it does not claim a real provider key was validated.
+  - #4 performs a real connection check only for supported providers configured by the current account; if none are configured it is SKIPPED without sending a request.
+  - #5 and #6 persist/read/delete temporary team roles and leader assignment.
+  - #20 checks local AIModelRepository query scoping with a temporary provider and deletes it. Its evidence explicitly excludes Supabase RLS and Firestore rules.
+- Checks #7–#19 now return SKIPPED with a reason until they can execute through a real TeamOrchestrator job, fault-injection adapter, measured usage source or process-restart harness. No synthetic fixture is promoted to PASS.
+- Removed fabricated Vibe files, crash reports and patch diffs. Both sandbox views now show an explicit unavailable state and disable execution until a real isolated workspace/source is connected.
+- Report defaults now fail closed: no contacted models, conflicts, rate-limit events, measured cost, Free Only guarantee, backend isolation or sandbox guarantee are invented. Local repository scoping is reported separately from backend RLS.
+- Validation jobs are serialized, cancellation is propagated, account changes cancel user-scoped jobs and reset results, and the Markdown report is exported through Android's document picker rather than hidden app-private storage.
+
+### Files and implementation commits
+- `app/src/main/java/com/example/data/validation/TeamValidationEngineImpl.kt` — commits `d54afc9c850b0ae34da801ed71f566ee86ae131c`, `f90f91ccdd4e5eca2ff9361a1d0ffda4a59f37bf`, `0dc38c231976a7dbe0af43856c6f34e7fd28ff34`, `bca44a9b95ece5783478fab2bb2aa1e481e65cfb`.
+- `app/src/main/java/com/example/domain/validation/TeamValidationModels.kt` — commits `37d572f51341b9a2833c97d268efa7e4bde2f7c8`, `8f135aa8482362feb67cb13269e262174b635a6d`.
+- `app/src/main/java/com/example/di/DependencyProvider.kt` — commit `0625c68c5f595e70b02f4016df81135b2c15a88d`.
+- `app/src/main/java/com/example/presentation/viewmodel/TeamValidationViewModel.kt` — commits `7386824ec3e81a8a11fa039a69fbe27121a76a59`, `a65ed571bf11e24faa8091d57e5430b4cb00c33d`.
+- `app/src/main/java/com/example/presentation/ui/screens/TeamValidationCenterScreen.kt` — commit `8ee3b41d75f929bde1d5354a2e637fc16a9b6abf`.
+- `app/src/main/java/com/example/presentation/ui/screens/validation/ValidationReportTab.kt` — commit `90ea50edc74d74875b8995063afaa00580e433fc`.
+- `app/src/main/java/com/example/presentation/ui/screens/validation/ValidationMatrixTab.kt` — commit `10afd06ad11002667c9035a659d09ac23d9566dc`.
+- `app/src/main/java/com/example/presentation/ui/screens/validation/VibeSandboxTab.kt` — commit `f2b7828b02703902720cbc3acd3458c605c7eb0c`.
+- `app/src/main/java/com/example/presentation/ui/screens/validation/CrashSandboxTab.kt` — commit `8acf902eccf0114af347b7f2f322d5300c770f70`.
+- `app/src/test/java/com/example/data/validation/TeamValidationEngineImplTest.kt` — commits `81c924744755af3e70f8187363894365147aa78b`, `076531511d41604864eb1521b1e5109fd951b447`.
+
+### Tests and verification
+- Added seven engine regression tests for full-suite truthfulness/cleanup, temporary team cleanup, temporary provider cleanup, missing-provider skip, orchestration skip, unavailable sandboxes and fail-closed report defaults.
+- The tests have been added to source; they are not yet counted as passed.
+- CI on commit `8eece53b85e01e19130ed0ac461f6f049237fb6e` exposed a Kotlin string-template syntax error in report cost formatting. The source was corrected in `bca44a9b95ece5783478fab2bb2aa1e481e65cfb`; final CI for that and subsequent HEADs is still pending.
+- Earlier CI logs on the preceding TeamUsage head showed a Robolectric Maven artifact fetch failure; that is a separate network/dependency retrieval issue and is not treated as a source-test pass.
+- No local Gradle/Android SDK, emulator or device is available in this automation environment. No APK build, rendered RTL/LTR review, screenshot, accessibility run or device test is claimed.
+- No `AGENTS.md` / `agents.md` file was found in the repository tree at the inspected HEAD.
+- Supabase project schema/RLS was not changed. Test #20 verifies local repository query scoping only; backend RLS/Firestore isolation remains unverified.
+
+### TeamValidation criterion status
+
+| Criterion | State | Evidence / blocker |
+|---|---|---|
+| Reversible repository checks for team creation, provider records, roles and leader assignment | IN_PROGRESS | Implemented with temporary-record cleanup; awaiting CI execution |
+| Local secret-encryption round trip | IN_PROGRESS | Implemented with ephemeral values; awaiting CI execution |
+| Real configured-provider connectivity | IN_PROGRESS | Calls testConnection for supported configured providers; SKIPPED when none are configured |
+| Sequential/parallel/debate/hierarchical execution, handover, conflict detection and review (#7–#13) | BLOCKED | Requires real TeamOrchestrator jobs and versioned input/output evidence; synthetic results removed |
+| Pause/resume, failover, 429 handling, Free Only enforcement, metered usage and process recovery (#14–#19) | BLOCKED | Requires real persisted execution, controlled fault injection, usage telemetry and restart harness; no synthetic writes retained |
+| Vibe executable sandbox | BLOCKED | No isolated workspace capable of writing files and running tests is connected |
+| Crash investigation sandbox | BLOCKED | No real crash source plus isolated patch/build/regression pipeline is connected |
+| Report accuracy, progress states and user-selected Markdown export | IN_PROGRESS | Fail-closed report and Storage Access Framework export implemented; awaiting CI and UI verification |
+| Rendered RTL/LTR, device sizes, accessibility and navigation verification | BLOCKED | No Android emulator/device available |
+
+### Persistent continuity
+- Last area worked: TeamValidation evidence integrity, reversible repository checks and report/export behavior.
+- Next exact step: inspect the Actions runs for the latest main HEAD until terminal status; fix any compile/test/lint failures before adding more TeamValidation behavior. Then build a test-only real TeamOrchestrator execution fixture with deterministic provider adapters and persisted job evidence. Do not mark TeamValidation closed while #7–#19, either executable sandbox, backend isolation or device verification remains BLOCKED.
