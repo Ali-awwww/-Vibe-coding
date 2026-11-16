@@ -8,6 +8,7 @@ import com.example.domain.repository.AIModelTeamRepository
 import com.example.domain.repository.AuthRepository
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -59,6 +60,9 @@ class TeamDetailViewModel(
     val uiState: StateFlow<TeamDetailUiState> = _uiState.asStateFlow()
     private val currentUser = authRepository.currentUser.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     private val refreshRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private var estimationJob: Job? = null
+    private var executionJob: Job? = null
+    private var mutationJob: Job? = null
 
     init {
         if (teamId.isBlank()) {
@@ -91,7 +95,8 @@ class TeamDetailViewModel(
             flow { emit(teamRepository.getTeamById(teamId)) },
             teamRepository.getTeamExecutions(teamId)
         ) { team, executions ->
-            TeamDetailLoadResult.Loaded(userId, team, executions)
+            val result: TeamDetailLoadResult = TeamDetailLoadResult.Loaded(userId, team, executions)
+            result
         }
             .onStart { emit(TeamDetailLoadResult.Loading(userId)) }
             .catch { cause ->
@@ -102,8 +107,9 @@ class TeamDetailViewModel(
     private fun applyLoadResult(result: TeamDetailLoadResult) {
         when (result) {
             is TeamDetailLoadResult.Loading -> {
+                val accountChanged = _uiState.value.userId != result.userId
+                if (accountChanged) cancelUserScopedOperations()
                 _uiState.update { current ->
-                    val accountChanged = current.userId != result.userId
                     current.copy(
                         userId = result.userId,
                         isAuthenticated = true,
@@ -118,6 +124,7 @@ class TeamDetailViewModel(
             }
 
             TeamDetailLoadResult.Unauthenticated -> {
+                cancelUserScopedOperations()
                 _uiState.value = TeamDetailUiState(
                     isAuthenticated = false,
                     isLoading = false,
@@ -181,7 +188,7 @@ class TeamDetailViewModel(
         }
         if (_uiState.value.isEstimating) return
 
-        viewModelScope.launch {
+        estimationJob = viewModelScope.launch {
             _uiState.update { it.copy(isEstimating = true, error = null) }
             try {
                 val estimation = teamOrchestrator.estimateTaskResources(userId, team, prompt)
@@ -229,7 +236,7 @@ class TeamDetailViewModel(
         if (_uiState.value.isExecuting) return
 
         _uiState.update { it.copy(showEstimationDialog = false, error = null, isExecuting = true) }
-        viewModelScope.launch {
+        executionJob = viewModelScope.launch {
             try {
                 teamOrchestrator.executeTask(userId, team, prompt).collect { execution ->
                     _uiState.update { it.copy(currentExecution = execution) }
@@ -278,7 +285,7 @@ class TeamDetailViewModel(
     ) {
         if (authenticatedUserId() == null || _uiState.value.isMutating) return
 
-        viewModelScope.launch {
+        mutationJob = viewModelScope.launch {
             _uiState.update { it.copy(isMutating = true, error = null) }
             try {
                 mutation().getOrThrow()
@@ -296,6 +303,15 @@ class TeamDetailViewModel(
                 _uiState.update { it.copy(isMutating = false) }
             }
         }
+    }
+
+    private fun cancelUserScopedOperations() {
+        estimationJob?.cancel()
+        executionJob?.cancel()
+        mutationJob?.cancel()
+        estimationJob = null
+        executionJob = null
+        mutationJob = null
     }
 
     private fun authenticatedUserId(): String? {

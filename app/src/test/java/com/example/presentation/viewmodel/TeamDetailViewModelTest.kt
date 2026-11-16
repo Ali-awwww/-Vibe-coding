@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.*
@@ -178,6 +180,28 @@ class TeamDetailViewModelTest {
     }
 
     @Test
+    fun signOutCancelsInFlightExecutionAndClearsItsResult() = runTest(dispatcher) {
+        teamRepository.seedTeam(ModelTeam(id = "team-1", name = "Vibe team", ownerId = "user-1"))
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+        orchestrator.holdExecutionOpen = true
+        viewModel.updateTaskPrompt("Run a long task")
+        viewModel.executeTeamTask()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.isExecuting)
+        assertNotNull(viewModel.uiState.value.currentExecution)
+
+        authRepository.signOut()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAuthenticated)
+        assertFalse(viewModel.uiState.value.isExecuting)
+        assertNull(viewModel.uiState.value.team)
+        assertNull(viewModel.uiState.value.currentExecution)
+    }
+
+    @Test
     fun invalidTeamIdDoesNotCallRepository() = runTest(dispatcher) {
         val viewModel = TeamDetailViewModel("", teamRepository, orchestrator, authRepository)
         advanceUntilIdle()
@@ -266,10 +290,12 @@ class TeamDetailViewModelTest {
     private class FakeTeamOrchestrator : TeamOrchestrator {
         var estimationFailure: Throwable? = null
         var executionFailure: Throwable? = null
+        var holdExecutionOpen: Boolean = false
 
         override fun executeTask(userId: String, team: ModelTeam, prompt: String): Flow<TeamExecution> = flow {
             executionFailure?.let { throw it }
             emit(TeamExecution(id = "execution-1", teamId = team.id, userId = userId, prompt = prompt))
+            if (holdExecutionOpen) awaitCancellation()
         }
 
         override fun executeTaskWithContext(
