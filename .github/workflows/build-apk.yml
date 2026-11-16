@@ -12,11 +12,7 @@ jobs:
     name: Build & Package APK
     runs-on: ubuntu-latest
     env:
-      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-      KEYSTORE_PATH: ${{ runner.temp }}/vibe-coding-release.jks
-      STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      ANDROID_SIGNING_BUNDLE: ${{ secrets.ANDROID_SIGNING_BUNDLE }}
 
     steps:
       - name: Checkout Repository
@@ -36,9 +32,20 @@ jobs:
       - name: Prepare release signing
         shell: bash
         run: |
-          if [ -n "${KEYSTORE_BASE64:-}" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
-            chmod 600 "$KEYSTORE_PATH"
+          if [ -n "${ANDROID_SIGNING_BUNDLE:-}" ]; then
+            python3 - <<'PY'
+            import base64, json, os
+            from pathlib import Path
+            bundle = json.loads(base64.b64decode(os.environ["ANDROID_SIGNING_BUNDLE"]))
+            keystore_path = Path(os.environ["RUNNER_TEMP"]) / "vibe-coding-release.jks"
+            keystore_path.write_bytes(base64.b64decode(bundle["keystore_base64"]))
+            keystore_path.chmod(0o600)
+            with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+                env.write(f"KEYSTORE_PATH={keystore_path}\n")
+                env.write(f"STORE_PASSWORD={bundle['store_password']}\n")
+                env.write(f"KEY_ALIAS={bundle['key_alias']}\n")
+                env.write(f"KEY_PASSWORD={bundle['key_password']}\n")
+            PY
           else
             echo "Release signing secrets are not configured; building unsigned release artifacts."
           fi
