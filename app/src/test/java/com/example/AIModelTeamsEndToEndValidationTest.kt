@@ -8,7 +8,6 @@ import com.example.data.local.AppDatabase
 import com.example.data.remote.*
 import com.example.data.repository.AIModelRepositoryImpl
 import com.example.data.validation.TeamValidationEngineImpl
-import com.example.domain.agent.TeamOrchestrator
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
 import com.example.domain.repository.AIModelTeamRepository
@@ -29,7 +28,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
 @Config
@@ -41,7 +39,6 @@ class AIModelTeamsEndToEndValidationTest {
     private lateinit var aiProviderDao: AIProviderDao
     private lateinit var aiModelRepository: AIModelRepository
     private lateinit var teamRepository: AIModelTeamRepository
-    private lateinit var mockTeamOrchestrator: TeamOrchestrator
     private lateinit var validationEngine: TeamValidationEngineImpl
 
     @Before
@@ -79,53 +76,9 @@ class AIModelTeamsEndToEndValidationTest {
         )
         teamRepository = InMemoryAIModelTeamRepository()
 
-        mockTeamOrchestrator = object : TeamOrchestrator {
-            override fun executeTask(userId: String, team: ModelTeam, prompt: String): Flow<TeamExecution> =
-                flowOf(TeamExecution(id = "e1", teamId = team.id, status = ExecutionStatus.COMPLETED))
-
-            override fun executeTaskWithContext(
-                userId: String,
-                team: ModelTeam,
-                prompt: String,
-                attachedFiles: List<AttachedFileContext>,
-                projectId: String?
-            ): Flow<TeamExecution> = flowOf(TeamExecution(id = "e1", teamId = team.id, status = ExecutionStatus.COMPLETED))
-
-            override suspend fun estimateTaskResources(userId: String, team: ModelTeam, prompt: String): PreExecutionEstimation =
-                PreExecutionEstimation()
-
-            override suspend fun pauseExecution(executionId: String) {
-                val current = teamRepository.getExecutionById(executionId)
-                if (current != null) teamRepository.logExecution(current.copy(status = ExecutionStatus.PAUSED))
-            }
-
-            override suspend fun resumeExecution(executionId: String, userId: String, team: ModelTeam): Flow<TeamExecution> =
-                flowOf(TeamExecution(id = executionId, teamId = team.id, status = ExecutionStatus.EXECUTING))
-
-            override suspend fun stopExecution(executionId: String) {}
-            override suspend fun retryFailedSteps(executionId: String, userId: String, team: ModelTeam): Flow<TeamExecution> =
-                flowOf(TeamExecution(id = executionId, teamId = team.id, status = ExecutionStatus.EXECUTING))
-            override suspend fun assignDirectTask(
-                executionId: String,
-                userId: String,
-                team: ModelTeam,
-                memberId: String,
-                taskPrompt: String
-            ): Flow<TeamExecution> = flowOf(TeamExecution(id = executionId, teamId = team.id, status = ExecutionStatus.EXECUTING))
-            override suspend fun sendInstruction(
-                executionId: String,
-                userId: String,
-                team: ModelTeam,
-                instruction: TeamInstruction
-            ): Flow<TeamExecution> = flowOf(TeamExecution(id = executionId, teamId = team.id, status = ExecutionStatus.EXECUTING))
-            override suspend fun changeMemberAgent(teamId: String, memberId: String, newModelId: String): Result<Unit> = Result.success(Unit)
-            override suspend fun planAndDistribute(team: ModelTeam, prompt: String): Result<List<ExecutionStep>> = Result.success(emptyList())
-        }
-
         validationEngine = TeamValidationEngineImpl(
             aiModelRepository = aiModelRepository,
             teamRepository = teamRepository,
-            teamOrchestrator = mockTeamOrchestrator,
             encryptSecret = testEncryptSecret,
             decryptSecret = testDecryptSecret
         )
@@ -160,111 +113,97 @@ class AIModelTeamsEndToEndValidationTest {
         val result = validationEngine.runSingleTest("user_isolation_tester", 20).first { it.status != ValidationStatus.RUNNING }
         assertEquals(ValidationStatus.PASSED, result.status)
         assertNotNull(result.evidence)
-        assertTrue(result.evidence!!.contains("العزل الصارم لمفاتيح المستخدمين"))
+        assertTrue(result.evidence!!.contains("local AIModelRepository"))
+        assertTrue(result.evidence!!.contains("does not verify Supabase RLS"))
     }
 
     @Test
     fun `test free only protection enforcement requirement 17`() = runTest(testDispatcher) {
         val result = validationEngine.runSingleTest("user_cost_shield", 17).first { it.status != ValidationStatus.RUNNING }
-        assertEquals(ValidationStatus.PASSED, result.status)
-        assertTrue(result.evidence!!.contains("Free Only"))
+        assertEquals(ValidationStatus.SKIPPED, result.status)
+        assertNotNull(result.errorMessage)
     }
 
     @Test
     fun `test model-to-model result handover requirement 11`() = runTest(testDispatcher) {
         val result = validationEngine.runSingleTest("user_handover", 11).first { it.status != ValidationStatus.RUNNING }
-        assertEquals(ValidationStatus.PASSED, result.status)
-        assertTrue(result.evidence!!.contains("calculateCrashScore"))
+        assertEquals(ValidationStatus.SKIPPED, result.status)
+        assertNotNull(result.errorMessage)
     }
 
     @Test
     fun `test debate mode execution and consensus requirement 9`() = runTest(testDispatcher) {
         val result = validationEngine.runSingleTest("user_debate", 9).first { it.status != ValidationStatus.RUNNING }
-        assertEquals(ValidationStatus.PASSED, result.status)
-        assertTrue(result.evidence!!.contains("جولة نقاش حقيقية"))
+        assertEquals(ValidationStatus.SKIPPED, result.status)
+        assertNotNull(result.errorMessage)
     }
 
     @Test
     fun `test pause and resume execution requirement 14`() = runTest(testDispatcher) {
         val result = validationEngine.runSingleTest("user_pause_resume", 14).first { it.status != ValidationStatus.RUNNING }
-        assertEquals(ValidationStatus.PASSED, result.status)
-        assertTrue(result.evidence!!.contains("PAUSED"))
-        assertTrue(result.evidence!!.contains("EXECUTING"))
+        assertEquals(ValidationStatus.SKIPPED, result.status)
+        assertNotNull(result.errorMessage)
     }
 
     @Test
-    fun `test full 20-point validation suite executes and passes 100 percent`() = runTest(testDispatcher) {
-        var lastProgress = validationEngine.runFullValidationSuite("usr_e2e_master").first()
-        validationEngine.runFullValidationSuite("usr_e2e_master").collect { progress ->
-            lastProgress = progress
-        }
+    fun `test full matrix reports only executed checks as passed`() = runTest(testDispatcher) {
+        val lastProgress = validationEngine.runFullValidationSuite("usr_e2e_master").toList().last()
 
         assertFalse("Progress should complete", lastProgress.isRunning)
-        assertEquals("All 20 tests must be executed", 20, lastProgress.items.size)
-        val nonPassingItems = lastProgress.items.filter { it.status != ValidationStatus.PASSED }
-        assertTrue(
-            "All tests must pass. Non-passing items: " + nonPassingItems.joinToString { item ->
-                "id=${item.id}, status=${item.status}, error=${item.errorMessage}, evidence=${item.evidence}"
-            },
-            nonPassingItems.isEmpty()
-        )
+        assertEquals(20, lastProgress.items.size)
+        assertEquals(6, lastProgress.items.count { it.status == ValidationStatus.PASSED })
+        assertEquals(14, lastProgress.items.count { it.status == ValidationStatus.SKIPPED })
+        assertEquals(0, lastProgress.items.count { it.status == ValidationStatus.FAILED })
         assertNotNull(lastProgress.summaryReport)
-        assertEquals(20, lastProgress.summaryReport?.passedCount)
-        assertEquals(0, lastProgress.summaryReport?.failedCount)
+        assertEquals(6, lastProgress.summaryReport?.passedCount)
+        assertEquals(14, lastProgress.summaryReport?.skippedCount)
+        assertFalse(lastProgress.summaryReport?.isFreeOnlyProtected ?: true)
+        assertFalse(lastProgress.summaryReport?.backendUserIsolationVerified ?: true)
     }
 
     @Test
-    fun `test vibe coding isolated sandbox executes all 7 steps with test fix`() = runTest(testDispatcher) {
-        var lastVibeProgress = validationEngine.runVibeCodingSandbox("usr_vibe_test").first()
-        validationEngine.runVibeCodingSandbox("usr_vibe_test").collect { progress ->
-            lastVibeProgress = progress
-        }
+    fun `test vibe sandbox is blocked until an executable workspace exists`() = runTest(testDispatcher) {
+        val progress = validationEngine.runVibeCodingSandbox("usr_vibe_test").first()
 
-        assertTrue("Vibe cycle must complete", lastVibeProgress.isComplete)
-        assertEquals("Must execute 7 steps", 7, lastVibeProgress.steps.size)
-        assertTrue("All steps must pass", lastVibeProgress.steps.all { it.status == ValidationStatus.PASSED })
-
-        // Check that step 6 found test failure and step 7 applied fix
-        val step6 = lastVibeProgress.steps[5]
-        val step7 = lastVibeProgress.steps[6]
-        assertEquals(false, step6.testPass)
-        assertEquals(true, step7.testPass)
-        assertTrue(step7.outputContent.contains("RE-RUN TESTS: ALL 5 TESTS PASSED"))
+        assertFalse(progress.isAvailable)
+        assertFalse(progress.isComplete)
+        assertTrue(progress.steps.isEmpty())
+        assertTrue(progress.generatedFiles.isEmpty())
+        assertNotNull(progress.blockedReason)
     }
 
     @Test
-    fun `test crash investigation isolated sandbox executes all 7 steps on synthetic report`() = runTest(testDispatcher) {
-        var lastCrashProgress = validationEngine.runCrashInvestigationSandbox("usr_crash_test").first()
-        validationEngine.runCrashInvestigationSandbox("usr_crash_test").collect { progress ->
-            lastCrashProgress = progress
-        }
+    fun `test crash sandbox does not invent a crash or verified patch`() = runTest(testDispatcher) {
+        val progress = validationEngine.runCrashInvestigationSandbox("usr_crash_test").first()
 
-        assertTrue("Crash investigation cycle must complete", lastCrashProgress.isComplete)
-        assertEquals("Must execute 7 steps", 7, lastCrashProgress.steps.size)
-        assertTrue("All steps must be verified", lastCrashProgress.steps.all { it.verified })
-        assertTrue("Patch diff must be generated", lastCrashProgress.patchDiff.contains("UserManager.kt"))
-        assertTrue(lastCrashProgress.finalVerdict.contains("اكتشاف السبب الجذري واقتراح الحل"))
+        assertFalse(progress.isAvailable)
+        assertFalse(progress.isComplete)
+        assertTrue(progress.steps.isEmpty())
+        assertTrue(progress.crashSummary.isBlank())
+        assertTrue(progress.patchDiff.isBlank())
+        assertNotNull(progress.blockedReason)
     }
 
     @Test
-    fun `test validation report generates truthful metrics and markdown audit`() = runTest(testDispatcher) {
-        val initialTests = validationEngine.getInitialTests()
-        val report = validationEngine.generateValidationReport(initialTests, null, null)
+    fun `test report leaves unverified metrics unavailable`() = runTest(testDispatcher) {
+        val report = validationEngine.generateValidationReport(validationEngine.getInitialTests(), null, null)
 
         assertEquals(20, report.totalTests)
-        assertEquals(0.0, report.totalActualCostUsd, 0.001)
-        assertTrue(report.isFreeOnlyProtected)
-        assertTrue(report.userKeyIsolationVerified)
-        assertTrue(report.isolatedSandboxVerified)
-        assertTrue("Report must list contacted models", report.modelsContacted.isNotEmpty())
-        assertTrue("Report must document conflicts", report.conflictsDetected.isNotEmpty())
+        assertEquals(20, report.pendingCount)
+        assertFalse(report.actualCostMeasured)
+        assertFalse(report.isFreeOnlyProtected)
+        assertFalse(report.userKeyIsolationVerified)
+        assertFalse(report.backendUserIsolationVerified)
+        assertFalse(report.isolatedSandboxVerified)
+        assertTrue(report.modelsContacted.isEmpty())
+        assertTrue(report.conflictsDetected.isEmpty())
+        assertTrue(report.rateLimitsObserved.isEmpty())
 
         val md = validationEngine.buildMarkdownReport(report)
-        assertTrue(md.contains("تقرير التحقق الشامل لنظام فرق نماذج الذكاء الاصطناعي"))
-        assertTrue(md.contains("SANDBOX DEMO"))
-        assertTrue(md.contains("Google Gemini 3.8 Flash [Sandbox Demo]"))
-        assertTrue(md.contains("OpenRouter Auto Free [Sandbox Demo]"))
-        assertFalse(md.contains("gemini-1.5"))
+        assertTrue(md.contains("NOT VERIFIED"))
+        assertTrue(md.contains("PENDING"))
+        assertFalse(md.contains("SANDBOX DEMO"))
+        assertFalse(md.contains("Google Gemini 3.8 Flash"))
     }
 
     @Test
@@ -289,6 +228,9 @@ class AIModelTeamsEndToEndValidationTest {
 
         viewModel.selectTab(ValidationTab.REPORT)
         assertEquals(ValidationTab.REPORT, viewModel.uiState.value.selectedTab)
+        assertNull(viewModel.uiState.value.summaryReport)
+        viewModel.runSingleTest(1)
+        advanceUntilIdle()
         assertNotNull(viewModel.uiState.value.summaryReport)
 
         // Expand toggle
