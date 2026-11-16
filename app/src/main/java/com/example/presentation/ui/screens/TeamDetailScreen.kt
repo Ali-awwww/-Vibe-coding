@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -52,101 +53,148 @@ fun TeamDetailScreen(navController: NavController, teamId: String) {
     }
 
     Scaffold(
+        containerColor = com.example.ui.theme.VibeDesignTokens.Color.SpaceBackground,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(uiState.team?.name ?: "تفاصيل الفريق") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate(Screen.TeamChat(teamId)) }) {
-                        Icon(Icons.Default.Chat, contentDescription = "Team Chat")
+                    IconButton(
+                        enabled = uiState.team != null && uiState.isAuthenticated,
+                        onClick = { navController.navigate(Screen.TeamChat(teamId)) }
+                    ) {
+                        Icon(Icons.Default.Chat, contentDescription = "محادثة الفريق")
                     }
-                    IconButton(onClick = { navController.navigate(Screen.TeamUsage(teamId)) }) {
-                        Icon(Icons.Default.QueryStats, contentDescription = "Usage Dashboard")
+                    IconButton(
+                        enabled = uiState.team != null && uiState.isAuthenticated,
+                        onClick = { navController.navigate(Screen.TeamUsage(teamId)) }
+                    ) {
+                        Icon(Icons.Default.QueryStats, contentDescription = "استهلاك الفريق")
                     }
-                    IconButton(onClick = { viewModel.setGovernanceDialogVisible(true) }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Governance Settings")
+                    IconButton(
+                        enabled = uiState.team != null && uiState.isAuthenticated && !uiState.isMutating,
+                        onClick = { viewModel.setGovernanceDialogVisible(true) }
+                    ) {
+                        Icon(Icons.Default.Tune, contentDescription = "إعدادات الحوكمة")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = com.example.ui.theme.VibeDesignTokens.Color.SpaceBackground,
+                    titleContentColor = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary,
+                    navigationIconContentColor = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary,
+                    actionIconContentColor = com.example.ui.theme.VibeDesignTokens.Color.Cyan
+                )
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .background(com.example.ui.theme.VibeDesignTokens.Color.SpaceBackground)
+                .padding(innerPadding)
         ) {
-            uiState.team?.let { team ->
-                item {
-                    TeamInfoSection(
-                        team = team,
-                        onViewUsage = { navController.navigate(Screen.TeamUsage(teamId)) },
-                        onEditGovernance = { viewModel.setGovernanceDialogVisible(true) }
-                    )
+            when {
+                uiState.isLoading -> Box(
+                    modifier = Modifier.fillMaxSize().testTag("team_detail_loading"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = com.example.ui.theme.VibeDesignTokens.Color.Cyan)
                 }
 
-                item {
-                    Text("أعضاء الفريق النشطون", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
+                !uiState.isAuthenticated -> TeamDetailStatePanel(
+                    title = "يلزم تسجيل الدخول",
+                    message = TeamDetailViewModel.AUTH_REQUIRED_MESSAGE,
+                    onRetry = null
+                )
 
-                items(team.members) { member ->
-                    MemberStatusCard(member)
-                }
+                uiState.team == null -> TeamDetailStatePanel(
+                    title = "الفريق غير متاح",
+                    message = uiState.loadError ?: "لم يتم العثور على الفريق.",
+                    onRetry = { viewModel.refresh() }
+                )
 
-                item {
-                    HorizontalDivider()
-                    Spacer(Modifier.height(8.dp))
-                    Text("تنفيذ مهمة برمجية", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-
-                item {
-                    ExecutionInputSection(
-                        prompt = uiState.taskPrompt,
-                        onPromptChange = { viewModel.updateTaskPrompt(it) },
-                        onExecute = { viewModel.executeTeamTask() },
-                        onEstimate = { viewModel.requestEstimation() },
-                        isLoading = uiState.currentExecution?.status == ExecutionStatus.EXECUTING
-                    )
-                }
-
-                uiState.currentExecution?.let { execution ->
-                    item {
-                        ExecutionStatusSection(execution)
-                    }
-
-                    if (execution.sharedMemory.entries.isNotEmpty()) {
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize().testTag("team_detail_content"),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    uiState.team?.let { team ->
                         item {
-                            SharedMemorySection(execution.sharedMemory)
+                            TeamInfoSection(
+                                team = team,
+                                onViewUsage = { navController.navigate(Screen.TeamUsage(teamId)) },
+                                onEditGovernance = { viewModel.setGovernanceDialogVisible(true) }
+                            )
                         }
-                    }
 
-                    if (execution.messages.isNotEmpty()) {
                         item {
-                            AgentMessagesSection(execution.messages)
+                            Text("أعضاء الفريق", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary)
                         }
-                    }
-                    
-                    item {
-                        Text("خطة التنفيذ والمهام", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
 
-                    items(execution.steps) { step ->
-                        ExecutionStepCard(step)
-                    }
-                }
-                
-                if (uiState.currentExecution == null && uiState.executions.isNotEmpty()) {
-                    item {
-                        Text("سجل التنفيذ السابق", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
-                    items(uiState.executions) { prevExec ->
-                        ExecutionHistoryItem(prevExec)
+                        if (team.members.isEmpty()) {
+                            item {
+                                Text(
+                                    "لا يوجد أعضاء في هذا الفريق بعد.",
+                                    color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                )
+                            }
+                        } else {
+                            items(team.members, key = { it.id }) { member ->
+                                MemberStatusCard(member)
+                            }
+                        }
+
+                        item {
+                            HorizontalDivider(color = com.example.ui.theme.VibeDesignTokens.Color.Grid)
+                            Spacer(Modifier.height(8.dp))
+                            Text("تنفيذ مهمة برمجية", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary)
+                        }
+
+                        item {
+                            ExecutionInputSection(
+                                prompt = uiState.taskPrompt,
+                                onPromptChange = { viewModel.updateTaskPrompt(it) },
+                                onExecute = { viewModel.executeTeamTask() },
+                                onEstimate = { viewModel.requestEstimation() },
+                                isLoading = uiState.isExecuting || uiState.currentExecution?.status == ExecutionStatus.EXECUTING,
+                                isEstimating = uiState.isEstimating
+                            )
+                        }
+
+                        uiState.currentExecution?.let { execution ->
+                            item { ExecutionStatusSection(execution) }
+
+                            if (execution.sharedMemory.entries.isNotEmpty()) {
+                                item { SharedMemorySection(execution.sharedMemory) }
+                            }
+
+                            if (execution.messages.isNotEmpty()) {
+                                item { AgentMessagesSection(execution.messages) }
+                            }
+
+                            item {
+                                Text("خطة التنفيذ والمهام", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary)
+                            }
+
+                            items(execution.steps, key = { it.id }) { step ->
+                                ExecutionStepCard(step)
+                            }
+                        }
+
+                        if (uiState.currentExecution == null && uiState.executions.isNotEmpty()) {
+                            item {
+                                Text("سجل التنفيذ السابق", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary)
+                            }
+                            items(uiState.executions, key = { it.id }) { previousExecution ->
+                                ExecutionHistoryItem(previousExecution)
+                            }
+                        }
                     }
                 }
             }
@@ -167,6 +215,61 @@ fun TeamDetailScreen(navController: NavController, teamId: String) {
             onSave = { viewModel.updateGovernance(it) },
             onDismiss = { viewModel.setGovernanceDialogVisible(false) }
         )
+    }
+}
+
+
+@Composable
+private fun TeamDetailStatePanel(
+    title: String,
+    message: String,
+    onRetry: (() -> Unit)?
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .testTag("team_detail_unavailable"),
+        color = com.example.ui.theme.VibeDesignTokens.Color.SpacePanel,
+        shape = RoundedCornerShape(com.example.ui.theme.VibeDesignTokens.Shape.Panel),
+        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.VibeDesignTokens.Color.Grid)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                Icons.Default.Groups,
+                contentDescription = null,
+                tint = com.example.ui.theme.VibeDesignTokens.Color.Warning,
+                modifier = Modifier.size(32.dp)
+            )
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted
+            )
+            if (onRetry != null) {
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = com.example.ui.theme.VibeDesignTokens.Color.Cyan,
+                        contentColor = com.example.ui.theme.VibeDesignTokens.Color.OnCyan
+                    )
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("إعادة المحاولة")
+                }
+            }
+        }
     }
 }
 
@@ -303,7 +406,8 @@ fun ExecutionInputSection(
     onPromptChange: (String) -> Unit,
     onExecute: () -> Unit,
     onEstimate: () -> Unit,
-    isLoading: Boolean
+    isLoading: Boolean,
+    isEstimating: Boolean = false
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
@@ -320,9 +424,13 @@ fun ExecutionInputSection(
             OutlinedButton(
                 onClick = onEstimate,
                 modifier = Modifier.weight(1f),
-                enabled = !isLoading && prompt.isNotBlank()
+                enabled = !isLoading && !isEstimating && prompt.isNotBlank()
             ) {
-                Icon(Icons.Default.Calculate, null, modifier = Modifier.size(18.dp))
+                if (isEstimating) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.Calculate, null, modifier = Modifier.size(18.dp))
+                }
                 Spacer(Modifier.width(6.dp))
                 Text("تقدير الموارد", style = MaterialTheme.typography.labelMedium)
             }
