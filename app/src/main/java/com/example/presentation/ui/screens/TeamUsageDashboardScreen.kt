@@ -27,6 +27,7 @@ import androidx.navigation.NavController
 import com.example.di.DependencyProvider
 import com.example.domain.model.*
 import com.example.presentation.ui.components.TeamGovernanceDialog
+import com.example.presentation.viewmodel.TeamUsagePeriod
 import com.example.presentation.viewmodel.TeamUsageUiState
 import com.example.presentation.viewmodel.TeamUsageViewModel
 import java.text.SimpleDateFormat
@@ -501,7 +502,7 @@ private fun MemberFilterChips(
 @Composable
 private fun MemberUsageCard(summary: MemberUsageSummary) {
     val costLabel = when {
-        !summary.isCostConfirmed -> "تقديري: " + String.format("%.3f", summary.costUsd) + "$"
+        !summary.isCostConfirmed -> "تكلفة غير مؤكدة"
         summary.isFreeModel -> "مجاني (مسجل)"
         else -> "مؤكد: " + String.format("%.3f", summary.costUsd) + "$"
     }
