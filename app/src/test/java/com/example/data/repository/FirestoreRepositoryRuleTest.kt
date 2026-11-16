@@ -248,7 +248,7 @@ class FirestoreRepositoryRuleTest : FirestoreEmulatorTestBase() {
         val directFailure = runCatching {
             withTimeout(FLOW_TIMEOUT_MS) {
                 firestore.collection("users").document("someone")
-                    .collection("projects").snapshots().first()
+                    .collection("projects").get().await()
             }
         }.exceptionOrNull()
         assertNotNull(directFailure)
