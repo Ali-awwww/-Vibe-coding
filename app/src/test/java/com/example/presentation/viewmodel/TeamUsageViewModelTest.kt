@@ -151,6 +151,9 @@ class TeamUsageViewModelTest {
                 isFree = false,
                 isCostConfirmed = true,
                 costUsd = 0.0,
+                tokensInput = 0,
+                tokensOutput = 0,
+                totalTokens = 0,
                 status = "BLOCKED_PAID"
             )
         )
