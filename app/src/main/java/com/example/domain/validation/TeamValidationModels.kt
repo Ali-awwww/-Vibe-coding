@@ -134,7 +134,7 @@ data class CrashInvestigationSandboxProgress(
     val currentStepIndex: Int = 0,
     val totalSteps: Int = 7,
     val steps: List<CrashInvestigationSandboxStep> = emptyList(),
-    val syntheticCrashSummary: String = "",
+    val crashSummary: String = "",
     val patchDiff: String = "",
     val isComplete: Boolean = false,
     val isRunning: Boolean = false,
