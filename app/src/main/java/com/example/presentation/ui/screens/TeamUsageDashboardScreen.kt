@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,123 +47,172 @@ fun TeamUsageDashboardScreen(
         )
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
     var showGovernanceDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearError()
+        }
+    }
+    LaunchedEffect(uiState.isAuthenticated, uiState.team?.id) {
+        if (!uiState.isAuthenticated || uiState.team == null) showGovernanceDialog = false
+    }
+
     Scaffold(
+        containerColor = com.example.ui.theme.VibeDesignTokens.Color.SpaceBackground,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("لوحة استهلاك وحوكمة الفريق", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(uiState.team?.name ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("لوحة استهلاك الفريق", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(uiState.team?.name ?: "", style = MaterialTheme.typography.labelSmall, color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showGovernanceDialog = true }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Governance Settings")
+                    IconButton(
+                        enabled = uiState.team != null && uiState.isAuthenticated && !uiState.isMutating,
+                        onClick = { showGovernanceDialog = true }
+                    ) {
+                        Icon(Icons.Default.Tune, contentDescription = "إعدادات الحوكمة")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = com.example.ui.theme.VibeDesignTokens.Color.SpaceBackground,
+                    titleContentColor = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary,
+                    navigationIconContentColor = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary,
+                    actionIconContentColor = com.example.ui.theme.VibeDesignTokens.Color.Cyan
+                )
             )
         }
     ) { innerPadding ->
-        if (uiState.isLoading) {
-            Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // 1. High-level Consumption Metrics Row
-                item {
-                    TeamMetricsOverview(uiState)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(com.example.ui.theme.VibeDesignTokens.Color.SpaceBackground)
+                .padding(innerPadding)
+        ) {
+            when {
+                uiState.isLoading -> Box(
+                    modifier = Modifier.fillMaxSize().testTag("team_usage_loading"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = com.example.ui.theme.VibeDesignTokens.Color.Cyan)
                 }
 
-                // 2. Active Governance Policy Card
-                item {
-                    GovernanceStatusCard(
-                        team = uiState.team,
-                        onEditPolicy = { showGovernanceDialog = true }
-                    )
-                }
+                !uiState.isAuthenticated -> TeamUsageStatePanel(
+                    title = "يلزم تسجيل الدخول",
+                    message = TeamUsageViewModel.AUTH_REQUIRED_MESSAGE,
+                    onRetry = null
+                )
 
-                // 3. Failover Alerts (if any)
-                if (uiState.failoverEvents.isNotEmpty()) {
+                uiState.team == null -> TeamUsageStatePanel(
+                    title = "الفريق غير متاح",
+                    message = uiState.loadError ?: "لا يمكن عرض بيانات هذا الفريق.",
+                    onRetry = { viewModel.refresh() }
+                )
+
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize().testTag("team_usage_content"),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                     item {
-                        FailoversSection(uiState.failoverEvents)
+                        PeriodFilterChips(
+                            selectedPeriod = uiState.selectedPeriod,
+                            onSelect = viewModel::updatePeriod
+                        )
                     }
-                }
 
-                // 4. Per-Member Consumption Breakdown
-                item {
-                    Text(
-                        "استهلاك أعضاء الفريق (Per-Member Breakdown)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                    item { TeamMetricsOverview(uiState) }
 
-                // Member Filter Chips
-                item {
-                    MemberFilterChips(
-                        members = uiState.memberSummaries,
-                        selectedId = uiState.selectedMemberId,
-                        onSelect = { viewModel.selectMemberFilter(it) }
-                    )
-                }
+                    item {
+                        GovernanceStatusCard(
+                            team = uiState.team,
+                            hasMeasuredUsage = uiState.hasMeasuredUsage,
+                            hasPaidUsageUnderFreeOnly = uiState.hasPaidUsageUnderFreeOnly,
+                            onEditPolicy = { showGovernanceDialog = true }
+                        )
+                    }
 
-                items(uiState.memberSummaries.filter { uiState.selectedMemberId == null || it.memberId == uiState.selectedMemberId }) { summary ->
-                    MemberUsageCard(summary)
-                }
+                    if (uiState.failoverEvents.isNotEmpty()) {
+                        item { FailoversSection(uiState.failoverEvents) }
+                    }
 
-                // 5. Operations Audit Log Section
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    item {
                         Text(
-                            "سجل العمليات والطلبات (Operations Log)",
+                            "استهلاك أعضاء الفريق",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "${uiState.filteredRecords.size} عملية",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontWeight = FontWeight.Bold,
+                            color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary
                         )
                     }
-                }
 
-                item {
-                    OutlinedTextField(
-                        value = uiState.searchQuery,
-                        onValueChange = { viewModel.updateSearchQuery(it) },
-                        placeholder = { Text("بحث بالمهمة أو النموذج أو العضو...") },
-                        leadingIcon = { Icon(Icons.Default.Search, null) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                }
+                    if (uiState.memberSummaries.isNotEmpty()) {
+                        item {
+                            MemberFilterChips(
+                                members = uiState.memberSummaries,
+                                selectedId = uiState.selectedMemberId,
+                                onSelect = viewModel::selectMemberFilter
+                            )
+                        }
+                        items(uiState.memberSummaries, key = { it.memberId.ifBlank { it.modelId + it.providerId } }) { summary ->
+                            MemberUsageCard(summary)
+                        }
+                    } else {
+                        item {
+                            Text(
+                                "لا توجد بيانات قياس موثقة للأعضاء ضمن هذه الفترة.",
+                                color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted
+                            )
+                        }
+                    }
 
-                if (uiState.filteredRecords.isEmpty()) {
                     item {
-                        EmptyUsageRecords()
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "سجل العمليات والطلبات",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary
+                            )
+                            Text(
+                                uiState.filteredRecords.size.toString() + " عملية",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted
+                            )
+                        }
                     }
-                } else {
-                    items(uiState.filteredRecords) { record ->
-                        UsageRecordItem(record)
+
+                    item {
+                        OutlinedTextField(
+                            value = uiState.searchQuery,
+                            onValueChange = viewModel::updateSearchQuery,
+                            placeholder = { Text("بحث بالمهمة أو النموذج أو العضو...") },
+                            leadingIcon = { Icon(Icons.Default.Search, null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+
+                    if (uiState.filteredRecords.isEmpty()) {
+                        item { EmptyUsageRecords() }
+                    } else {
+                        items(uiState.filteredRecords, key = { it.id }) { record ->
+                            UsageRecordItem(record)
+                        }
                     }
                 }
             }
@@ -173,29 +223,96 @@ fun TeamUsageDashboardScreen(
         TeamGovernanceDialog(
             currentSettings = uiState.team!!.governance,
             onSave = { updated ->
-                viewModel.updateTeamGovernance(updated)
-                showGovernanceDialog = false
+                viewModel.updateTeamGovernance(updated) {
+                    showGovernanceDialog = false
+                }
             },
-            onDismiss = { showGovernanceDialog = false }
+            onDismiss = { if (!uiState.isMutating) showGovernanceDialog = false },
+            isSaving = uiState.isMutating
         )
     }
 }
 
 @Composable
-private fun TeamMetricsOverview(uiState: TeamUsageUiState) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+internal fun TeamUsageStatePanel(
+    title: String,
+    message: String,
+    onRetry: (() -> Unit)?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(24.dp).testTag("team_usage_unavailable"),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.VibeDesignTokens.Color.SpacePanel),
+        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.VibeDesignTokens.Color.Grid)
     ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(Icons.Default.QueryStats, contentDescription = null, tint = com.example.ui.theme.VibeDesignTokens.Color.Cyan)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary)
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted)
+            if (onRetry != null) {
+                Button(onClick = onRetry) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("إعادة المحاولة")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeriodFilterChips(
+    selectedPeriod: TeamUsagePeriod,
+    onSelect: (TeamUsagePeriod) -> Unit
+) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(TeamUsagePeriod.values().toList()) { period ->
+            FilterChip(
+                selected = selectedPeriod == period,
+                onClick = { onSelect(period) },
+                label = { Text(period.labelAr) }
+            )
+        }
+    }
+}
+
+@Composable
+internal fun TeamMetricsOverview(uiState: TeamUsageUiState) {
+    if (!uiState.hasMeasuredUsage) {
+        Card(
+            modifier = Modifier.fillMaxWidth().testTag("team_usage_no_measurements"),
+            colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.VibeDesignTokens.Color.SpacePanel),
+            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.VibeDesignTokens.Color.Grid)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "لا توجد بيانات قياس موثقة خلال هذه الفترة.",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary
+                )
+                Text(
+                    "هذا لا يعني أن الاستهلاك يساوي صفراً؛ لم تصل سجلات قياس يمكن الاعتماد عليها.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted
+                )
+            }
+        }
+        return
+    }
+
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         MetricTile(
-            title = "إجمالي الطلبات",
-            value = "${uiState.totalRequests}",
+            title = "الطلبات المسجلة",
+            value = uiState.totalRequests.toString(),
             icon = Icons.Default.Api,
             modifier = Modifier.weight(1f),
             color = MaterialTheme.colorScheme.primary
         )
         MetricTile(
-            title = "إجمالي الرموز",
+            title = "الرموز المسجلة",
             value = String.format("%,d", uiState.totalTokens),
             icon = Icons.Default.DataUsage,
             modifier = Modifier.weight(1f),
@@ -203,10 +320,32 @@ private fun TeamMetricsOverview(uiState: TeamUsageUiState) {
         )
         MetricTile(
             title = "التكلفة المؤكدة",
-            value = if (uiState.team?.governance?.freeOnly == true) "0.00$" else "${String.format("%.3f", uiState.totalCostUsd)}$",
+            value = if (uiState.hasConfirmedCost) String.format("%.3f", uiState.totalCostUsd) + "$" else "غير متاحة",
             icon = Icons.Default.MonetizationOn,
             modifier = Modifier.weight(1f),
-            color = if (uiState.team?.governance?.freeOnly == true) Color(0xFF2E7D32) else MaterialTheme.colorScheme.tertiary
+            color = MaterialTheme.colorScheme.tertiary
+        )
+    }
+
+    if (uiState.unconfirmedCostUsd > 0.0) {
+        Text(
+            "تكلفة تقديرية غير مؤكدة: " + String.format("%.3f", uiState.unconfirmedCostUsd) + "$",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+    if (uiState.hasPaidUsageUnderFreeOnly) {
+        Text(
+            "تنبيه: رُصد سجل استخدام مدفوع رغم تفعيل سياسة Free Only.",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+    uiState.lastMeasuredAt?.let { timestamp ->
+        Text(
+            "المصدر: سجلات قياس الفريق • آخر سجل: " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp)),
+            color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted,
+            style = MaterialTheme.typography.labelSmall
         )
     }
 }
@@ -233,17 +372,23 @@ private fun MetricTile(
 }
 
 @Composable
-private fun GovernanceStatusCard(team: ModelTeam?, onEditPolicy: () -> Unit) {
-    val gov = team?.governance ?: TeamGovernanceSettings()
+private fun GovernanceStatusCard(
+    team: ModelTeam?,
+    hasMeasuredUsage: Boolean,
+    hasPaidUsageUnderFreeOnly: Boolean,
+    onEditPolicy: () -> Unit
+) {
+    val gov = team?.governance ?: return
+    val warning = hasPaidUsageUnderFreeOnly
+    val statusColor = when {
+        warning -> MaterialTheme.colorScheme.error
+        gov.freeOnly -> com.example.ui.theme.VibeDesignTokens.Color.Success
+        else -> MaterialTheme.colorScheme.primary
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (gov.freeOnly) Color(0xFF1B5E20).copy(alpha = 0.1f) else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (gov.freeOnly) Color(0xFF2E7D32).copy(alpha = 0.3f) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
-        )
+        colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.1f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.3f))
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -253,37 +398,42 @@ private fun GovernanceStatusCard(team: ModelTeam?, onEditPolicy: () -> Unit) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        if (gov.freeOnly) Icons.Default.CheckCircle else Icons.Default.Shield,
+                        if (warning) Icons.Default.Warning else if (gov.freeOnly) Icons.Default.CheckCircle else Icons.Default.Shield,
                         null,
-                        tint = if (gov.freeOnly) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                        tint = statusColor,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (gov.freeOnly) "سياسة الاستخدام المجاني (Free Only): نشطة ومفروضة" else "سياسة الاستهلاك المقيد (Cost Guard)",
+                        when {
+                            warning -> "تنبيه: رُصد استخدام مدفوع مع سياسة Free Only"
+                            gov.freeOnly && hasMeasuredUsage -> "سجلات الفترة لا تُظهر استخداماً مدفوعاً"
+                            gov.freeOnly -> "سياسة Free Only مهيأة — لا توجد قياسات بعد"
+                            else -> "سياسة حدود الاستهلاك مهيأة"
+                        },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = if (gov.freeOnly) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
+                        color = statusColor
                     )
                 }
-                IconButton(onClick = onEditPolicy, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(16.dp))
+                IconButton(onClick = onEditPolicy, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Edit, contentDescription = "تعديل السياسة", modifier = Modifier.size(18.dp))
                 }
             }
             Spacer(Modifier.height(8.dp))
             Text(
                 if (gov.freeOnly)
-                    "كل النماذج داخل الفريق خاضعة لحساب المستخدم ولن يتم استخدام أي نموذج مدفوع أو التحويل التلقائي إليه تحت أي ظرف."
+                    "الحدود الحالية تمنع النماذج المدفوعة؛ راقب سجلات القياس لاكتشاف أي مخالفة."
                 else
-                    "الحد الأقصى للميزانية: ${gov.maxTeamCostUsd}$ | الحد الأقصى للرموز: ${String.format("%,d", gov.maxTotalTokens)}",
+                    "الميزانية القصوى: " + gov.maxTeamCostUsd + "$ • الرموز: " + String.format("%,d", gov.maxTotalTokens),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PolicyPill("الحد: ${gov.maxApiRequests} طلب")
-                PolicyPill("أقصى تزامن: ${gov.maxParallelRequests}")
-                if (gov.autoFallbackToFree) PolicyPill("تبديل مجاني عند 429")
+                PolicyPill("الحد: " + gov.maxApiRequests + " طلب")
+                PolicyPill("أقصى تزامن: " + gov.maxParallelRequests)
+                if (gov.autoFallbackToFree) PolicyPill("بديل مجاني عند 429")
             }
         }
     }
@@ -350,9 +500,14 @@ private fun MemberFilterChips(
 
 @Composable
 private fun MemberUsageCard(summary: MemberUsageSummary) {
+    val costLabel = when {
+        !summary.isCostConfirmed -> "تقديري: " + String.format("%.3f", summary.costUsd) + "$"
+        summary.isFreeModel -> "مجاني (مسجل)"
+        else -> "مؤكد: " + String.format("%.3f", summary.costUsd) + "$"
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.VibeDesignTokens.Color.SpacePanel)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -361,54 +516,39 @@ private fun MemberUsageCard(summary: MemberUsageSummary) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = CircleShape
-                    ) {
-                        Text(
-                            summary.role.labelAr.take(1),
-                            modifier = Modifier.padding(6.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = CircleShape) {
+                        Text(summary.role.labelAr.take(1), modifier = Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(summary.memberName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Text(summary.role.labelAr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(summary.role.labelAr, style = MaterialTheme.typography.labelSmall, color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted)
                     }
                 }
                 Surface(
-                    color = if (summary.isFreeModel) Color(0xFF1B5E20).copy(alpha = 0.12f) else MaterialTheme.colorScheme.secondaryContainer,
+                    color = if (summary.isCostConfirmed) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer,
                     shape = RoundedCornerShape(4.dp)
                 ) {
-                    Text(
-                        if (summary.isFreeModel) "مجاني 0.00$" else "${String.format("%.3f", summary.costUsd)}$",
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (summary.isFreeModel) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    Text(costLabel, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
             }
 
             Spacer(Modifier.height(10.dp))
-
-            // Details Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("النموذج النشط", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(summary.modelName.ifBlank { summary.modelId }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text("النموذج", style = MaterialTheme.typography.labelSmall, color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted)
+                    Text(summary.modelName.ifBlank { summary.modelId.ifBlank { "غير محدد" } }, style = MaterialTheme.typography.bodySmall)
                 }
                 Column {
-                    Text("الطلبات", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("${summary.requestsCount} طلب", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text("المزود", style = MaterialTheme.typography.labelSmall, color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted)
+                    Text(summary.providerName.ifBlank { summary.providerId.ifBlank { "غير محدد" } }, style = MaterialTheme.typography.bodySmall)
                 }
                 Column {
-                    Text("الرموز (Tokens)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("الطلبات", style = MaterialTheme.typography.labelSmall, color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted)
+                    Text(summary.requestsCount.toString(), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                }
+                Column {
+                    Text("الرموز", style = MaterialTheme.typography.labelSmall, color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted)
                     Text(String.format("%,d", summary.totalTokens), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                 }
             }
@@ -418,7 +558,7 @@ private fun MemberUsageCard(summary: MemberUsageSummary) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("أخطاء تجاوز الحصة (429): ${summary.rateLimitHits} مرات", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    Text("أخطاء تجاوز الحصة (429): " + summary.rateLimitHits, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -487,7 +627,11 @@ private fun UsageRecordItem(record: TeamUsageRecord) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    if (record.isFree) "0.00$ (مجاني)" else "${String.format("%.4f", record.costUsd)}$",
+                    when {
+                        !record.isCostConfirmed -> "تكلفة غير مؤكدة"
+                        record.isFree -> "مجاني (مسجل)"
+                        else -> String.format("%.4f", record.costUsd) + "$"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = if (record.isFree) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
@@ -505,7 +649,7 @@ private fun EmptyUsageRecords() {
     ) {
         Icon(Icons.Default.History, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.outline)
         Spacer(Modifier.height(8.dp))
-        Text("لا توجد سجلات استهلاك بعد", style = MaterialTheme.typography.bodyMedium)
-        Text("سيتم تسجيل استهلاك النماذج والرموز فور بدء تشغيل الفريق.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        Text("لا توجد سجلات قياس موثقة ضمن الفترة المحددة", style = MaterialTheme.typography.bodyMedium)
+        Text("لا يمكن استنتاج أن الاستهلاك صفر من غياب السجلات.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
     }
 }

@@ -1912,7 +1912,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### Continuity
 - **Active screens:** `ModelTeams`, `CreateTeam`, and `TeamChat` remain **`[ ]` OPEN** until explicit build verification, unit tests, and rendered device/emulator checks are executed upon user request.
-- **Next step:** Await user command to run compilation and test validation (`gradle :app:testDebugUnitTest`), or proceed with remaining collaboration screens (`TeamDetail`, `TeamUsage`, `TeamValidation`).
+- **Next step:** Continue automatically with TeamDetail, TeamUsage and TeamValidation after recording external blockers; do not wait for a user command to run build or tests.
 
 
 
@@ -1951,3 +1951,34 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added Compose regression coverage for member detail/removal and governance validation/saving.
 - Additional files: app/src/main/java/com/example/presentation/ui/components/TeamGovernanceDialog.kt and app/src/test/java/com/example/presentation/ui/components/TeamGovernanceDialogTest.kt.
 - Verification for this follow-up is pending the latest push-triggered Actions runs; no device or live backend verification is claimed.
+## 2026-11-17 — TeamUsage measured telemetry and governance integrity
+
+### Confirmed defects
+- TeamUsage fabricated member rows for members with no usage records, defaulted every member to free, and used the member's name as a model name and provider ID fragments as provider names.
+- The dashboard displayed zero totals and zero cost when telemetry was absent, and forced cost to 0.00 whenever Free Only was configured, even if persisted records showed paid usage.
+- Unconfirmed cost was included in the confirmed-cost total; governance writes ignored Result.failure and the dialog closed immediately.
+- Loading and repository failures were not caught, and the screen did not react to account sign-out or live team updates.
+
+### Implementation
+- Reworked TeamUsageViewModel to observe only the current user's team collection, clear data on sign-out/account change, fail closed for foreign/deleted teams, and surface retryable errors.
+- Added 7-day, 30-day and all-time periods; metrics, member summaries, failover events and operation logs now use the selected period.
+- Aggregation now uses persisted TeamUsageRecord metadata only. No member summary is invented without records; confirmed and unconfirmed cost are separated; model/provider names are never fabricated.
+- The dashboard now distinguishes no telemetry from zero usage, labels estimated cost, warns if paid records appear under Free Only, and displays data freshness/provenance.
+- Governance writes now inspect repository Result, preserve the previous settings on failure, and dismiss only after success.
+
+### Files and commits
+- app/src/main/java/com/example/presentation/viewmodel/TeamUsageViewModel.kt
+- app/src/main/java/com/example/presentation/ui/screens/TeamUsageDashboardScreen.kt
+- app/src/test/java/com/example/presentation/viewmodel/TeamUsageViewModelTest.kt
+- app/src/test/java/com/example/presentation/ui/screens/TeamUsageDashboardScreenTest.kt
+- Implementation commit: acbae1d72ec42c308eec05957e20aec1816102f8; screen/UI tests and documentation commit pending.
+
+### Verification
+- Added five ViewModel tests for absent telemetry, measured aggregation/cost provenance, period filtering, account/ownership isolation and failed/successful governance writes.
+- Added three Compose tests for the no-telemetry state, unconfirmed cost label and retry state.
+- CI/build/lint verification is pending the screen/test commit; no device screenshots, live Firestore/Supabase billing validation or RLS tests are claimed.
+
+### Continuity
+- TeamUsage remains OPEN until the final CI passes and the rendered screen is checked on an Android device/emulator.
+- TeamUsage still reads the current authenticated Firebase/local team repository path. Supabase team-table DDL/RLS is absent from the repository, so production Supabase migration remains BLOCKED without inventing a schema.
+- Exact next step: finish screen tests and inspect final Android CI/APK/Code Quality runs. Then proceed to TeamValidation; do not show estimated or missing usage as measured billing.
