@@ -1824,3 +1824,94 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Continuity
 - **Active screens:** `AIModels` and `TeamValidation` remain **`[ ]` OPEN** until rendered device/emulator visual verification and live API credential checks are completed.
 - **Next step:** Visually inspect `AIModelsScreen` and `TeamValidation` (`ValidationReportTab`) on the streaming emulator / physical device (RTL & LTR, small width, font scaling, live OpenRouter/Gemini keys), then proceed to the next screen slice in Priority 1 (`Login` / `Projects` / `Dashboard`).
+
+
+## 2026-11-16 — Projects, Applications & Dashboard context slice (`VibeDesignTokens`, config guards & UI tests)
+
+### Observed gaps before changes
+- `DashboardScreen.kt` and `ProjectsScreen.kt` relied on uncustomized Material 3 cards/surfaces and screen-local colors instead of the shared `VibeDesignTokens` Cosmic Cyber palette and modular panel structure.
+- `DashboardViewModel` and `ProjectsViewModel` lacked explicit `isAuthenticated`, `isCloudConfigured`, and active project filter / mutation state flags, and `DashboardViewModel` could invoke `CrashRepository` reads before an authenticated user was present.
+- `DependencyProvider` passed `SupabaseProjectDataSource` unconditionally even when `BuildConfig.SUPABASE_URL` / `BuildConfig.SUPABASE_PUBLISHABLE_KEY` contained template placeholders, and `Screen.Applications` did not land directly on the Applications tab inside `ProjectsScreen`.
+- `ProjectsScreen.kt` had grown beyond 1,100 lines, and `ApplicationCard` squeezed status chips next to the delete button on compact widths.
+
+### Concrete changes implemented
+- **Supabase configuration guard & DI:**
+  - `app/src/main/java/com/example/data/remote/supabase/SupabaseConfig.kt` — added `isConfigured(...)` and `normalizeBaseUrl(...)` to detect `.env.example` placeholders (`PLACEHOLDER_URL`, `PLACEHOLDER_PUBLISHABLE_KEY`, `YOUR_*`) and validate HTTP(S) hosts.
+  - `app/src/main/java/com/example/di/DependencyProvider.kt` — normalized `supabaseBaseUrl` and gated `SupabaseProjectDataSource` injection on `SupabaseConfig.isConfigured()`.
+- **ViewModels & reactive project context:**
+  - `app/src/main/java/com/example/presentation/viewmodel/DashboardViewModel.kt` — added `isAuthenticated`, `projects`, `selectedProjectId`, and `isCloudConfigured` to `DashboardUiState`; skipped `CrashRepository` queries when `user == null`; added `selectProject(projectId?)` and `refresh()` via `_refreshTrigger.flatMapLatest` with `CancellationException` preservation.
+  - `app/src/main/java/com/example/presentation/viewmodel/ProjectsViewModel.kt` — added `isAuthenticated`, `isCloudConfigured`, and `isMutating`; enforced signed-out mutation guards (`requireAuthenticatedUser`), `_refreshTrigger` reload after mutations, `trim()` validation, and safe error propagation.
+- **Cosmic Cyber UI modularization & navigation:**
+  - `app/src/main/java/com/example/ui/theme/VibeDesignTokens.kt` — added shared `Warning` color token (`#FFB74D`).
+  - `app/src/main/java/com/example/presentation/ui/screens/dashboard/DashboardComponents.kt` & `DashboardScreen.kt` — extracted modular cosmic components (`CosmicDashboardBackdrop`, `DashboardPanel`, `DeveloperSessionHeader`, `ProjectContextFilterRow`, `DashboardStatCard`, `DashboardToolCard`, `DashboardNotificationsSheetContent`), added `WindowInsets.safeDrawing`, `widthIn(max = 720.dp)`, clickable 2x2 KPI cards, auth-required gate, retry banner, and Compose `testTag`s.
+  - `app/src/main/java/com/example/presentation/ui/screens/projects/ProjectsComponents.kt`, `ProjectsApplicationsTab.kt`, `ProjectsAdminTabs.kt`, `ProjectsDialogs.kt`, & `ProjectsScreen.kt` — split 1,165-line monolith into focused modules with `StatusChip` merged semantics, `FlowRow` status layout, 48dp delete targets, `initialTab` support, and auth/error states.
+  - `app/src/main/java/com/example/presentation/navigation/AppNavigation.kt` — routed `Screen.Applications` to `ProjectsScreen(..., initialTab = 1)`.
+- **Unit & Robolectric Compose UI tests:**
+  - `app/src/test/java/com/example/data/remote/supabase/SupabaseConfigTest.kt` (4 tests)
+  - `app/src/test/java/com/example/presentation/viewmodel/FakeRepositories.kt`, `DashboardViewModelTest.kt` (3 tests), `ProjectsViewModelTest.kt` (4 tests)
+  - `app/src/test/java/com/example/presentation/ui/screens/DashboardScreenTest.kt` (2 Compose UI tests), `ProjectsScreenTest.kt` (3 Compose UI tests)
+
+### Verification evidence
+- **Targeted Unit & Robolectric tests (PASS — 26/26 passed, 0 failed):**
+  - Command: `gradle :app:testDebugUnitTest --tests "com.example.presentation.viewmodel.AuthenticatedProjectFlowTest" --tests "com.example.data.repository.ProjectIdentityGuardTest" --tests "com.example.data.remote.supabase.SupabaseConfigTest" --tests "com.example.presentation.viewmodel.DashboardViewModelTest" --tests "com.example.presentation.viewmodel.ProjectsViewModelTest" --tests "com.example.presentation.ui.screens.DashboardScreenTest" --tests "com.example.presentation.ui.screens.ProjectsScreenTest"`
+  - Output: `BUILD SUCCESSFUL in 2m 24s`.
+- **Android APK compilation (PASS):** `compile_applet` succeeded (`Build succeeded - the applet is compiled`).
+- **Hardcoded legacy color scan (PASS):** `grep` across modified dashboard/projects files returned zero legacy hex colors (`CLEAN_NO_HARDCODED_LEGACY_COLORS`).
+- **Not run / blocked:**
+  - Full-project unit test suite and `lintDebug` were not executed in this turn.
+  - No Android emulator/ADB device is attached in the container; rendered Arabic RTL / English LTR layout, font scaling, TalkBack traversal, and live Supabase PostgREST project CRUD remain unverified.
+
+### Continuity
+- **Active screens:** `Dashboard`, `Projects`, and `Applications` remain **`[ ]` OPEN** until rendered device/emulator UI verification and live Supabase integration are completed.
+- **Next step:** Visually verify `Dashboard`, `Projects`, and `Applications` on an emulator/device with live Supabase credentials; proceed to the `ModelTeams`, `CreateTeam`, and `TeamChat` collaboration slice.
+
+
+## 2026-11-16 — ModelTeams, CreateTeam & TeamChat engineering & collaboration slice (`VibeDesignTokens`, reactive state & tests)
+
+### Observed gaps before changes
+- `ModelTeamsScreen.kt` hid `TeamTemplates` whenever custom teams list was empty (`uiState.teams.isEmpty()`), leaving a blank canvas without templates or guidance.
+- `AppNavigation.kt` for `Screen.CreateTeam` launched a disconnected coroutine on one ViewModel reference and navigated to `ModelTeamsScreen` separately instead of passing `initialCreateMode = true`.
+- `AIModelTeamRepositoryImpl.kt` used a one-shot `flow { emit(localTeams.values...) }` that never emitted dynamic updates after `createTeam` / `updateTeam` / `deleteTeam` / `logExecution`, relied on `FirebaseAuth.getInstance()` directly without Supabase `ProjectIdentityGuard` validation, swallowed Firestore write exceptions in silent `catch (_: Exception) {}` blocks, and lacked scoped `ownerId == uid` filtering.
+- `TeamChatViewModel.kt` contained a dead duplicate `?: run { ... }` block in `loadInitialData()`, used unscoped `crashRepository.getProjects()`, did not cancel or track previous `loadTeamExecutions` collectors when switching teams, and leaked execution state across sign-out.
+- `TeamActivityLogPanel.kt` fabricated two hardcoded architectural consensus/disagreement strings when execution points were empty.
+- Several UI panels (`LiveTeamCollaborationPanel`, `TeamChatScreen`, `TeamActivityLogPanel`, `TeamResultReviewPanel`, dialogs) used hardcoded green colors (`0xFF2E7D32`, `0xFF1B5E20`) and overflowing horizontal `Row` chip rows on narrow widths.
+
+### Concrete changes implemented
+- **Repository, Auth & Security Boundary:**
+  - `app/src/main/java/com/example/data/repository/AIModelTeamRepositoryImpl.kt` — bound identity via `AuthRepository` + `ProjectIdentityGuard` (`requireSupabaseUserId` + `requireLegacyFirebaseIdentityMatch`), added `currentUserIdProvider` for JVM tests, converted local caching to reactive `MutableStateFlow<Map<String, ModelTeam>>` (`localTeamsState`) and `MutableStateFlow<Map<String, TeamExecution>>` (`localExecutionsState`), eliminated exception swallowing on Firestore mutations, enforced user ownership checks across reads/updates/deletions, and rethrew `CancellationException`.
+  - `app/src/main/java/com/example/di/DependencyProvider.kt` — wired `provideAuthRepository(context)`, `getFirestore(context)`, `getFirebaseAuth(context)`, and Room `aiProviderDao()` into `AIModelTeamRepositoryImpl`.
+- **ViewModels & Reactive Workspace Coordination:**
+  - `app/src/main/java/com/example/presentation/viewmodel/ModelTeamsViewModel.kt` — added `isAuthenticated`, `isCloudConfigured`, `connectedProviderIds`, `isMutating`, `statusMessage`, `nameError`, `membersError`, and `pendingDeleteTeam` to `ModelTeamsUiState`; observed `authRepository.currentUser` reactively with `flatMapLatest` (clearing all data on sign-out); combined `aiModelRepository.getProviders` to track connected vs configured models; added trimmed validation, duplicate name guards, duplicate `(modelId, role)` rejection, draft preservation on write failure, collision-safe naming in `useTemplate()`, and delete confirmation flow.
+  - `app/src/main/java/com/example/presentation/viewmodel/TeamChatViewModel.kt` — added `isAuthenticated`, `isCloudConfigured`, and `isLoading` to `TeamChatUiState`; observed `authRepository.currentUser` with `flatMapLatest` (clearing execution and cancelling timer/history jobs on sign-out); scoped projects strictly via `crashRepository.getProjectsForUser(user.id)`; cancelled previous execution history listeners on team switches; added `.catch` (with `CancellationException` rethrow); and enforced non-blank input validation and sign-in checks on all mutations.
+- **Cosmic Cyber UI Modularization (`VibeDesignTokens` & <500 lines per file):**
+  - `app/src/main/java/com/example/presentation/ui/screens/teams/ModelTeamsComponents.kt` & `ModelTeamsRosterSection.kt` & `CreateTeamSettingsSections.kt` — modularized cosmic cyber cards, badges (`teams_sync_badge`, `StatusPill` with merged semantics), `TeamCard` (distinguishing connected vs configured models, 48dp touch targets), templates roster (always visible), empty roster fallback, and `DeleteTeamConfirmDialog`.
+  - `app/src/main/java/com/example/presentation/ui/screens/teams/CreateTeamWizard.kt` — controlled wizard with inline error messages, per-model `متصل`/`مهيّأ` badge, role picker dialog, `imePadding()`, and `testTag` hooks.
+  - `app/src/main/java/com/example/presentation/ui/screens/ModelTeamsScreen.kt` — added `initialCreateMode: Boolean = false`, stateless `ModelTeamsScreenContent(...)`, `WindowInsets.safeDrawing`, `widthIn(max = 720.dp)`, `BackHandler` in create mode, and auth card.
+  - `app/src/main/java/com/example/presentation/navigation/AppNavigation.kt` — routed `Screen.CreateTeam` directly to `ModelTeamsScreen(..., initialCreateMode = true)`.
+  - `app/src/main/java/com/example/presentation/ui/screens/teamchat/TeamChatHeaderAndInstructions.kt` & `TeamChatScreen.kt` — extracted `TeamLiveStatusBar` (showing member counts, Free AI Only, LOCAL indicator, and timer), `TeamInstructionsTabContent`, `TeamChatScreenContent(...)`, `WindowInsets.safeDrawing`, `imePadding()`, `widthIn(max = 760.dp)`, and auth gate.
+  - `app/src/main/java/com/example/presentation/ui/screens/teamchat/TeamActivityLogPanel.kt` — removed fabricated consensus/disagreement strings, added honest empty-state messages (`empty_consensus_message`, `empty_disagreements_message`), converted filter `Row` to `LazyRow`, and applied `VibeDesignTokens`.
+  - `app/src/main/java/com/example/presentation/ui/screens/teamchat/TeamChatInputPanel.kt` — added `verticalScroll`, replaced overflowing button `Row`s with `FlowRow`, and preserved all interactive `testTag`s.
+  - `app/src/main/java/com/example/presentation/ui/screens/teamchat/LiveTeamCollaborationPanel.kt`, `TeamResultReviewPanel.kt`, and dialogs — cleaned up legacy colors (`0xFF2E7D32`), replaced static rows with `LazyRow`, and bound all accents to `VibeDesignTokens.Color.*`.
+- **Unit & Robolectric Test Suites Added:**
+  - `app/src/test/java/com/example/data/repository/AIModelTeamRepositoryImplTest.kt` (5 tests) — reactive dynamic streams, cross-user SecurityException isolation, unauthenticated fail-closed check, execution streaming, Room usage filtering.
+  - `app/src/test/java/com/example/presentation/viewmodel/ModelTeamsViewModelTest.kt` (3 test suites) — auth isolation, sign-out wipe, blank/duplicate input validation, draft preservation on error, template collision naming, delete confirmation.
+  - `app/src/test/java/com/example/presentation/viewmodel/TeamChatViewModelAuthAndScopeTest.kt` (3 test suites) — unauthenticated state handling, scoped user projects, prompt validation, execution history cancellation on team switch.
+  - `app/src/test/java/com/example/presentation/ui/screens/ModelTeamsScreenTest.kt` (4 Compose UI tests) — auth card, visible templates on empty roster, readiness badge, delete confirmation dialog, CreateTeamWizard validation/save.
+  - `app/src/test/java/com/example/presentation/ui/screens/TeamChatScreenTest.kt` (3 Compose UI tests) — auth card, live status bar with LOCAL badge, prompt submission, honest empty consensus/disagreement display.
+
+### Verification evidence & build constraints
+- **Static consistency & legacy color audit (PASS):**
+  - Command: `grep -rnE "0xFF2E7D32|0xFF1B5E20|Color\.White" ...`
+  - Output: `CLEAN_LEGACY_COLORS` (0 occurrences across all modified/created screens and panels).
+  - All source files conform to modularity guidelines (<500 lines per UI file).
+- **Gradle compilation & test execution status (PAUSED per user instruction):**
+  - Per explicit user mandate (`عدم تشغيل البناء إلا عند طلبي الصريح`), no Gradle build, `compile_applet`, `lint_applet`, or test runner commands were executed during this turn.
+  - All test suites and production changes are written in source and ready for execution upon explicit user instruction.
+- **Supabase Cloud Schema Prerequisite Note:**
+  - `/supabase/migrations/` in the repository contains index migrations (`20261105224519_index_team_executions_project_id.sql`), but the initial DDL migration creating `model_teams` and `team_executions` tables is not present in local SQL files. Direct Supabase PostgREST team CRUD cannot be guessed or fabricated; `AIModelTeamRepositoryImpl` currently uses reactive caching with `ProjectIdentityGuard` and legacy Firestore compatibility until the team table DDL is provided.
+
+### Continuity
+- **Active screens:** `ModelTeams`, `CreateTeam`, and `TeamChat` remain **`[ ]` OPEN** until explicit build verification, unit tests, and rendered device/emulator checks are executed upon user request.
+- **Next step:** Await user command to run compilation and test validation (`gradle :app:testDebugUnitTest`), or proceed with remaining collaboration screens (`TeamDetail`, `TeamUsage`, `TeamValidation`).
+
+

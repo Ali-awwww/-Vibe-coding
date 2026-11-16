@@ -189,7 +189,13 @@ object DependencyProvider {
     }
 
     fun provideAIModelTeamRepository(context: Context): AIModelTeamRepository {
-        return modelTeamRepository ?: AIModelTeamRepositoryImpl(context).also { modelTeamRepository = it }
+        return modelTeamRepository ?: AIModelTeamRepositoryImpl(
+            context = context,
+            authRepository = provideAuthRepository(context),
+            firestore = getFirestore(context),
+            firebaseAuth = getFirebaseAuth(context),
+            aiProviderDaoOverride = getDatabase(context).aiProviderDao()
+        ).also { modelTeamRepository = it }
     }
 
     private var teamGovernanceEngine: com.example.domain.governance.TeamGovernanceEngine? = null

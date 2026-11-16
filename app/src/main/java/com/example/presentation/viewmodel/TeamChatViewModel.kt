@@ -2,12 +2,15 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.remote.supabase.SupabaseConfig
 import com.example.domain.agent.TeamOrchestrator
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
 import com.example.domain.repository.AIModelTeamRepository
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.CrashRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -22,6 +25,9 @@ enum class TeamChatTab(val labelAr: String, val labelEn: String) {
 }
 
 data class TeamChatUiState(
+    val isAuthenticated: Boolean = false,
+    val isCloudConfigured: Boolean = SupabaseConfig.isConfigured(),
+    val isLoading: Boolean = false,
     val teams: List<ModelTeam> = emptyList(),
     val selectedTeam: ModelTeam? = null,
     val projects: List<Project> = emptyList(),
@@ -47,6 +53,7 @@ data class TeamChatUiState(
     val error: String? = null
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class TeamChatViewModel(
     private val initialTeamId: String?,
     private val initialProjectId: String?,
@@ -60,94 +67,181 @@ class TeamChatViewModel(
     private val _uiState = MutableStateFlow(TeamChatUiState())
     val uiState: StateFlow<TeamChatUiState> = _uiState.asStateFlow()
 
+    private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+
     private var executionJob: Job? = null
+    private var executionHistoryJob: Job? = null
     private var timerJob: Job? = null
 
     private fun getUserId(): String? = authRepository.getCurrentUserSync()?.id?.takeIf { it.isNotBlank() }
 
     init {
-        loadInitialData()
+        observeAuthenticatedWorkspace()
     }
 
-    private fun loadInitialData() {
-        val userId = getUserId() ?: run {
-            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
-            return
-        } ?: run {
-            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح للوصول إلى محادثات الفريق.") }
-            return
-        }
-
+    private fun observeAuthenticatedWorkspace() {
         viewModelScope.launch {
-            // Load teams
-            launch {
-                teamRepository.getTeams(userId).collect { teamsList ->
-                    _uiState.update { current ->
-                        val selected = if (initialTeamId != null) {
-                            teamsList.find { it.id == initialTeamId } ?: teamsList.firstOrNull()
-                        } else {
-                            current.selectedTeam ?: teamsList.firstOrNull()
+            combine(authRepository.currentUser, refreshTrigger) { user, _ -> user }
+                .flatMapLatest { user ->
+                    if (user == null) {
+                        executionHistoryJob?.cancel()
+                        executionJob?.cancel()
+                        stopTimer()
+                        flowOf(
+                            TeamChatBootstrap(
+                                isAuthenticated = false,
+                                teams = emptyList(),
+                                projects = emptyList(),
+                                models = emptyList(),
+                                error = null
+                            )
+                        )
+                    } else {
+                        _uiState.update { it.copy(isAuthenticated = true, isLoading = true, error = null) }
+                        combine(
+                            teamRepository.getTeams(user.id),
+                            crashRepository.getProjectsForUser(user.id),
+                            aiModelRepository.getAllAvailableModels(user.id, false)
+                        ) { teams, projects, models ->
+                            TeamChatBootstrap(
+                                isAuthenticated = true,
+                                teams = teams,
+                                projects = projects,
+                                models = models,
+                                error = null
+                            )
+                        }.catch { e ->
+                            if (e is CancellationException) throw e
+                            emit(
+                                TeamChatBootstrap(
+                                    isAuthenticated = true,
+                                    teams = emptyList(),
+                                    projects = emptyList(),
+                                    models = emptyList(),
+                                    error = e.message ?: "تعذّر تحميل بيانات محادثة الفريق."
+                                )
+                            )
                         }
+                    }
+                }
+                .collect { bootstrap ->
+                    if (!bootstrap.isAuthenticated) {
+                        _uiState.update {
+                            it.copy(
+                                isAuthenticated = false,
+                                isLoading = false,
+                                teams = emptyList(),
+                                selectedTeam = null,
+                                projects = emptyList(),
+                                selectedProject = null,
+                                availableModels = emptyList(),
+                                currentExecution = null,
+                                executionHistory = emptyList(),
+                                isExecuting = false,
+                                isPaused = false,
+                                executionDurationSeconds = 0
+                            )
+                        }
+                        return@collect
+                    }
+
+                    val previousTeamId = _uiState.value.selectedTeam?.id
+                    val resolvedTeam = resolveSelectedTeam(
+                        teamsList = bootstrap.teams,
+                        currentSelectedId = previousTeamId
+                    )
+                    val resolvedProject = resolveSelectedProject(
+                        projectsList = bootstrap.projects,
+                        currentSelectedId = _uiState.value.selectedProject?.id
+                    )
+
+                    _uiState.update { current ->
                         current.copy(
-                            teams = teamsList,
-                            selectedTeam = selected
+                            isAuthenticated = true,
+                            isLoading = false,
+                            teams = bootstrap.teams,
+                            selectedTeam = resolvedTeam,
+                            projects = bootstrap.projects,
+                            selectedProject = resolvedProject,
+                            availableModels = bootstrap.models,
+                            error = bootstrap.error ?: current.error
                         )
                     }
-                    val selected = _uiState.value.selectedTeam
-                    if (selected != null) {
-                        loadTeamExecutions(selected.id)
+
+                    if (resolvedTeam != null && resolvedTeam.id != previousTeamId) {
+                        loadTeamExecutions(resolvedTeam.id)
+                    } else if (resolvedTeam == null) {
+                        executionHistoryJob?.cancel()
                     }
                 }
-            }
-
-            // Load projects
-            launch {
-                crashRepository.getProjects().collect { projectsList ->
-                    _uiState.update { current ->
-                        val selected = if (initialProjectId != null) {
-                            projectsList.find { it.id == initialProjectId } ?: projectsList.firstOrNull()
-                        } else {
-                            current.selectedProject ?: projectsList.firstOrNull()
-                        }
-                        current.copy(
-                            projects = projectsList,
-                            selectedProject = selected
-                        )
-                    }
-                }
-            }
-
-            // Load available models for switching & comparison
-            launch {
-                aiModelRepository.getAllAvailableModels(userId, false).collect { models ->
-                    _uiState.update { it.copy(availableModels = models) }
-                }
-            }
         }
+    }
+
+    private fun resolveSelectedTeam(
+        teamsList: List<ModelTeam>,
+        currentSelectedId: String?
+    ): ModelTeam? {
+        if (currentSelectedId != null) {
+            teamsList.find { it.id == currentSelectedId }?.let { return it }
+        }
+        if (initialTeamId != null) {
+            teamsList.find { it.id == initialTeamId }?.let { return it }
+        }
+        return teamsList.firstOrNull()
+    }
+
+    private fun resolveSelectedProject(
+        projectsList: List<Project>,
+        currentSelectedId: String?
+    ): Project? {
+        if (currentSelectedId != null) {
+            projectsList.find { it.id == currentSelectedId }?.let { return it }
+        }
+        if (initialProjectId != null) {
+            projectsList.find { it.id == initialProjectId }?.let { return it }
+        }
+        return projectsList.firstOrNull()
     }
 
     private fun loadTeamExecutions(teamId: String) {
-        viewModelScope.launch {
-            teamRepository.getTeamExecutions(teamId).collect { history ->
-                _uiState.update { current ->
-                    val latest = history.firstOrNull()
-                    val activeExec = if (current.currentExecution?.teamId == teamId) {
-                        current.currentExecution
-                    } else latest
-
-                    current.copy(
-                        executionHistory = history,
-                        currentExecution = activeExec,
-                        isExecuting = activeExec?.status == ExecutionStatus.EXECUTING,
-                        isPaused = activeExec?.status == ExecutionStatus.PAUSED
-                    )
+        executionHistoryJob?.cancel()
+        executionHistoryJob = viewModelScope.launch {
+            teamRepository.getTeamExecutions(teamId)
+                .catch { e ->
+                    if (e is CancellationException) throw e
+                    _uiState.update { it.copy(error = e.message ?: "تعذّر تحميل سجل تنفيذ الفريق.") }
                 }
-            }
+                .collect { history ->
+                    _uiState.update { current ->
+                        val latest = history.firstOrNull()
+                        val activeExec = if (current.currentExecution?.teamId == teamId) {
+                            current.currentExecution
+                        } else {
+                            latest
+                        }
+
+                        current.copy(
+                            executionHistory = history,
+                            currentExecution = activeExec,
+                            isExecuting = activeExec?.status == ExecutionStatus.EXECUTING,
+                            isPaused = activeExec?.status == ExecutionStatus.PAUSED
+                        )
+                    }
+                }
         }
     }
 
+    fun refresh() {
+        refreshTrigger.tryEmit(Unit)
+    }
+
     fun selectTeam(team: ModelTeam) {
-        _uiState.update { it.copy(selectedTeam = team) }
+        _uiState.update {
+            it.copy(
+                selectedTeam = team,
+                currentExecution = if (it.currentExecution?.teamId == team.id) it.currentExecution else null
+            )
+        }
         loadTeamExecutions(team.id)
     }
 
@@ -164,9 +258,10 @@ class TeamChatViewModel(
     }
 
     fun addAttachedFile(name: String, path: String, content: String, sizeBytes: Long, fileType: String = "text/plain") {
+        val safeName = name.trim().ifBlank { "snippet.txt" }
         val newFile = AttachedFileContext(
-            name = name.ifBlank { "snippet.txt" },
-            path = path.ifBlank { "/src/$name" },
+            name = safeName,
+            path = path.trim().ifBlank { "/src/$safeName" },
             content = content,
             sizeBytes = if (sizeBytes > 0) sizeBytes else content.toByteArray().size.toLong(),
             fileType = fileType
@@ -175,7 +270,7 @@ class TeamChatViewModel(
             it.copy(
                 attachedFiles = it.attachedFiles + newFile,
                 showAttachmentDialog = false,
-                statusMessage = "تم إرفاق الملف: $name"
+                statusMessage = "تم إرفاق الملف: $safeName"
             )
         }
     }
@@ -192,13 +287,25 @@ class TeamChatViewModel(
 
     fun requestEstimation() {
         val team = _uiState.value.selectedTeam ?: return
-        val prompt = _uiState.value.taskPrompt
-        if (prompt.isBlank()) return
+        val prompt = _uiState.value.taskPrompt.trim()
+        if (prompt.isBlank()) {
+            _uiState.update { it.copy(error = "يرجى كتابة نص المهمة قبل تقدير الموارد.") }
+            return
+        }
 
-        val userId = getUserId() ?: return
+        val userId = getUserId() ?: run {
+            _uiState.update { it.copy(error = AUTH_REQUIRED_ACTION) }
+            return
+        }
         viewModelScope.launch {
-            val est = teamOrchestrator.estimateTaskResources(userId, team, prompt)
-            _uiState.update { it.copy(preEstimation = est, showEstimationDialog = true) }
+            runCatching { teamOrchestrator.estimateTaskResources(userId, team, prompt) }
+                .onSuccess { est ->
+                    _uiState.update { it.copy(preEstimation = est, showEstimationDialog = true) }
+                }
+                .onFailure { e ->
+                    if (e is CancellationException) throw e
+                    _uiState.update { it.copy(error = e.message ?: "تعذّر تقدير الموارد.") }
+                }
         }
     }
 
@@ -207,10 +314,18 @@ class TeamChatViewModel(
     }
 
     fun sendTask(skipEstimationCheck: Boolean = false) {
-        val team = _uiState.value.selectedTeam ?: return
+        val team = _uiState.value.selectedTeam ?: run {
+            _uiState.update { it.copy(error = "يرجى اختيار فريق أولاً.") }
+            return
+        }
         val prompt = _uiState.value.taskPrompt.trim()
         if (prompt.isBlank()) {
             _uiState.update { it.copy(error = "يرجى كتابة نص المهمة أولاً") }
+            return
+        }
+
+        val userId = getUserId() ?: run {
+            _uiState.update { it.copy(error = AUTH_REQUIRED_ACTION) }
             return
         }
 
@@ -225,14 +340,11 @@ class TeamChatViewModel(
                 isExecuting = true,
                 isPaused = false,
                 executionDurationSeconds = 0,
-                activeTab = TeamChatTab.LIVE_COLLABORATION
+                activeTab = TeamChatTab.LIVE_COLLABORATION,
+                error = null
             )
         }
 
-        val userId = getUserId() ?: run {
-            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
-            return
-        }
         val attached = _uiState.value.attachedFiles
         val projectId = _uiState.value.selectedProject?.id
 
@@ -246,18 +358,30 @@ class TeamChatViewModel(
                 prompt = prompt,
                 attachedFiles = attached,
                 projectId = projectId
-            ).collect { execution ->
-                _uiState.update { current ->
-                    current.copy(
-                        currentExecution = execution,
-                        isExecuting = execution.status == ExecutionStatus.EXECUTING,
-                        isPaused = execution.status == ExecutionStatus.PAUSED
-                    )
-                }
-                if (execution.status == ExecutionStatus.COMPLETED || execution.status == ExecutionStatus.FAILED || execution.status == ExecutionStatus.CANCELLED) {
+            )
+                .catch { e ->
+                    if (e is CancellationException) throw e
                     stopTimer()
+                    _uiState.update {
+                        it.copy(
+                            isExecuting = false,
+                            isPaused = false,
+                            error = e.message ?: "فشل تنفيذ مهمة الفريق."
+                        )
+                    }
                 }
-            }
+                .collect { execution ->
+                    _uiState.update { current ->
+                        current.copy(
+                            currentExecution = execution,
+                            isExecuting = execution.status == ExecutionStatus.EXECUTING,
+                            isPaused = execution.status == ExecutionStatus.PAUSED
+                        )
+                    }
+                    if (execution.status == ExecutionStatus.COMPLETED || execution.status == ExecutionStatus.FAILED || execution.status == ExecutionStatus.CANCELLED) {
+                        stopTimer()
+                    }
+                }
         }
     }
 
@@ -274,7 +398,7 @@ class TeamChatViewModel(
         val exec = _uiState.value.currentExecution ?: return
         val team = _uiState.value.selectedTeam ?: return
         val userId = getUserId() ?: run {
-            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            _uiState.update { it.copy(error = AUTH_REQUIRED_ACTION) }
             return
         }
 
@@ -283,18 +407,26 @@ class TeamChatViewModel(
 
         executionJob?.cancel()
         executionJob = viewModelScope.launch {
-            teamOrchestrator.resumeExecution(exec.id, userId, team).collect { updated ->
-                _uiState.update { current ->
-                    current.copy(
-                        currentExecution = updated,
-                        isExecuting = updated.status == ExecutionStatus.EXECUTING,
-                        isPaused = updated.status == ExecutionStatus.PAUSED
-                    )
-                }
-                if (updated.status == ExecutionStatus.COMPLETED || updated.status == ExecutionStatus.FAILED) {
+            teamOrchestrator.resumeExecution(exec.id, userId, team)
+                .catch { e ->
+                    if (e is CancellationException) throw e
                     stopTimer()
+                    _uiState.update {
+                        it.copy(isExecuting = false, isPaused = false, error = e.message)
+                    }
                 }
-            }
+                .collect { updated ->
+                    _uiState.update { current ->
+                        current.copy(
+                            currentExecution = updated,
+                            isExecuting = updated.status == ExecutionStatus.EXECUTING,
+                            isPaused = updated.status == ExecutionStatus.PAUSED
+                        )
+                    }
+                    if (updated.status == ExecutionStatus.COMPLETED || updated.status == ExecutionStatus.FAILED) {
+                        stopTimer()
+                    }
+                }
         }
     }
 
@@ -318,7 +450,7 @@ class TeamChatViewModel(
         val exec = _uiState.value.currentExecution ?: return
         val team = _uiState.value.selectedTeam ?: return
         val userId = getUserId() ?: run {
-            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            _uiState.update { it.copy(error = AUTH_REQUIRED_ACTION) }
             return
         }
 
@@ -327,25 +459,38 @@ class TeamChatViewModel(
 
         executionJob?.cancel()
         executionJob = viewModelScope.launch {
-            teamOrchestrator.retryFailedSteps(exec.id, userId, team).collect { updated ->
-                _uiState.update { current ->
-                    current.copy(
-                        currentExecution = updated,
-                        isExecuting = updated.status == ExecutionStatus.EXECUTING
-                    )
-                }
-                if (updated.status == ExecutionStatus.COMPLETED || updated.status == ExecutionStatus.FAILED) {
+            teamOrchestrator.retryFailedSteps(exec.id, userId, team)
+                .catch { e ->
+                    if (e is CancellationException) throw e
                     stopTimer()
+                    _uiState.update {
+                        it.copy(isExecuting = false, error = e.message)
+                    }
                 }
-            }
+                .collect { updated ->
+                    _uiState.update { current ->
+                        current.copy(
+                            currentExecution = updated,
+                            isExecuting = updated.status == ExecutionStatus.EXECUTING
+                        )
+                    }
+                    if (updated.status == ExecutionStatus.COMPLETED || updated.status == ExecutionStatus.FAILED) {
+                        stopTimer()
+                    }
+                }
         }
     }
 
     fun assignDirectTask(memberId: String, taskPrompt: String) {
         val exec = _uiState.value.currentExecution
         val team = _uiState.value.selectedTeam ?: return
+        val trimmedTask = taskPrompt.trim()
+        if (trimmedTask.isBlank()) {
+            _uiState.update { it.copy(error = "يرجى كتابة نص المهمة الموجهة.") }
+            return
+        }
         val userId = getUserId() ?: run {
-            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            _uiState.update { it.copy(error = AUTH_REQUIRED_ACTION) }
             return
         }
         val executionId = exec?.id ?: java.util.UUID.randomUUID().toString()
@@ -353,38 +498,55 @@ class TeamChatViewModel(
         _uiState.update { it.copy(showAssignDialog = false, isExecuting = true, statusMessage = "جارٍ إسناد المهمة للعضو") }
 
         viewModelScope.launch {
-            teamOrchestrator.assignDirectTask(executionId, userId, team, memberId, taskPrompt).collect { updated ->
-                _uiState.update { it.copy(currentExecution = updated, isExecuting = false) }
-            }
+            teamOrchestrator.assignDirectTask(executionId, userId, team, memberId, trimmedTask)
+                .catch { e ->
+                    if (e is CancellationException) throw e
+                    _uiState.update { it.copy(isExecuting = false, error = e.message) }
+                }
+                .collect { updated ->
+                    _uiState.update { it.copy(currentExecution = updated, isExecuting = false) }
+                }
         }
     }
 
     fun sendInstruction(instruction: TeamInstruction) {
-        val exec = _uiState.value.currentExecution ?: return
+        val exec = _uiState.value.currentExecution ?: run {
+            _uiState.update { it.copy(error = "لا توجد جلسة تنفيذ نشطة لإرسال التعليمات إليها.") }
+            return
+        }
         val team = _uiState.value.selectedTeam ?: return
         val userId = getUserId() ?: run {
-            _uiState.update { it.copy(error = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق.") }
+            _uiState.update { it.copy(error = AUTH_REQUIRED_ACTION) }
             return
         }
 
         _uiState.update { it.copy(showInstructionDialog = false, isExecuting = true, statusMessage = "جارٍ إرسال التعليمات ومعالجتها") }
 
         viewModelScope.launch {
-            teamOrchestrator.sendInstruction(exec.id, userId, team, instruction).collect { updated ->
-                _uiState.update { it.copy(currentExecution = updated, isExecuting = false) }
-            }
+            teamOrchestrator.sendInstruction(exec.id, userId, team, instruction)
+                .catch { e ->
+                    if (e is CancellationException) throw e
+                    _uiState.update { it.copy(isExecuting = false, error = e.message) }
+                }
+                .collect { updated ->
+                    _uiState.update { it.copy(currentExecution = updated, isExecuting = false) }
+                }
         }
     }
 
     fun changeMemberAgent(memberId: String, newModelId: String) {
         val team = _uiState.value.selectedTeam ?: return
+        if (getUserId() == null) {
+            _uiState.update { it.copy(error = AUTH_REQUIRED_ACTION) }
+            return
+        }
         viewModelScope.launch {
             val result = teamOrchestrator.changeMemberAgent(team.id, memberId, newModelId)
             if (result.isSuccess) {
                 val updatedTeam = teamRepository.getTeamById(team.id)
-                _uiState.update {
-                    it.copy(
-                        selectedTeam = updatedTeam,
+                _uiState.update { current ->
+                    current.copy(
+                        selectedTeam = updatedTeam ?: current.selectedTeam,
                         showChangeAgentDialog = false,
                         statusMessage = "تم تبديل نموذج العضو بنجاح"
                     )
@@ -442,5 +604,18 @@ class TeamChatViewModel(
         super.onCleared()
         stopTimer()
         executionJob?.cancel()
+        executionHistoryJob?.cancel()
+    }
+
+    companion object {
+        private const val AUTH_REQUIRED_ACTION = "سجّل الدخول بحساب صالح لتنفيذ عمليات الفريق."
     }
 }
+
+private data class TeamChatBootstrap(
+    val isAuthenticated: Boolean,
+    val teams: List<ModelTeam>,
+    val projects: List<Project>,
+    val models: List<AIModel>,
+    val error: String?
+)

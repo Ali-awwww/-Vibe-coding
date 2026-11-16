@@ -2,6 +2,7 @@ package com.example.presentation.ui.screens.teamchat
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -88,11 +89,11 @@ fun TeamInstructionDialog(
                         item {
                             Text("اختر العضو المستهدف:", style = MaterialTheme.typography.labelSmall)
                             Spacer(Modifier.height(4.dp))
-                            Row(
+                            LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                team.members.forEach { member ->
+                                items(team.members) { member ->
                                     FilterChip(
                                         selected = selectedMemberId == member.id,
                                         onClick = { selectedMemberId = member.id },

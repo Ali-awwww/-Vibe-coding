@@ -1,6 +1,8 @@
 package com.example.presentation.ui.screens.teamchat
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AssignmentInd
 import androidx.compose.material3.*
@@ -40,11 +42,11 @@ fun DirectTaskAssignmentDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("اختر العضو المسند إليه:", style = MaterialTheme.typography.labelMedium)
-                Row(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    team.members.forEach { member ->
+                    items(team.members) { member ->
                         FilterChip(
                             selected = selectedMemberId == member.id,
                             onClick = { selectedMemberId = member.id },

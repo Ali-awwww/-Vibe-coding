@@ -1,28 +1,26 @@
 package com.example.presentation.ui.screens.teamchat
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.*
-import com.example.presentation.viewmodel.TeamChatTab
+import com.example.ui.theme.VibeDesignTokens
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TeamChatInputPanel(
     teams: List<ModelTeam>,
@@ -64,21 +62,24 @@ fun TeamChatInputPanel(
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Selection Row: Team & Project
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Team Selector
             Box(modifier = Modifier.weight(1f)) {
                 OutlinedCard(
                     onClick = { expandedTeamMenu = true },
-                    modifier = Modifier.fillMaxWidth().testTag("select_team_dropdown_button")
+                    colors = CardDefaults.outlinedCardColors(containerColor = VibeDesignTokens.Color.SpacePanel),
+                    border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("select_team_dropdown_button")
                 ) {
                     Row(
                         modifier = Modifier
@@ -87,16 +88,18 @@ fun TeamChatInputPanel(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text("الفريق النشط", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("الفريق النشط", style = MaterialTheme.typography.labelSmall, color = VibeDesignTokens.Color.TextMuted)
                             Text(
-                                selectedTeam?.name ?: "اختر الفريق",
+                                text = selectedTeam?.name ?: "اختر الفريق",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 1
+                                color = VibeDesignTokens.Color.TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = VibeDesignTokens.Color.Cyan)
                     }
                 }
 
@@ -121,11 +124,14 @@ fun TeamChatInputPanel(
                 }
             }
 
-            // Project Selector
             Box(modifier = Modifier.weight(1f)) {
                 OutlinedCard(
                     onClick = { expandedProjectMenu = true },
-                    modifier = Modifier.fillMaxWidth().testTag("select_project_dropdown_button")
+                    colors = CardDefaults.outlinedCardColors(containerColor = VibeDesignTokens.Color.SpacePanel),
+                    border = BorderStroke(1.dp, VibeDesignTokens.Color.Violet.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("select_project_dropdown_button")
                 ) {
                     Row(
                         modifier = Modifier
@@ -134,16 +140,18 @@ fun TeamChatInputPanel(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text("المشروع المرتبط", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("المشروع المرتبط", style = MaterialTheme.typography.labelSmall, color = VibeDesignTokens.Color.TextMuted)
                             Text(
-                                selectedProject?.name ?: "بدون مشروع محدد",
+                                text = selectedProject?.name ?: "بدون مشروع محدد",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 1
+                                color = VibeDesignTokens.Color.TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = VibeDesignTokens.Color.Violet)
                     }
                 }
 
@@ -171,8 +179,7 @@ fun TeamChatInputPanel(
             }
         }
 
-        // Quick task suggestions
-        Text("نماذج مهام هندسية سريعة:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("نماذج مهام هندسية سريعة:", style = MaterialTheme.typography.labelSmall, color = VibeDesignTokens.Color.TextMuted)
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
@@ -182,15 +189,16 @@ fun TeamChatInputPanel(
                 SuggestionChip(
                     onClick = { onTaskPromptChange(template) },
                     label = { Text(template.take(28) + "...", style = MaterialTheme.typography.labelSmall) },
-                    icon = { Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary) }
+                    icon = { Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(14.dp), tint = VibeDesignTokens.Color.Cyan) }
                 )
             }
         }
 
-        // Main Task Prompt Card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
+            colors = CardDefaults.cardColors(containerColor = VibeDesignTokens.Color.SpacePanel),
+            border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.28f))
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Row(
@@ -198,13 +206,13 @@ fun TeamChatInputPanel(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("نص المهمة البرمجية", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("نص المهمة البرمجية", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = VibeDesignTokens.Color.TextPrimary)
                     if (taskPrompt.isNotEmpty()) {
                         TextButton(
                             onClick = { onTaskPromptChange("") },
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                         ) {
-                            Text("مسح", style = MaterialTheme.typography.labelSmall)
+                            Text("مسح", style = MaterialTheme.typography.labelSmall, color = VibeDesignTokens.Color.Cyan)
                         }
                     }
                 }
@@ -218,21 +226,20 @@ fun TeamChatInputPanel(
                         .fillMaxWidth()
                         .heightIn(min = 120.dp, max = 220.dp)
                         .testTag("team_task_prompt_input"),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(VibeDesignTokens.Shape.Control)
                 )
 
                 Spacer(Modifier.height(10.dp))
 
-                // Attached Files Strip
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp), tint = VibeDesignTokens.Color.Cyan)
                         Spacer(Modifier.width(6.dp))
-                        Text("الملفات المرفقة (${attachedFiles.size}):", style = MaterialTheme.typography.labelMedium)
+                        Text("الملفات المرفقة (${attachedFiles.size}):", style = MaterialTheme.typography.labelMedium, color = VibeDesignTokens.Color.TextPrimary)
                     }
 
                     TextButton(
@@ -248,7 +255,9 @@ fun TeamChatInputPanel(
                 if (attachedFiles.isNotEmpty()) {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
                     ) {
                         itemsIndexed(attachedFiles) { index, file ->
                             InputChip(
@@ -260,7 +269,7 @@ fun TeamChatInputPanel(
                                         onClick = { onRemoveAttachedFile(index) },
                                         modifier = Modifier.size(18.dp)
                                     ) {
-                                        Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(14.dp))
+                                        Icon(Icons.Default.Close, contentDescription = "إزالة الملف", modifier = Modifier.size(14.dp))
                                     }
                                 }
                             )
@@ -270,37 +279,40 @@ fun TeamChatInputPanel(
             }
         }
 
-        // Action Buttons Row: Send, Estimation, Pause, Resume, Stop, Retry
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Primary Send / Execute Button
                 Button(
                     onClick = onSendTask,
                     enabled = !isExecuting && selectedTeam != null,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VibeDesignTokens.Color.Cyan,
+                        contentColor = VibeDesignTokens.Color.OnCyan
+                    ),
                     modifier = Modifier
                         .weight(1.4f)
+                        .minimumInteractiveComponentSize()
                         .testTag("send_team_task_button")
                 ) {
                     if (isExecuting) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = VibeDesignTokens.Color.OnCyan, strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
-                        Text("جارٍ التنفيذ...")
+                        Text("جارٍ التنفيذ...", fontWeight = FontWeight.Bold)
                     } else {
                         Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("إرسال المهمة")
+                        Text("إرسال المهمة", fontWeight = FontWeight.Bold)
                     }
                 }
 
-                // Cost / Tokens Estimation Button
                 OutlinedButton(
                     onClick = onEstimateTask,
                     enabled = !isExecuting && selectedTeam != null,
                     modifier = Modifier
                         .weight(1f)
+                        .minimumInteractiveComponentSize()
                         .testTag("estimate_team_task_button")
                 ) {
                     Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -309,25 +321,23 @@ fun TeamChatInputPanel(
                 }
             }
 
-            // Execution Controls Bar (Pause, Resume, Stop, Retry, Review)
             Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(12.dp),
-                tonalElevation = 2.dp,
+                color = VibeDesignTokens.Color.SpacePanelRaised,
+                shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
+                border = BorderStroke(1.dp, VibeDesignTokens.Color.Grid),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
+                FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Pause Team
                     FilledTonalButton(
                         onClick = onPauseTeam,
                         enabled = isExecuting && !isPaused,
-                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = VibeDesignTokens.Color.Warning.copy(alpha = 0.22f)),
                         modifier = Modifier.testTag("pause_team_button")
                     ) {
                         Icon(Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -335,11 +345,10 @@ fun TeamChatInputPanel(
                         Text("إيقاف مؤقت", style = MaterialTheme.typography.labelSmall)
                     }
 
-                    // Resume Team
                     FilledTonalButton(
                         onClick = onResumeTeam,
                         enabled = isPaused,
-                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = VibeDesignTokens.Color.Cyan.copy(alpha = 0.22f)),
                         modifier = Modifier.testTag("resume_team_button")
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -347,11 +356,10 @@ fun TeamChatInputPanel(
                         Text("استكمال", style = MaterialTheme.typography.labelSmall)
                     }
 
-                    // Stop Team
                     FilledTonalButton(
                         onClick = onStopTeam,
                         enabled = isExecuting || isPaused,
-                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = VibeDesignTokens.Color.Error.copy(alpha = 0.22f)),
                         modifier = Modifier.testTag("stop_team_button")
                     ) {
                         Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -359,7 +367,6 @@ fun TeamChatInputPanel(
                         Text("إيقاف", style = MaterialTheme.typography.labelSmall)
                     }
 
-                    // Retry Failed
                     val hasFailed = currentExecution?.steps?.any { it.status == StepStatus.FAILED } == true
                     FilledTonalButton(
                         onClick = onRetryFailed,
@@ -373,15 +380,15 @@ fun TeamChatInputPanel(
                 }
             }
 
-            // Secondary Quick Actions: Direct Assignment, Agent Swap, Instructions, Review Results
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
                     onClick = onOpenAssignDialog,
                     enabled = selectedTeam != null,
-                    modifier = Modifier.weight(1f).testTag("assign_task_button")
+                    modifier = Modifier.testTag("assign_task_button")
                 ) {
                     Icon(Icons.Default.AssignmentInd, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
@@ -391,7 +398,7 @@ fun TeamChatInputPanel(
                 OutlinedButton(
                     onClick = onOpenChangeAgentDialog,
                     enabled = selectedTeam != null,
-                    modifier = Modifier.weight(1f).testTag("change_agent_button")
+                    modifier = Modifier.testTag("change_agent_button")
                 ) {
                     Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
@@ -401,7 +408,7 @@ fun TeamChatInputPanel(
                 OutlinedButton(
                     onClick = onOpenInstructionDialog,
                     enabled = selectedTeam != null,
-                    modifier = Modifier.weight(1f).testTag("send_instructions_button")
+                    modifier = Modifier.testTag("send_instructions_button")
                 ) {
                     Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
@@ -411,8 +418,11 @@ fun TeamChatInputPanel(
                 Button(
                     onClick = onReviewResultClick,
                     enabled = currentExecution != null,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                    modifier = Modifier.weight(1.1f).testTag("review_results_button")
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VibeDesignTokens.Color.Violet,
+                        contentColor = VibeDesignTokens.Color.TextPrimary
+                    ),
+                    modifier = Modifier.testTag("review_results_button")
                 ) {
                     Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))

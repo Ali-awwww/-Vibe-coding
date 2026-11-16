@@ -3,7 +3,9 @@ package com.example.presentation.ui.screens.teamchat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -95,11 +97,11 @@ abstract class AppDatabase : RoomDatabase() {
                 item {
                     Text("اختر من ملفات المشروع أو أدخل سياقًا مخصصًا:", style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.height(6.dp))
-                    Row(
+                    LazyRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        presetFiles.forEachIndexed { index, preset ->
+                        itemsIndexed(presetFiles) { index, preset ->
                             FilterChip(
                                 selected = selectedPresetIndex == index,
                                 onClick = {

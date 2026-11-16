@@ -3,6 +3,7 @@ package com.example.presentation.ui.screens.teamchat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.example.domain.model.AIModel
 import com.example.domain.model.ModelTeam
 import com.example.domain.model.TeamMember
+import com.example.ui.theme.VibeDesignTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,11 +58,11 @@ fun ChangeAgentDialog(
                 Text("اختر العضو المطلوب تعديل نموذجه:", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(8.dp))
 
-                Row(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    team.members.forEach { member ->
+                    items(team.members) { member ->
                         FilterChip(
                             selected = selectedMemberId == member.id,
                             onClick = {
@@ -120,14 +122,14 @@ fun ChangeAgentDialog(
                                 }
                                 if (model.isFree) {
                                     Surface(
-                                        color = Color(0xFF2E7D32).copy(alpha = 0.15f),
+                                        color = VibeDesignTokens.Color.Success.copy(alpha = 0.16f),
                                         shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
                                             "مجاني 100%",
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF2E7D32),
+                                            color = VibeDesignTokens.Color.Success,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }

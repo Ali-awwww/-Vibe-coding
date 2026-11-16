@@ -65,16 +65,16 @@ fun TeamResultReviewPanel(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Sub-tabs row
-        Row(
+        LazyRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ReviewSubTab.values().forEach { subTab ->
+            items(ReviewSubTab.values()) { subTab ->
                 FilterChip(
                     selected = activeSubTab == subTab,
                     onClick = { activeSubTab = subTab },
-                    label = { Text(subTab.labelAr, style = MaterialTheme.typography.labelSmall) }
+                    label = { Text(subTab.labelAr, style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.testTag("review_subtab_${subTab.name}")
                 )
             }
         }

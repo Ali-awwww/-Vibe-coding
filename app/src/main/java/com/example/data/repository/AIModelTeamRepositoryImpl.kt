@@ -2,40 +2,49 @@ package com.example.data.repository
 
 import android.content.Context
 import com.example.R
+import com.example.data.local.AIProviderDao
+import com.example.di.DependencyProvider
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelTeamRepository
-import com.google.firebase.Firebase
+import com.example.domain.repository.AuthRepository
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
 import com.google.firebase.firestore.toObject
 import com.google.firebase.firestore.toObjects
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
-class AIModelTeamRepositoryImpl(private val context: Context) : AIModelTeamRepository {
+class AIModelTeamRepositoryImpl(
+    private val context: Context,
+    private val authRepository: AuthRepository? = null,
+    private val firestore: FirebaseFirestore? = null,
+    private val firebaseAuth: FirebaseAuth? = null,
+    private val aiProviderDaoOverride: AIProviderDao? = null,
+    private val currentUserIdProvider: (() -> String?)? = null
+) : AIModelTeamRepository {
 
-    private val auth: FirebaseAuth? by lazy {
-        try {
-            Firebase.auth
-        } catch (_: Exception) {
+    private val localTeamsState = MutableStateFlow<Map<String, ModelTeam>>(emptyMap())
+    private val localExecutionsState = MutableStateFlow<Map<String, TeamExecution>>(emptyMap())
+
+    private val activeFirebaseAuth: FirebaseAuth? by lazy {
+        firebaseAuth ?: try {
+            if (!com.example.util.isFirebaseConfigured(context)) null else FirebaseAuth.getInstance()
+        } catch (_: Throwable) {
             null
         }
     }
-    private fun requireUserId(): String = auth?.currentUser?.uid?.takeIf { it.isNotBlank() }
-        ?: throw IllegalStateException("Authentication is required for team data operations.")
-
-    private val localTeams = java.util.concurrent.ConcurrentHashMap<String, ModelTeam>()
-    private val localExecutions = java.util.concurrent.ConcurrentHashMap<String, TeamExecution>()
 
     private val db: FirebaseFirestore? by lazy {
-        try {
+        firestore ?: try {
             if (!com.example.util.isFirebaseConfigured(context)) {
                 return@lazy null
             }
@@ -54,119 +63,234 @@ class AIModelTeamRepositoryImpl(private val context: Context) : AIModelTeamRepos
         }
     }
 
+    private val aiProviderDao: AIProviderDao by lazy {
+        aiProviderDaoOverride ?: DependencyProvider.provideDatabase(context).aiProviderDao()
+    }
+
+    private fun resolveAuthenticatedUserId(requestedUserId: String? = null): String {
+        val activeUserId = currentUserIdProvider?.invoke()?.takeIf { it.isNotBlank() }
+            ?: authRepository?.getCurrentUserSync()?.id?.takeIf { it.isNotBlank() }
+            ?: activeFirebaseAuth?.currentUser?.uid?.takeIf { it.isNotBlank() }
+
+        val uid = ProjectIdentityGuard.requireSupabaseUserId(
+            currentUserId = activeUserId,
+            requestedUserId = requestedUserId
+        )
+
+        if (db != null) {
+            ProjectIdentityGuard.requireLegacyFirebaseIdentityMatch(
+                supabaseUserId = uid,
+                firebaseUserId = activeFirebaseAuth?.currentUser?.uid
+            )
+        }
+        return uid
+    }
+
     override fun getTeams(userId: String): Flow<List<ModelTeam>> = flow {
+        val uid = resolveAuthenticatedUserId(userId)
         val firestoreDb = db
         if (firestoreDb != null) {
-            try {
-                emitAll(
-                    firestoreDb.collection("users").document(userId).collection("model_teams")
-                        .orderBy("createdAt", Query.Direction.DESCENDING)
-                        .snapshots()
-                        .map { it.toObjects(ModelTeam::class.java) }
-                )
-                return@flow
-            } catch (_: Exception) {
-                // fall through to local
-            }
+            emitAll(
+                firestoreDb.collection("users").document(uid).collection("model_teams")
+                    .orderBy("createdAt", Query.Direction.DESCENDING)
+                    .snapshots()
+                    .map { snapshot ->
+                        val remoteTeams = snapshot.toObjects(ModelTeam::class.java)
+                        localTeamsState.update { current ->
+                            val withoutOwner = current.filterValues { it.ownerId != uid }
+                            withoutOwner + remoteTeams.associateBy { it.id }
+                        }
+                        remoteTeams
+                    }
+            )
+            return@flow
         }
-        emit(localTeams.values.filter { it.ownerId == userId }.sortedByDescending { it.createdAt })
+
+        emitAll(
+            localTeamsState.map { map ->
+                map.values
+                    .filter { it.ownerId == uid }
+                    .sortedByDescending { it.createdAt }
+            }
+        )
     }
 
     override suspend fun getTeamById(teamId: String): ModelTeam? {
-        localTeams[teamId]?.let { return it }
-        val uid = requireUserId()
+        val uid = resolveAuthenticatedUserId()
+        localTeamsState.value[teamId]?.let { cached ->
+            if (cached.ownerId == uid) return cached
+            throw SecurityException("Team access denied for the current account.")
+        }
+
         val firestoreDb = db ?: return null
         return try {
-            firestoreDb.collection("users").document(uid).collection("model_teams").document(teamId)
-                .get().await().toObject<ModelTeam>()?.also { localTeams[teamId] = it }
-        } catch (_: Exception) {
-            null
+            val remote = firestoreDb.collection("users").document(uid)
+                .collection("model_teams").document(teamId)
+                .get().await().toObject<ModelTeam>()
+            if (remote != null) {
+                if (remote.ownerId.isNotBlank() && remote.ownerId != uid) {
+                    throw SecurityException("Team access denied for the current account.")
+                }
+                localTeamsState.update { it + (teamId to remote) }
+            }
+            remote
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SecurityException) {
+            throw e
         }
     }
 
     override suspend fun createTeam(team: ModelTeam): Result<String> = runCatching {
-        val uid = requireUserId()
-        val id = if (team.id.isEmpty()) UUID.randomUUID().toString() else team.id
-        val finalTeam = team.copy(id = id, ownerId = uid, createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
-        localTeams[id] = finalTeam
-        try {
-            db?.collection("users")?.document(uid)?.collection("model_teams")?.document(id)?.set(finalTeam)?.await()
-        } catch (_: Exception) {}
+        val uid = resolveAuthenticatedUserId(
+            requestedUserId = team.ownerId.takeIf { it.isNotBlank() }
+        )
+        val id = if (team.id.isBlank()) UUID.randomUUID().toString() else team.id
+        val now = System.currentTimeMillis()
+        val finalTeam = team.copy(
+            id = id,
+            ownerId = uid,
+            createdAt = if (team.createdAt > 0L) team.createdAt else now,
+            updatedAt = now
+        )
+
+        db?.let { firestoreDb ->
+            firestoreDb.collection("users").document(uid)
+                .collection("model_teams").document(id)
+                .set(finalTeam)
+                .await()
+        }
+
+        localTeamsState.update { it + (id to finalTeam) }
         id
-    }
+    }.onFailure { if (it is CancellationException) throw it }
 
     override suspend fun updateTeam(team: ModelTeam): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        val updated = team.copy(updatedAt = System.currentTimeMillis())
-        localTeams[team.id] = updated
-        try {
-            db?.collection("users")?.document(uid)?.collection("model_teams")?.document(team.id)
-                ?.set(updated)
-                ?.await()
-        } catch (_: Exception) {}
-    }
+        val uid = resolveAuthenticatedUserId(
+            requestedUserId = team.ownerId.takeIf { it.isNotBlank() }
+        )
+        val existing = localTeamsState.value[team.id]
+        if (existing != null && existing.ownerId != uid) {
+            throw SecurityException("Cannot modify a team owned by another user.")
+        }
+
+        val updated = team.copy(
+            ownerId = uid,
+            updatedAt = System.currentTimeMillis()
+        )
+
+        db?.let { firestoreDb ->
+            firestoreDb.collection("users").document(uid)
+                .collection("model_teams").document(team.id)
+                .set(updated)
+                .await()
+        }
+
+        localTeamsState.update { it + (team.id to updated) }
+    }.onFailure { if (it is CancellationException) throw it }
 
     override suspend fun deleteTeam(teamId: String): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        localTeams.remove(teamId)
-        try {
-            db?.collection("users")?.document(uid)?.collection("model_teams")?.document(teamId)?.delete()?.await()
-        } catch (_: Exception) {}
-    }
+        val uid = resolveAuthenticatedUserId()
+        val existing = localTeamsState.value[teamId]
+        if (existing != null && existing.ownerId != uid) {
+            throw SecurityException("Cannot delete a team owned by another user.")
+        }
+
+        db?.let { firestoreDb ->
+            firestoreDb.collection("users").document(uid)
+                .collection("model_teams").document(teamId)
+                .delete()
+                .await()
+        }
+
+        localTeamsState.update { it - teamId }
+    }.onFailure { if (it is CancellationException) throw it }
 
     override fun getTeamExecutions(teamId: String): Flow<List<TeamExecution>> = flow {
-        val uid = requireUserId()
+        val uid = resolveAuthenticatedUserId()
         val firestoreDb = db
         if (firestoreDb != null) {
-            try {
-                emitAll(
-                    firestoreDb.collection("users").document(uid).collection("team_executions")
-                        .whereEqualTo("teamId", teamId)
-                        .orderBy("startedAt", Query.Direction.DESCENDING)
-                        .snapshots()
-                        .map { it.toObjects(TeamExecution::class.java) }
-                )
-                return@flow
-            } catch (_: Exception) {
-                // fall through to local
-            }
+            emitAll(
+                firestoreDb.collection("users").document(uid).collection("team_executions")
+                    .whereEqualTo("teamId", teamId)
+                    .orderBy("startedAt", Query.Direction.DESCENDING)
+                    .snapshots()
+                    .map { snapshot ->
+                        val remote = snapshot.toObjects(TeamExecution::class.java)
+                        localExecutionsState.update { current ->
+                            current + remote.associateBy { it.id }
+                        }
+                        remote
+                    }
+            )
+            return@flow
         }
-        emit(localExecutions.values.filter { it.teamId == teamId }.sortedByDescending { it.startedAt })
+
+        emitAll(
+            localExecutionsState.map { map ->
+                map.values
+                    .filter { it.teamId == teamId && it.userId == uid }
+                    .sortedByDescending { it.startedAt }
+            }
+        )
     }
 
     override suspend fun getExecutionById(executionId: String): TeamExecution? {
-        localExecutions[executionId]?.let { return it }
-        val uid = requireUserId()
+        val uid = resolveAuthenticatedUserId()
+        localExecutionsState.value[executionId]?.let { cached ->
+            if (cached.userId == uid) return cached
+            throw SecurityException("Execution access denied for the current account.")
+        }
+
         val firestoreDb = db ?: return null
         return try {
-            firestoreDb.collection("users").document(uid).collection("team_executions").document(executionId)
-                .get().await().toObject<TeamExecution>()?.also { localExecutions[executionId] = it }
-        } catch (_: Exception) {
-            null
+            val remote = firestoreDb.collection("users").document(uid)
+                .collection("team_executions").document(executionId)
+                .get().await().toObject<TeamExecution>()
+            if (remote != null) {
+                if (remote.userId.isNotBlank() && remote.userId != uid) {
+                    throw SecurityException("Execution access denied for the current account.")
+                }
+                localExecutionsState.update { it + (executionId to remote) }
+            }
+            remote
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SecurityException) {
+            throw e
         }
     }
 
     override suspend fun logExecution(execution: TeamExecution): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        val id = if (execution.id.isEmpty()) UUID.randomUUID().toString() else execution.id
+        val uid = resolveAuthenticatedUserId(
+            requestedUserId = execution.userId.takeIf { it.isNotBlank() }
+        )
+        val id = if (execution.id.isBlank()) UUID.randomUUID().toString() else execution.id
         val finalExec = execution.copy(id = id, userId = uid)
-        localExecutions[id] = finalExec
-        try {
-            db?.collection("users")?.document(uid)?.collection("team_executions")?.document(id)?.set(finalExec)?.await()
-        } catch (_: Exception) {}
-    }
+
+        db?.let { firestoreDb ->
+            firestoreDb.collection("users").document(uid)
+                .collection("team_executions").document(id)
+                .set(finalExec)
+                .await()
+        }
+
+        localExecutionsState.update { it + (id to finalExec) }
+    }.onFailure { if (it is CancellationException) throw it }
 
     override suspend fun addTeamMember(teamId: String, member: TeamMember): Result<Unit> = runCatching {
-        val team = getTeamById(teamId) ?: throw Exception("Team not found")
-        val newMembers = team.members + member.copy(id = UUID.randomUUID().toString())
+        val team = getTeamById(teamId) ?: throw NoSuchElementException("Team not found")
+        val memberId = member.id.ifBlank { UUID.randomUUID().toString() }
+        val newMembers = team.members + member.copy(id = memberId)
         updateTeam(team.copy(members = newMembers)).getOrThrow()
-    }
+    }.onFailure { if (it is CancellationException) throw it }
 
     override suspend fun removeTeamMember(teamId: String, memberId: String): Result<Unit> = runCatching {
-        val team = getTeamById(teamId) ?: throw Exception("Team not found")
+        val team = getTeamById(teamId) ?: throw NoSuchElementException("Team not found")
         val newMembers = team.members.filter { it.id != memberId }
-        updateTeam(team.copy(members = newMembers)).getOrThrow()
-    }
+        val updatedLeader = if (team.leaderMemberId == memberId) newMembers.firstOrNull()?.id else team.leaderMemberId
+        updateTeam(team.copy(members = newMembers, leaderMemberId = updatedLeader)).getOrThrow()
+    }.onFailure { if (it is CancellationException) throw it }
 
     override suspend fun updateMemberStatus(
         teamId: String,
@@ -175,8 +299,8 @@ class AIModelTeamRepositoryImpl(private val context: Context) : AIModelTeamRepos
         currentTask: String?,
         lastResult: String?
     ): Result<Unit> = runCatching {
-        val team = getTeamById(teamId) ?: throw Exception("Team not found")
-        val newMembers = team.members.map { 
+        val team = getTeamById(teamId) ?: throw NoSuchElementException("Team not found")
+        val newMembers = team.members.map {
             if (it.id == memberId) {
                 it.copy(
                     status = status,
@@ -187,26 +311,33 @@ class AIModelTeamRepositoryImpl(private val context: Context) : AIModelTeamRepos
             } else it
         }
         updateTeam(team.copy(members = newMembers)).getOrThrow()
-    }
-
-    private val aiProviderDao: com.example.data.local.AIProviderDao by lazy {
-        com.example.di.DependencyProvider.provideDatabase(context).aiProviderDao()
-    }
+    }.onFailure { if (it is CancellationException) throw it }
 
     override fun getTeamUsageRecords(teamId: String): Flow<List<TeamUsageRecord>> {
-        return aiProviderDao.getTeamUsageRecords(teamId)
+        val uid = resolveAuthenticatedUserId()
+        return aiProviderDao.getTeamUsageRecords(teamId).map { rows ->
+            rows.filter { it.userId == uid }
+        }
     }
 
     override fun getAllTeamUsageRecords(userId: String): Flow<List<TeamUsageRecord>> {
-        return aiProviderDao.getAllTeamUsageRecords(userId)
+        val uid = resolveAuthenticatedUserId(userId)
+        return aiProviderDao.getAllTeamUsageRecords(uid)
     }
 
     override suspend fun logTeamUsage(record: TeamUsageRecord): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        aiProviderDao.insertTeamUsageRecord(record)
-        try {
-            db?.collection("users")?.document(uid)?.collection("team_usage_records")?.document(record.id)?.set(record)?.await()
-        } catch (_: Exception) {}
-    }
-}
+        val uid = resolveAuthenticatedUserId(
+            requestedUserId = record.userId.takeIf { it.isNotBlank() }
+        )
+        val scopedRecord = record.copy(userId = uid)
 
+        db?.let { firestoreDb ->
+            firestoreDb.collection("users").document(uid)
+                .collection("team_usage_records").document(scopedRecord.id)
+                .set(scopedRecord)
+                .await()
+        }
+
+        aiProviderDao.insertTeamUsageRecord(scopedRecord)
+    }.onFailure { if (it is CancellationException) throw it }
+}

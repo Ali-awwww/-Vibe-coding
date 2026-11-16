@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.*
+import com.example.ui.theme.VibeDesignTokens
 
 @Composable
 fun LiveTeamCollaborationPanel(
@@ -62,11 +63,11 @@ fun LiveTeamCollaborationPanel(
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = when {
-                        isPaused -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
-                        isExecuting -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                        currentExecution?.status == ExecutionStatus.COMPLETED -> Color(0xFF2E7D32).copy(alpha = 0.15f)
-                        currentExecution?.status == ExecutionStatus.FAILED -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                        else -> MaterialTheme.colorScheme.surfaceVariant
+                        isPaused -> VibeDesignTokens.Color.Warning.copy(alpha = 0.16f)
+                        isExecuting -> VibeDesignTokens.Color.Cyan.copy(alpha = 0.16f)
+                        currentExecution?.status == ExecutionStatus.COMPLETED -> VibeDesignTokens.Color.Success.copy(alpha = 0.16f)
+                        currentExecution?.status == ExecutionStatus.FAILED -> VibeDesignTokens.Color.Error.copy(alpha = 0.16f)
+                        else -> VibeDesignTokens.Color.SpacePanel
                     }
                 ),
                 modifier = Modifier.fillMaxWidth()
@@ -82,11 +83,11 @@ fun LiveTeamCollaborationPanel(
                         Surface(
                             shape = CircleShape,
                             color = when {
-                                isPaused -> MaterialTheme.colorScheme.tertiary
-                                isExecuting -> MaterialTheme.colorScheme.primary
-                                currentExecution?.status == ExecutionStatus.COMPLETED -> Color(0xFF2E7D32)
-                                currentExecution?.status == ExecutionStatus.FAILED -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.outline
+                                isPaused -> VibeDesignTokens.Color.Warning
+                                isExecuting -> VibeDesignTokens.Color.Cyan
+                                currentExecution?.status == ExecutionStatus.COMPLETED -> VibeDesignTokens.Color.Success
+                                currentExecution?.status == ExecutionStatus.FAILED -> VibeDesignTokens.Color.Error
+                                else -> VibeDesignTokens.Color.TextMuted
                             },
                             modifier = Modifier.size(12.dp)
                         ) {}
@@ -253,14 +254,14 @@ fun LiveTeamCollaborationPanel(
 
                         if (member.isCostConfirmed) {
                             Surface(
-                                color = Color(0xFF2E7D32).copy(alpha = 0.12f),
+                                color = VibeDesignTokens.Color.Success.copy(alpha = 0.14f),
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
                                     "حصة مجانية (Free)",
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF2E7D32),
+                                    color = VibeDesignTokens.Color.Success,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -432,12 +433,12 @@ fun LiveTeamCollaborationPanel(
 @Composable
 fun MemberStatusBadge(memberStatus: MemberStatus, stepStatus: StepStatus?) {
     val (label, bg, fg) = when {
-        stepStatus == StepStatus.IN_PROGRESS || memberStatus == MemberStatus.WORKING -> Triple("يعمل الآن", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary)
-        stepStatus == StepStatus.COMPLETED || memberStatus == MemberStatus.COMPLETED -> Triple("مكتمل", Color(0xFF2E7D32).copy(alpha = 0.2f), Color(0xFF2E7D32))
-        stepStatus == StepStatus.FAILED || memberStatus == MemberStatus.FAILED -> Triple("فشل", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error)
-        memberStatus == MemberStatus.RATE_LIMITED -> Triple("محدود الحصة", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.tertiary)
-        memberStatus == MemberStatus.WAITING -> Triple("بانتظار دور", MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f), MaterialTheme.colorScheme.tertiary)
-        else -> Triple("جاهز (خامل)", MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
+        stepStatus == StepStatus.IN_PROGRESS || memberStatus == MemberStatus.WORKING -> Triple("يعمل الآن", VibeDesignTokens.Color.Cyan.copy(alpha = 0.18f), VibeDesignTokens.Color.Cyan)
+        stepStatus == StepStatus.COMPLETED || memberStatus == MemberStatus.COMPLETED -> Triple("مكتمل", VibeDesignTokens.Color.Success.copy(alpha = 0.18f), VibeDesignTokens.Color.Success)
+        stepStatus == StepStatus.FAILED || memberStatus == MemberStatus.FAILED -> Triple("فشل", VibeDesignTokens.Color.Error.copy(alpha = 0.18f), VibeDesignTokens.Color.Error)
+        memberStatus == MemberStatus.RATE_LIMITED -> Triple("محدود الحصة", VibeDesignTokens.Color.Warning.copy(alpha = 0.18f), VibeDesignTokens.Color.Warning)
+        memberStatus == MemberStatus.WAITING -> Triple("بانتظار دور", VibeDesignTokens.Color.Warning.copy(alpha = 0.14f), VibeDesignTokens.Color.Warning)
+        else -> Triple("جاهز (خامل)", VibeDesignTokens.Color.SpacePanelRaised, VibeDesignTokens.Color.TextMuted)
     }
 
     Surface(

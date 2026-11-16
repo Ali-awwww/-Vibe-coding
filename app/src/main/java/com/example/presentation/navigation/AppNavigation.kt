@@ -271,13 +271,7 @@ fun AppNavigation(
         }
 
         composable<Screen.CreateTeam> {
-            val teamsViewModel: ModelTeamsViewModel = viewModel {
-                DependencyProvider.provideModelTeamsViewModel(context)
-            }
-            androidx.compose.runtime.LaunchedEffect(Unit) {
-                teamsViewModel.startCreateTeam()
-            }
-            ModelTeamsScreen(navController = navController)
+            ModelTeamsScreen(navController = navController, initialCreateMode = true)
         }
 
         composable<Screen.TeamDetail> { backStackEntry ->
