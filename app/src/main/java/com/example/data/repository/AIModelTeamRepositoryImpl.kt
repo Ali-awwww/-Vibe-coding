@@ -31,13 +31,15 @@ class AIModelTeamRepositoryImpl(
     private val firestore: FirebaseFirestore? = null,
     private val firebaseAuth: FirebaseAuth? = null,
     private val aiProviderDaoOverride: AIProviderDao? = null,
-    private val currentUserIdProvider: (() -> String?)? = null
+    private val currentUserIdProvider: (() -> String?)? = null,
+    private val enableRemoteBackend: Boolean = true
 ) : AIModelTeamRepository {
 
     private val localTeamsState = MutableStateFlow<Map<String, ModelTeam>>(emptyMap())
     private val localExecutionsState = MutableStateFlow<Map<String, TeamExecution>>(emptyMap())
 
     private val activeFirebaseAuth: FirebaseAuth? by lazy {
+        if (!enableRemoteBackend) return@lazy null
         firebaseAuth ?: try {
             if (!com.example.util.isFirebaseConfigured(context)) null else FirebaseAuth.getInstance()
         } catch (_: Throwable) {
@@ -46,6 +48,7 @@ class AIModelTeamRepositoryImpl(
     }
 
     private val db: FirebaseFirestore? by lazy {
+        if (!enableRemoteBackend) return@lazy null
         firestore ?: try {
             if (!com.example.util.isFirebaseConfigured(context)) {
                 return@lazy null

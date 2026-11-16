@@ -44,7 +44,8 @@ class AIModelTeamRepositoryImplTest {
             firestore = null,
             firebaseAuth = null,
             aiProviderDaoOverride = aiProviderDao,
-            currentUserIdProvider = { activeUserId }
+            currentUserIdProvider = { activeUserId },
+            enableRemoteBackend = false
         )
     }
 
