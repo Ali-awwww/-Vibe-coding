@@ -24,19 +24,43 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.validation.TeamValidationSummaryReport
 import com.example.presentation.viewmodel.TeamValidationUiState
-import com.example.presentation.viewmodel.TeamValidationViewModel
 
 @Composable
 fun ValidationReportTab(
     uiState: TeamValidationUiState,
-    viewModel: TeamValidationViewModel
+    onExportReport: () -> Unit
 ) {
     val report = uiState.summaryReport
     val context = LocalContext.current
 
     if (report == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Assessment,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(40.dp)
+                )
+                Text(
+                    text = "لا يوجد تقرير بعد",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "شغّل فحصاً واحداً على الأقل لإنشاء تقرير مبني على نتائج فعلية. لن تُعرض بيانات نموذجية أو تكلفة افتراضية.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         return
     }
@@ -67,7 +91,7 @@ fun ValidationReportTab(
                         tint = MaterialTheme.colorScheme.secondary
                     )
                     Text(
-                        text = "وضع التحقق المعزول (Sandbox Demo): أرقام النماذج والتوكنز والتكلفة في هذا التقرير عينات تجريبية ولا تمثل فواتير مزودين فعلية.",
+                        text = "يعرض هذا التقرير الفحوص المنفذة فعلياً فقط. الفحوص المتجاوزة أو غير المتاحة لا تُحسب نجاحاً، والتكلفة لا تظهر إلا عند توفر سجل قياس حقيقي.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
@@ -104,7 +128,7 @@ fun ValidationReportTab(
                         }
 
                         Button(
-                            onClick = { viewModel.exportMarkdownReport(context) },
+                            onClick = onExportReport,
                             enabled = !uiState.isExporting,
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             modifier = Modifier.testTag("export_validation_report_button")
@@ -137,14 +161,18 @@ fun ValidationReportTab(
                         )
                         ReportMetricCard(
                             title = "التكلفة الفعلية",
-                            value = "$${String.format(java.util.Locale.US, "%.2f", report.totalActualCostUsd)}",
+                            value = if (report.actualCostMeasured) {
+                                "${String.format(java.util.Locale.US, "%.4f", report.totalActualCostUsd)}"
+                            } else {
+                                "غير مقاسة"
+                            },
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.weight(1f)
                         )
                         ReportMetricCard(
-                            title = "عزل المفاتيح",
-                            value = "صارم 100%",
-                            color = Color(0xFF00796B),
+                            title = "عزل الاستعلامات المحلية",
+                            value = if (report.userKeyIsolationVerified) "Room فقط" else "غير متحقق",
+                            color = if (report.userKeyIsolationVerified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -183,6 +211,14 @@ fun ValidationReportTab(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    if (report.modelsContacted.isEmpty()) {
+                        Text(
+                            text = "لم يسجل هذا التشغيل أي استدعاء استدلال لنموذج أو بيانات توكن. فحص اتصال المزود وحده لا يثبت تنفيذ استدلال ولا يحدد التكلفة.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     report.modelsContacted.forEach { model ->
                         Surface(
@@ -236,7 +272,11 @@ fun ValidationReportTab(
                                         modifier = Modifier.weight(1f)
                                     )
                                     Text(
-                                        text = "${model.totalTokens} توكن • $0.00",
+                                        text = if (report.actualCostMeasured) {
+                                            "${model.totalTokens} توكن • ${String.format(java.util.Locale.US, "%.4f", model.costUsd)}"
+                                        } else {
+                                            "${model.totalTokens} توكن • التكلفة غير مقاسة"
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Bold
@@ -262,6 +302,14 @@ fun ValidationReportTab(
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    if (report.conflictsDetected.isEmpty()) {
+                        Text(
+                            text = "لا توجد تعارضات فعلية مسجلة في هذا التشغيل.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     report.conflictsDetected.forEach { conflict ->
                         Surface(
@@ -301,6 +349,35 @@ fun ValidationReportTab(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (report.actionableErrors.isNotEmpty()) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "فحوص متجاوزة أو تحتاج معالجة",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        report.actionableErrors.forEach { message ->
+                            Text(
+                                text = "• $message",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 }
