@@ -68,13 +68,18 @@ class TeamDetailScreenTest {
 
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {
-                MemberStatusCard(member = member, onRemove = { removeRequested = true })
+                MemberStatusCard(
+                    member = member,
+                    capabilities = listOf(AICapability.CODING, AICapability.VISION),
+                    onRemove = { removeRequested = true }
+                )
             }
         }
 
         composeRule.onNodeWithText("النموذج: openrouter/free-model").assertIsDisplayed()
         composeRule.onNodeWithText("المزود: openrouter").assertIsDisplayed()
         composeRule.onNodeWithText("التعليمات: Review every proposed diff.").assertIsDisplayed()
+        composeRule.onNodeWithText("القدرات: برمجة • رؤية").assertIsDisplayed()
         composeRule.onNodeWithTag("team_detail_remove_member_member-1").performClick()
         assertTrue(removeRequested)
     }

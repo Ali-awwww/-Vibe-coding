@@ -149,6 +149,7 @@ fun TeamDetailScreen(navController: NavController, teamId: String) {
                             items(team.members, key = { it.id }) { member ->
                                 MemberStatusCard(
                                     member = member,
+                                    capabilities = uiState.memberCapabilities[member.id].orEmpty(),
                                     onRemove = { memberPendingRemoval = member },
                                     removeEnabled = !uiState.isMutating
                                 )
@@ -396,6 +397,7 @@ fun LabelValue(label: String, value: String) {
 @Composable
 fun MemberStatusCard(
     member: TeamMember,
+    capabilities: List<AICapability> = emptyList(),
     onRemove: (() -> Unit)? = null,
     removeEnabled: Boolean = true
 ) {
@@ -456,6 +458,15 @@ fun MemberStatusCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                if (capabilities.isNotEmpty()) {
+                    Text(
+                        "القدرات: ${capabilities.joinToString(" • ") { it.labelAr() }}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = com.example.ui.theme.VibeDesignTokens.Color.Cyan,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (member.instructions.isNotBlank()) {
                     Text(
                         "التعليمات: ${member.instructions}",
@@ -493,6 +504,16 @@ fun MemberStatusCard(
         }
     }
 }
+private fun AICapability.labelAr(): String = when (this) {
+    AICapability.CODING -> "برمجة"
+    AICapability.REASONING -> "استدلال"
+    AICapability.LONG_CONTEXT -> "سياق طويل"
+    AICapability.STREAMING -> "بث مباشر"
+    AICapability.FUNCTION_CALLING -> "استدعاء الأدوات"
+    AICapability.VISION -> "رؤية"
+    AICapability.AGENTIC -> "تنفيذ وكيل"
+}
+
 @Composable
 fun ExecutionInputSection(
     prompt: String,

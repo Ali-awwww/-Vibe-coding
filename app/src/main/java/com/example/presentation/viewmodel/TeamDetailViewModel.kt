@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.agent.TeamOrchestrator
 import com.example.domain.model.*
+import com.example.domain.repository.AIModelRepository
 import com.example.domain.repository.AIModelTeamRepository
 import com.example.domain.repository.AuthRepository
 import java.io.IOException
@@ -19,6 +20,7 @@ data class TeamDetailUiState(
     val team: ModelTeam? = null,
     val executions: List<TeamExecution> = emptyList(),
     val currentExecution: TeamExecution? = null,
+    val memberCapabilities: Map<String, List<AICapability>> = emptyMap(),
     val preEstimation: PreExecutionEstimation? = null,
     val showEstimationDialog: Boolean = false,
     val showGovernanceDialog: Boolean = false,
@@ -47,7 +49,8 @@ class TeamDetailViewModel(
     private val teamId: String,
     private val teamRepository: AIModelTeamRepository,
     private val teamOrchestrator: TeamOrchestrator,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val aiModelRepository: AIModelRepository? = null
 ) : ViewModel() {
 
     companion object {
@@ -63,6 +66,9 @@ class TeamDetailViewModel(
     private var estimationJob: Job? = null
     private var executionJob: Job? = null
     private var mutationJob: Job? = null
+    private var capabilitiesJob: Job? = null
+    private var capabilitiesUserId: String? = null
+    private var capabilitiesMemberKeys: List<String> = emptyList()
 
     init {
         if (teamId.isBlank()) {
@@ -117,6 +123,7 @@ class TeamDetailViewModel(
                         team = if (accountChanged) null else current.team,
                         executions = if (accountChanged) emptyList() else current.executions,
                         currentExecution = if (accountChanged) null else current.currentExecution,
+                        memberCapabilities = if (accountChanged) emptyMap() else current.memberCapabilities,
                         loadError = null,
                         error = null
                     )
@@ -149,6 +156,7 @@ class TeamDetailViewModel(
                         loadError = if (result.team == null) TEAM_NOT_FOUND_MESSAGE else null
                     )
                 }
+                loadMemberCapabilities(result.userId, result.team)
             }
 
             is TeamDetailLoadResult.Failed -> {
@@ -283,18 +291,21 @@ class TeamDetailViewModel(
         transform: (ModelTeam) -> ModelTeam,
         closeGovernanceDialog: Boolean = false
     ) {
-        if (authenticatedUserId() == null || _uiState.value.isMutating) return
+        val userId = authenticatedUserId() ?: return
+        if (_uiState.value.isMutating) return
 
         mutationJob = viewModelScope.launch {
             _uiState.update { it.copy(isMutating = true, error = null) }
             try {
                 mutation().getOrThrow()
+                val updatedTeam = _uiState.value.team?.let(transform)
                 _uiState.update { current ->
                     current.copy(
-                        team = current.team?.let(transform),
+                        team = updatedTeam,
                         showGovernanceDialog = if (closeGovernanceDialog) false else current.showGovernanceDialog
                     )
                 }
+                loadMemberCapabilities(userId, updatedTeam)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (cause: Throwable) {
@@ -309,9 +320,49 @@ class TeamDetailViewModel(
         estimationJob?.cancel()
         executionJob?.cancel()
         mutationJob?.cancel()
+        capabilitiesJob?.cancel()
         estimationJob = null
         executionJob = null
         mutationJob = null
+        capabilitiesJob = null
+        capabilitiesUserId = null
+        capabilitiesMemberKeys = emptyList()
+    }
+
+    private fun loadMemberCapabilities(userId: String, team: ModelTeam?) {
+        val repository = aiModelRepository ?: return
+        if (team == null) {
+            capabilitiesJob?.cancel()
+            capabilitiesUserId = userId
+            capabilitiesMemberKeys = emptyList()
+            _uiState.update { it.copy(memberCapabilities = emptyMap()) }
+            return
+        }
+
+        val memberKeys = team.members.map { "${it.id}|${it.modelId}" }
+        if (capabilitiesUserId == userId && capabilitiesMemberKeys == memberKeys) return
+        capabilitiesUserId = userId
+        capabilitiesMemberKeys = memberKeys
+        capabilitiesJob?.cancel()
+        capabilitiesJob = viewModelScope.launch {
+            val capabilities = mutableMapOf<String, List<AICapability>>()
+            for (member in team.members) {
+                if (member.id.isBlank() || member.modelId.isBlank()) continue
+                val model = try {
+                    repository.getModelById(userId, member.modelId)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    null
+                }
+                if (model != null && model.capabilities.isNotEmpty()) {
+                    capabilities[member.id] = model.capabilities
+                }
+            }
+            if (currentUser.value?.id?.trim() == userId && _uiState.value.team?.id == team.id) {
+                _uiState.update { it.copy(memberCapabilities = capabilities) }
+            }
+        }
     }
 
     private fun authenticatedUserId(): String? {

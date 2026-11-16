@@ -349,7 +349,8 @@ object DependencyProvider {
             teamId,
             provideAIModelTeamRepository(context),
             provideTeamOrchestrator(context),
-            provideAuthRepository(context)
+            provideAuthRepository(context),
+            provideAIModelRepository(context)
         )
     }
 

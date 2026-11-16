@@ -2,6 +2,7 @@ package com.example.presentation.viewmodel
 
 import com.example.domain.agent.TeamOrchestrator
 import com.example.domain.model.*
+import com.example.domain.repository.AIModelRepository
 import com.example.domain.repository.AIModelTeamRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,6 +31,7 @@ class TeamDetailViewModelTest {
     private lateinit var authRepository: FakeAuthRepository
     private lateinit var teamRepository: FakeTeamRepository
     private lateinit var orchestrator: FakeTeamOrchestrator
+    private lateinit var aiModelRepository: FakeAIModelRepository
 
     @Before
     fun setUp() {
@@ -37,6 +39,7 @@ class TeamDetailViewModelTest {
         authRepository = FakeAuthRepository(UserAccount(id = "user-1", email = "dev@vibe.test"))
         teamRepository = FakeTeamRepository()
         orchestrator = FakeTeamOrchestrator()
+        aiModelRepository = FakeAIModelRepository()
     }
 
     @After
@@ -202,6 +205,44 @@ class TeamDetailViewModelTest {
     }
 
     @Test
+    fun memberCapabilitiesAreLoadedFromTheAuthenticatedUsersModelCatalog() = runTest(dispatcher) {
+        val member = TeamMember(
+            id = "member-1",
+            name = "Engineer",
+            modelId = "model-1",
+            providerId = "provider-1"
+        )
+        teamRepository.seedTeam(
+            ModelTeam(id = "team-1", name = "Vibe team", ownerId = "user-1", members = listOf(member))
+        )
+        aiModelRepository.models["user-1" to "model-1"] = AIModel(
+            id = "model-1",
+            providerId = "provider-1",
+            apiId = "coding-model",
+            name = "Coding Model",
+            capabilities = listOf(AICapability.CODING, AICapability.VISION)
+        )
+
+        val viewModel = TeamDetailViewModel(
+            "team-1",
+            teamRepository,
+            orchestrator,
+            authRepository,
+            aiModelRepository
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(AICapability.CODING, AICapability.VISION),
+            viewModel.uiState.value.memberCapabilities["member-1"]
+        )
+
+        authRepository.userFlow.value = UserAccount(id = "user-2", email = "other@vibe.test")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.memberCapabilities.isEmpty())
+    }
+
+    @Test
     fun invalidTeamIdDoesNotCallRepository() = runTest(dispatcher) {
         val viewModel = TeamDetailViewModel("", teamRepository, orchestrator, authRepository)
         advanceUntilIdle()
@@ -285,6 +326,38 @@ class TeamDetailViewModelTest {
         override fun getTeamUsageRecords(teamId: String): Flow<List<TeamUsageRecord>> = flowOf(emptyList())
         override fun getAllTeamUsageRecords(userId: String): Flow<List<TeamUsageRecord>> = flowOf(emptyList())
         override suspend fun logTeamUsage(record: TeamUsageRecord): Result<Unit> = Result.success(Unit)
+    }
+
+    private class FakeAIModelRepository : AIModelRepository {
+        val models = mutableMapOf<Pair<String, String>, AIModel>()
+
+        override fun getProviders(userId: String): Flow<List<AIProvider>> = flowOf(emptyList())
+        override suspend fun getProviderById(userId: String, id: String): AIProvider? = null
+        override suspend fun addProvider(provider: AIProvider) = Unit
+        override suspend fun deleteProvider(userId: String, id: String) = Unit
+        override suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long) = Unit
+        override fun getModelsByProvider(userId: String, providerId: String): Flow<List<AIModel>> =
+            flowOf(models.filterKeys { it.first == userId }.values.filter { it.providerId == providerId })
+        override fun getAllAvailableModels(userId: String, freeOnly: Boolean): Flow<List<AIModel>> =
+            flowOf(models.filterKeys { it.first == userId }.values.filter { !freeOnly || it.isFree })
+        override suspend fun getModelById(userId: String, id: String): AIModel? = models[userId to id]
+        override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = Result.success(Unit)
+        override suspend fun testConnection(userId: String, providerId: String): Result<Unit> = Result.success(Unit)
+        override fun getRecentUsageLogs(userId: String): Flow<List<AIUsageLog>> = flowOf(emptyList())
+        override fun getTotalCost(userId: String, since: Long): Flow<Double?> = flowOf(0.0)
+        override suspend fun logUsage(log: AIUsageLog) = Unit
+        override fun getUserSettings(userId: String): Flow<AIUserSettings?> = flowOf(null)
+        override suspend fun updateUserSettings(settings: AIUserSettings) = Unit
+        override suspend fun setDefaultModel(userId: String, modelId: String) = Unit
+        override suspend fun getDefaultModel(userId: String): AIModel? = null
+        override suspend fun generateResponse(
+            userId: String,
+            modelId: String,
+            prompt: String,
+            systemInstruction: String?,
+            taskId: String?,
+            taskType: AITaskType
+        ): Result<String> = Result.success("ok")
     }
 
     private class FakeTeamOrchestrator : TeamOrchestrator {

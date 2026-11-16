@@ -1932,20 +1932,20 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - app/src/test/java/com/example/presentation/viewmodel/TeamDetailViewModelTest.kt
 - app/src/test/java/com/example/presentation/ui/screens/TeamDetailScreenTest.kt
 - app/src/test/java/com/example/presentation/ui/components/TeamGovernanceDialogTest.kt
-- Implementation commits: 692eb7769f2a5029de4e31e1fcd13f8046466ade and 983a780f915128b1b28041b53d510a6572d84643.
+- Implementation commits: 692eb7769f2a5029de4e31e1fcd13f8046466ade, 983a780f915128b1b28041b53d510a6572d84643, 8747620160bd76f3d2c423204e39a21f1f738e22, 66baa8f5486304cec34bca671d4217e6fc576ba3 and 68125a08ad9c86c66d73c060381abf3915e5540f.
 
 ### Verification
-- Added seven ViewModel regression tests covering signed-out isolation, sign-out clearing, governance write failure/success, member write failure/success, estimation/execution errors, cancellation during sign-out, and invalid team IDs.
-- Added three TeamDetail Robolectric Compose tests for unavailable/retry, signed-out and member details/removal; added three governance-dialog Compose tests for invalid limits, save gating and valid values.
+- Added eight ViewModel regression tests covering signed-out isolation, sign-out clearing, governance write failure/success, member write failure/success, estimation/execution errors, cancellation during sign-out, invalid team IDs and user-scoped model capability lookup.
+- Added three TeamDetail Robolectric Compose tests for unavailable/retry, signed-out, and member details/capabilities/removal; added three governance-dialog Compose tests for invalid limits, save gating and valid values.
 - GitHub Actions for the latest code commits are still running/queued; no Gradle, test, lint or APK result for the final commit is recorded yet.
 - No emulator/device screenshots, rendered RTL/LTR review or live team-backend/RLS validation are claimed.
-- TeamDetail still uses the existing Firebase/local team repository path; Supabase team persistence is not claimed.
+- TeamDetail still uses the existing Firebase/local team repository path; Supabase team persistence is not claimed. Model capability metadata is read through the authenticated user's existing AIModelRepository.
 
 ### Continuity
 - TeamDetail remains OPEN until final CI passes and rendered device verification is completed.
 - Exact next step: inspect the three push-triggered workflows for the final HEAD and fix any reported failures. Then continue TeamUsage telemetry correctness; missing usage telemetry must remain unavailable rather than being rendered as zero.
 ### TeamDetail follow-up — member operations and governance validation
-- Added a confirmed member-removal flow; member cards now expose configured model/provider identity and member instructions.
+- Added a confirmed member-removal flow; member cards now expose configured model/provider identity, user-scoped model capabilities and member instructions.
 - Hardened the shared TeamGovernanceDialog: invalid, negative or zero limits are rejected rather than silently replaced with old values; saving disables duplicate submission/dismissal and shows progress.
 - TeamDetail binds dialog saving state to the repository mutation state.
 - Added Compose regression coverage for member detail/removal and governance validation/saving.
