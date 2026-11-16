@@ -600,7 +600,7 @@ class TeamValidationEngineImpl(
         val errors = report.actionableErrors.joinToString("\n") { "- $it" }
             .ifBlank { "- None recorded." }
         val cost = if (report.actualCostMeasured) {
-            "\${String.format(Locale.US, "%.4f", report.totalActualCostUsd)}"
+            "USD ${String.format(Locale.US, "%.4f", report.totalActualCostUsd)}"
         } else {
             "Not measured — no token billing record was collected."
         }
