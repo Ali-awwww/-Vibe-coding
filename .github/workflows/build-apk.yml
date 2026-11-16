@@ -49,41 +49,102 @@ jobs:
           name: CrashIntelligence-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
+          if-no-files-found: error
 
       - name: Configure Release Signing
+        id: release_signing
         env:
           ANDROID_RELEASE_SIGNING: ${{ secrets.ANDROID_RELEASE_SIGNING }}
         run: |
           python3 - <<'PY'
-          import base64, json, os, pathlib
+          import base64
+          import json
+          import os
+          import pathlib
+          import subprocess
+
+          output_path = os.environ["GITHUB_OUTPUT"]
+
+          def set_mode(mode):
+              with open(output_path, "a", encoding="utf-8") as output:
+                  output.write(f"mode={mode}\n")
+
           raw = os.environ.get("ANDROID_RELEASE_SIGNING", "").strip()
           if not raw:
-              print("ANDROID_RELEASE_SIGNING not set; release build will remain unsigned.")
+              print("ANDROID_RELEASE_SIGNING not set; building an unsigned release APK.")
+              set_mode("unsigned")
               raise SystemExit(0)
-          data = json.loads(base64.b64decode(raw).decode("utf-8"))
-          for secret_key in ("storePassword", "keyPassword"):
-              print(f"::add-mask::{data[secret_key]}")
-          ks_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "release-keystore.jks"
-          ks_path.write_bytes(base64.b64decode(data["keystoreBase64"]))
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
-              env_file.write(f"KEYSTORE_PATH={ks_path}\n")
-              env_file.write(f"STORE_PASSWORD={data['storePassword']}\n")
-              env_file.write(f"KEY_ALIAS={data['keyAlias']}\n")
-              env_file.write(f"KEY_PASSWORD={data['keyPassword']}\n")
-          print("Release signing configured successfully.")
+
+          keystore_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "release-keystore.jks"
+          csr_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "release-key-check.csr"
+          try:
+              data = json.loads(base64.b64decode(raw, validate=True).decode("utf-8"))
+              required = ("storePassword", "keyPassword", "keyAlias", "keystoreBase64")
+              if any(not isinstance(data.get(key), str) or not data[key] for key in required):
+                  raise ValueError("Missing release signing field")
+
+              print(f"::add-mask::{data['storePassword']}")
+              print(f"::add-mask::{data['keyPassword']}")
+              keystore_path.write_bytes(base64.b64decode(data["keystoreBase64"], validate=True))
+
+              validation_env = os.environ.copy()
+              validation_env["VIBE_RELEASE_STORE_PASSWORD"] = data["storePassword"]
+              validation_env["VIBE_RELEASE_KEY_PASSWORD"] = data["keyPassword"]
+              list_result = subprocess.run(
+                  [
+                      "keytool", "-list", "-keystore", str(keystore_path),
+                      "-storepass:env", "VIBE_RELEASE_STORE_PASSWORD",
+                      "-alias", data["keyAlias"]
+                  ],
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.PIPE,
+                  text=True,
+                  env=validation_env
+              )
+              if list_result.returncode != 0:
+                  raise ValueError("Keystore or alias validation failed")
+
+              key_result = subprocess.run(
+                  [
+                      "keytool", "-certreq", "-keystore", str(keystore_path),
+                      "-storepass:env", "VIBE_RELEASE_STORE_PASSWORD",
+                      "-alias", data["keyAlias"],
+                      "-keypass:env", "VIBE_RELEASE_KEY_PASSWORD",
+                      "-file", str(csr_path)
+                  ],
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.PIPE,
+                  text=True,
+                  env=validation_env
+              )
+              if key_result.returncode != 0:
+                  raise ValueError("Private key password validation failed")
+
+              with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+                  env_file.write(f"KEYSTORE_PATH={keystore_path}\n")
+                  env_file.write(f"STORE_PASSWORD={data['storePassword']}\n")
+                  env_file.write(f"KEY_ALIAS={data['keyAlias']}\n")
+                  env_file.write(f"KEY_PASSWORD={data['keyPassword']}\n")
+              set_mode("signed")
+              print("Release signing credentials validated.")
+          except Exception:
+              keystore_path.unlink(missing_ok=True)
+              csr_path.unlink(missing_ok=True)
+              print("::warning::Release signing credentials could not be validated. Building an unsigned release APK; no secret settings were changed.")
+              set_mode("unsigned")
           PY
 
       - name: Build Release APK
         run: gradle assembleRelease --stacktrace
-        continue-on-error: true
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: CrashIntelligence-Release-APK
+          name: CrashIntelligence-Release-APK-${{ steps.release_signing.outputs.mode }}
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
+          if-no-files-found: error
 
       - name: Clean Up Release Keystore
         if: always()
-        run: rm -f "${RUNNER_TEMP}/release-keystore.jks"
+        run: rm -f "${RUNNER_TEMP}/release-keystore.jks" "${RUNNER_TEMP}/release-key-check.csr"

@@ -2094,3 +2094,9 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: TeamValidation execution evidence, debate orchestration, and execution-log persistence.
 - Next exact step: reconcile the live `model_teams` / `team_executions` schema with version-controlled migrations, then implement a Supabase-backed `AIModelTeamRepository` adapter using the existing authenticated session and owner RLS. Keep the production database read-only during development; add adapter contract tests with fake PostgREST responses, and do not fall back to Firestore or local memory while reporting a remote write as successful.
+
+
+### CI packaging defect and safe handling
+- APK run `43977660816` reached terminal SUCCESS, but its `assembleRelease` step internally failed with `UnrecoverableKeyException / BadPaddingException` while reading alias `vibe_release_key`. The following upload reported no release APK files. The workflow's `continue-on-error: true` masked this failure; only the Debug APK and unit-test reports were actually uploaded.
+- The signing payload is not modified. The workflow now validates the keystore, alias, and private-key password with `keytool` before exporting signing variables. Invalid or absent signing credentials select an explicitly named unsigned release artifact; a real release build failure is no longer suppressed, and artifact upload fails if no APK exists.
+- This is a workflow-only fix and does not change GitHub secrets, Android signing credentials, production services, or release distribution.
