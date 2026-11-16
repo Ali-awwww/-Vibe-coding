@@ -1,5 +1,7 @@
 package com.example.presentation.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,6 +35,14 @@ fun TeamValidationCenterScreen(
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val reportExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/markdown")
+    ) { destination ->
+        if (destination != null) viewModel.exportMarkdownReport(context, destination)
+    }
+    val launchReportExport = {
+        reportExportLauncher.launch("team-validation-report.md")
+    }
 
     LaunchedEffect(uiState.exportSuccessMessage) {
         uiState.exportSuccessMessage?.let {
@@ -83,7 +93,8 @@ fun TeamValidationCenterScreen(
                         Icon(Icons.Default.PlayCircle, contentDescription = "Run All Tests")
                     }
                     IconButton(
-                        onClick = { viewModel.exportMarkdownReport(context) },
+                        onClick = launchReportExport,
+                        enabled = uiState.summaryReport != null && !uiState.isExporting,
                         modifier = Modifier.testTag("top_bar_export_report")
                     ) {
                         Icon(Icons.Default.FileDownload, contentDescription = "Export Report")
@@ -130,7 +141,10 @@ fun TeamValidationCenterScreen(
                 ValidationTab.MATRIX_20 -> ValidationMatrixTab(uiState, viewModel)
                 ValidationTab.VIBE_SANDBOX -> VibeSandboxTab(uiState, viewModel)
                 ValidationTab.CRASH_SANDBOX -> CrashSandboxTab(uiState, viewModel)
-                ValidationTab.REPORT -> ValidationReportTab(uiState, viewModel)
+                ValidationTab.REPORT -> ValidationReportTab(
+                    uiState = uiState,
+                    onExportReport = launchReportExport
+                )
             }
         }
     }
