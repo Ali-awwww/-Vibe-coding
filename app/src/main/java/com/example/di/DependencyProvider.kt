@@ -417,9 +417,7 @@ object DependencyProvider {
     fun provideTeamValidationEngine(context: Context): com.example.domain.validation.TeamValidationEngine {
         return teamValidationEngine ?: com.example.data.validation.TeamValidationEngineImpl(
             aiModelRepository = provideAIModelRepository(context),
-            teamRepository = provideAIModelTeamRepository(context),
-            teamOrchestrator = provideTeamOrchestrator(context),
-            vibeStudioRepository = provideVibeStudioRepository(context)
+            teamRepository = provideAIModelTeamRepository(context)
         ).also { teamValidationEngine = it }
     }
 
