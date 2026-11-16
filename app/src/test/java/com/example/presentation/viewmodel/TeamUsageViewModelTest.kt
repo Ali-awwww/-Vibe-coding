@@ -158,7 +158,8 @@ class TeamUsageViewModelTest {
         val viewModel = createViewModel()
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.hasMeasuredUsage)
+        assertFalse(viewModel.uiState.value.hasMeasuredUsage)
+        assertTrue(viewModel.uiState.value.memberSummaries.isEmpty())
         assertFalse(viewModel.uiState.value.hasPaidUsageUnderFreeOnly)
     }
 

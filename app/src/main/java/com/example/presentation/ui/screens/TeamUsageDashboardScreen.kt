@@ -170,7 +170,7 @@ fun TeamUsageDashboardScreen(
                     } else {
                         item {
                             Text(
-                                "لا توجد بيانات قياس موثقة للأعضاء ضمن هذه الفترة.",
+                                "لا توجد بيانات استهلاك موثقة للأعضاء ضمن هذه الفترة.",
                                 color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted
                             )
                         }
@@ -290,12 +290,12 @@ internal fun TeamMetricsOverview(uiState: TeamUsageUiState) {
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    "لا توجد بيانات قياس موثقة خلال هذه الفترة.",
+                    "لا توجد بيانات استهلاك قابلة للقياس خلال هذه الفترة.",
                     style = MaterialTheme.typography.titleSmall,
                     color = com.example.ui.theme.VibeDesignTokens.Color.TextPrimary
                 )
                 Text(
-                    "هذا لا يعني أن الاستهلاك يساوي صفراً؛ لم تصل سجلات قياس يمكن الاعتماد عليها.",
+                    "قد توجد محاولات محظورة أو فاشلة، لكنها لا تثبت حدوث استهلاك قابل للفوترة.",
                     style = MaterialTheme.typography.bodySmall,
                     color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted
                 )
@@ -409,7 +409,7 @@ private fun GovernanceStatusCard(
                         when {
                             warning -> "تنبيه: رُصد استخدام مدفوع مع سياسة Free Only"
                             gov.freeOnly && hasMeasuredUsage -> "سجلات الفترة لا تُظهر استخداماً مدفوعاً"
-                            gov.freeOnly -> "سياسة Free Only مهيأة — لا توجد قياسات بعد"
+                            gov.freeOnly -> "سياسة Free Only مهيأة — لا يوجد استهلاك موثق بعد"
                             else -> "سياسة حدود الاستهلاك مهيأة"
                         },
                         style = MaterialTheme.typography.titleSmall,

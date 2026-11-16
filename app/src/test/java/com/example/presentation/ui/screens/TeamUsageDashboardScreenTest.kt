@@ -27,7 +27,7 @@ class TeamUsageDashboardScreenTest {
         }
 
         composeRule.onNodeWithTag("team_usage_no_measurements").assertIsDisplayed()
-        composeRule.onNodeWithText("لا توجد بيانات قياس موثقة خلال هذه الفترة.").assertIsDisplayed()
+        composeRule.onNodeWithText("لا توجد بيانات استهلاك قابلة للقياس خلال هذه الفترة.").assertIsDisplayed()
         composeRule.onNodeWithText("0.000$").assertDoesNotExist()
     }
 

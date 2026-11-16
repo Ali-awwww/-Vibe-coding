@@ -195,7 +195,8 @@ class TeamUsageViewModel(
 
     private fun deriveMetrics(current: TeamUsageUiState): TeamUsageUiState {
         val periodRecords = filterByPeriod(current.usageRecords, current.selectedPeriod)
-        val summaries = aggregateMembers(periodRecords)
+        val billableRecords = periodRecords.filter { it.hasBillableUsage() }
+        val summaries = aggregateMembers(billableRecords)
         val now = clock()
         val periodFailovers = allFailoverEvents
             .filter { current.selectedPeriod.includes(it.timestamp, now) }
@@ -206,13 +207,13 @@ class TeamUsageViewModel(
             memberSummaries = summaries,
             failoverEvents = periodFailovers,
             totalRequests = periodRecords.size,
-            totalTokens = periodRecords.sumOf { it.totalTokens },
-            totalCostUsd = periodRecords.filter { it.isCostConfirmed }.sumOf { it.costUsd },
-            unconfirmedCostUsd = periodRecords.filterNot { it.isCostConfirmed }.sumOf { it.costUsd },
-            hasMeasuredUsage = periodRecords.isNotEmpty(),
-            hasConfirmedCost = periodRecords.any { it.isCostConfirmed },
-            hasPaidUsageUnderFreeOnly = current.team?.governance?.freeOnly == true && periodRecords.any { it.status == "SUCCESS" && !it.isFree },
-            lastMeasuredAt = periodRecords.maxOfOrNull { it.timestamp },
+            totalTokens = billableRecords.sumOf { it.totalTokens },
+            totalCostUsd = billableRecords.filter { it.isCostConfirmed }.sumOf { it.costUsd },
+            unconfirmedCostUsd = billableRecords.filterNot { it.isCostConfirmed }.sumOf { it.costUsd },
+            hasMeasuredUsage = billableRecords.isNotEmpty(),
+            hasConfirmedCost = billableRecords.any { it.isCostConfirmed },
+            hasPaidUsageUnderFreeOnly = current.team?.governance?.freeOnly == true && billableRecords.any { !it.isFree },
+            lastMeasuredAt = billableRecords.maxOfOrNull { it.timestamp },
             rateLimitHits = periodRecords.count { it.status == "RATE_LIMITED" }
         )
     }
@@ -368,6 +369,9 @@ class TeamUsageViewModel(
         else -> fallback
     }
 }
+
+private fun TeamUsageRecord.hasBillableUsage(): Boolean =
+    status == "SUCCESS" || totalTokens > 0 || costUsd > 0.0
 
 private fun TeamUsagePeriod.includes(timestamp: Long, now: Long): Boolean {
     val cutoff = durationMillis?.let { now - it }
