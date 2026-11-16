@@ -2060,3 +2060,33 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: TeamValidation evidence integrity, reversible repository checks and report/export behavior.
 - Next exact step: inspect the Actions runs for the latest main HEAD until terminal status; fix any compile/test/lint failures before adding more TeamValidation behavior. Then build a test-only real TeamOrchestrator execution fixture with deterministic provider adapters and persisted job evidence. Do not mark TeamValidation closed while #7–#19, either executable sandbox, backend isolation or device verification remains BLOCKED.
+
+
+## 2026-11-17 — Debate orchestration evidence and execution persistence
+
+### Confirmed defects
+- Debate mode launched child jobs that appended to shared mutable lists and polled those lists every 500 ms. A failed child could abort the coroutine scope without a clear persisted result, and the polling loop was unnecessary.
+- Proposal and critique text was not stored in `TeamExecution.messages`; only a generic “proposals collected” marker was persisted, so the job record could not prove what participants proposed or reviewed.
+- The primary `TeamOrchestratorImpl.executeTaskWithContext` path ignored `Result` from `logExecution` and emitted state before confirming persistence. A repository write failure could therefore be presented as progress or completion.
+
+### Implementation
+- Replaced debate polling and shared mutable collections with structured `async/awaitAll` execution. Provider and member-status failures now propagate to the orchestration boundary instead of leaving a polling loop waiting.
+- Persisted each participant proposal, each critique, and the leader's consensus as typed `AgentMessage` records. Empty proposals, critiques, consensus, missing leaders, and leader-only teams fail explicitly.
+- The primary execution path now checks each execution-log `Result` and persists before emitting that state. Cancellation is rethrown rather than converted into an ordinary failed execution.
+- Added `TeamOrchestratorExecutionFixtureTest`, a test-only deterministic provider adapter plus recording repository around the actual `TeamOrchestratorImpl` and `DebateOrchestrator`. It covers persisted proposal/critique/consensus evidence, provider failure, missing participants, initial persistence failure, and a final persistence failure that must never emit COMPLETED.
+
+### Verification boundaries
+- The deterministic provider and recording repository exist only in unit tests. They do not call a real provider, use user API keys, write Supabase/Firebase production data, or prove production database durability.
+- User-facing TeamValidation checks #7–#13 remain SKIPPED until real configured provider calls and production execution persistence can be verified. The fixture is orchestration regression coverage, not a PASS for those runtime checks.
+- Before this change, main HEAD `44ef5ae50f06d4f619f2d3e86fda7723d6c44199` had terminal-success Actions runs: Android CI `43975154714`, APK build `43975154728`, and code-quality/lint `43975154852`. The APK workflow uploaded `CrashIntelligence-Debug-APK` and unit-test reports. These are baseline results, not verification of this new commit.
+- Supabase project `hgfgbjomwhogpswpqusk` is currently ACTIVE_HEALTHY. Read-only inspection found RLS enabled on `public.model_teams` and `public.team_executions`; team policies are owner-scoped, and execution policies require both `user_id = auth.uid()` and ownership of the parent team. Both tables reported zero rows. No production DDL/DML, Auth, RLS, or settings changes were made.
+- Live migration history includes `20261105201532 add_model_teams_and_executions`, but the repository currently contains only the later team-execution index migration under `supabase/migrations`. The Android `AIModelTeamRepositoryImpl` still uses Firebase/Room/local state and is not wired to the existing Supabase team tables. This is a source/schema drift to reconcile before claiming Supabase team persistence.
+- No `AGENTS.md` or `agents.md` files exist in the current repository tree.
+
+### Verification for this batch
+- Source and regression tests are committed; CI status for the new commit is pending and must be checked to terminal state before treating the tests as passed.
+- No local Gradle execution, emulator/device run, rendered RTL/LTR review, or screenshot is claimed from this automation environment.
+
+### Persistent continuity
+- Last area worked: TeamValidation execution evidence, debate orchestration, and execution-log persistence.
+- Next exact step: reconcile the live `model_teams` / `team_executions` schema with version-controlled migrations, then implement a Supabase-backed `AIModelTeamRepository` adapter using the existing authenticated session and owner RLS. Keep the production database read-only during development; add adapter contract tests with fake PostgREST responses, and do not fall back to Firestore or local memory while reporting a remote write as successful.

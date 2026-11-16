@@ -8,6 +8,7 @@ import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
 import com.example.domain.repository.AIModelTeamRepository
 import com.example.domain.repository.VibeStudioRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -103,8 +104,8 @@ class TeamOrchestratorImpl(
             startedAt = System.currentTimeMillis()
         )
         
+        teamRepository.logExecution(currentExecution).getOrThrow()
         emit(currentExecution)
-        teamRepository.logExecution(currentExecution)
 
         // Validate execution start against Free Only policy and cost limits
         val startValidation = gov.validateExecutionStart(team, currentExecution, availableModels)
@@ -115,8 +116,8 @@ class TeamOrchestratorImpl(
                 error = errMessage,
                 completedAt = System.currentTimeMillis()
             )
+            teamRepository.logExecution(currentExecution).getOrThrow()
             emit(currentExecution)
-            teamRepository.logExecution(currentExecution)
             return@flow
         }
 
@@ -124,26 +125,29 @@ class TeamOrchestratorImpl(
             val orchestrator = getOrchestratorForStyle(team.collaborationStyle)
             orchestrator.execute(userId, team, currentExecution) { updatedExec ->
                 if (executionControls[executionId] == ControlState.STOPPED) {
-                    currentExecution = updatedExec.copy(
+                    val cancelledExecution = updatedExec.copy(
                         status = ExecutionStatus.CANCELLED,
                         completedAt = System.currentTimeMillis()
                     )
+                    teamRepository.logExecution(cancelledExecution).getOrThrow()
+                    currentExecution = cancelledExecution
                     emit(currentExecution)
-                    teamRepository.logExecution(currentExecution)
                     return@execute
                 }
+                teamRepository.logExecution(updatedExec).getOrThrow()
                 currentExecution = updatedExec
                 emit(currentExecution)
-                teamRepository.logExecution(currentExecution)
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             currentExecution = currentExecution.copy(
                 status = ExecutionStatus.FAILED,
                 error = e.message,
                 completedAt = System.currentTimeMillis()
             )
+            teamRepository.logExecution(currentExecution).getOrThrow()
             emit(currentExecution)
-            teamRepository.logExecution(currentExecution)
         }
     }
 
