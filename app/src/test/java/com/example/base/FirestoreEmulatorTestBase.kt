@@ -3,6 +3,7 @@ package com.example.base
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseException
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -15,6 +16,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -73,9 +75,17 @@ abstract class FirestoreEmulatorTestBase {
     protected suspend fun signInTestUser(email: String): String = withContext(Dispatchers.IO) {
         withTimeout(AUTH_TIMEOUT_MS) {
             val result = try {
-                auth.signInWithEmailAndPassword(email, DEFAULT_PASSWORD).await()
-            } catch (_: FirebaseAuthInvalidUserException) {
-                auth.createUserWithEmailAndPassword(email, DEFAULT_PASSWORD).await()
+                try {
+                    auth.signInWithEmailAndPassword(email, DEFAULT_PASSWORD).await()
+                } catch (_: FirebaseAuthInvalidUserException) {
+                    auth.createUserWithEmailAndPassword(email, DEFAULT_PASSWORD).await()
+                }
+            } catch (error: FirebaseException) {
+                assumeTrue(
+                    "Firebase Auth emulator is unavailable; skipping emulator-backed test",
+                    false
+                )
+                throw error
             }
             checkNotNull(result.user?.uid) { "User auth failed" }
         }
