@@ -44,6 +44,8 @@ fun ValidationMatrixTab(
     val passedCount = progress.items.count { it.status == ValidationStatus.PASSED }
     val failedCount = progress.items.count { it.status == ValidationStatus.FAILED }
     val runningCount = progress.items.count { it.status == ValidationStatus.RUNNING }
+    val skippedCount = progress.items.count { it.status == ValidationStatus.SKIPPED }
+    val pendingCount = progress.items.count { it.status == ValidationStatus.PENDING }
 
     LazyColumn(
         modifier = Modifier
@@ -106,12 +108,20 @@ fun ValidationMatrixTab(
 
                     // Progress indicators
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        StatPill("ناجح: $passedCount", Color(0xFF2E7D32), Icons.Default.CheckCircle)
+                        StatPill("ناجح: $passedCount", MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle)
                         if (failedCount > 0) {
                             StatPill("فاشل: $failedCount", MaterialTheme.colorScheme.error, Icons.Default.Error)
+                        }
+                        if (skippedCount > 0) {
+                            StatPill("متجاوز: $skippedCount", MaterialTheme.colorScheme.outline, Icons.Default.Block)
+                        }
+                        if (pendingCount > 0) {
+                            StatPill("لم يُنفذ: $pendingCount", MaterialTheme.colorScheme.outline, Icons.Default.Schedule)
                         }
                         if (runningCount > 0) {
                             StatPill("قيد التشغيل: $runningCount", MaterialTheme.colorScheme.primary, Icons.Default.Sync)
@@ -174,6 +184,7 @@ fun ValidationTestCard(
                 ValidationStatus.PASSED -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ValidationStatus.FAILED -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
                 ValidationStatus.RUNNING -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                ValidationStatus.SKIPPED -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                 else -> MaterialTheme.colorScheme.surface
             }
         ),
@@ -207,6 +218,12 @@ fun ValidationTestCard(
                         modifier = Modifier.size(22.dp),
                         strokeWidth = 2.5.dp,
                         color = MaterialTheme.colorScheme.primary
+                    )
+                    ValidationStatus.SKIPPED -> Icon(
+                        Icons.Default.Block,
+                        contentDescription = "Skipped",
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(24.dp)
                     )
                     else -> Icon(
                         Icons.Default.Schedule,
