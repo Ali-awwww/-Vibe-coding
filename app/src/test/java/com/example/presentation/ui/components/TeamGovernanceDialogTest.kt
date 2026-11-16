@@ -33,13 +33,15 @@ class TeamGovernanceDialogTest {
             }
         }
 
-        composeRule.onNodeWithTag("team_governance_max_tokens")
-            .performScrollTo()
-            .performTextClearance()
-            .performTextInput("0")
+        val maxTokensField = composeRule.onNodeWithTag("team_governance_max_tokens")
+        maxTokensField.performScrollTo()
+        maxTokensField.performTextClearance()
+        maxTokensField.performTextInput("0")
         composeRule.onNodeWithText("حفظ السياسات").performClick()
 
-        composeRule.onNodeWithTag("team_governance_validation_error").assertIsDisplayed()
+        val validationError = composeRule.onNodeWithTag("team_governance_validation_error")
+        validationError.performScrollTo()
+        validationError.assertIsDisplayed()
         assertNull(saved)
     }
 
@@ -75,10 +77,10 @@ class TeamGovernanceDialogTest {
             }
         }
 
-        composeRule.onNodeWithTag("team_governance_max_tokens")
-            .performScrollTo()
-            .performTextClearance()
-            .performTextInput("200000")
+        val maxTokensField = composeRule.onNodeWithTag("team_governance_max_tokens")
+        maxTokensField.performScrollTo()
+        maxTokensField.performTextClearance()
+        maxTokensField.performTextInput("200000")
         composeRule.onNodeWithText("حفظ السياسات").performClick()
 
         assertEquals(200000, saved?.maxTotalTokens)

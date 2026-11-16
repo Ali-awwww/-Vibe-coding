@@ -635,7 +635,11 @@ private fun UsageRecordItem(record: TeamUsageRecord) {
                     },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (record.isFree) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
+                    color = when {
+                        !record.isCostConfirmed -> MaterialTheme.colorScheme.error
+                        record.isFree -> Color(0xFF2E7D32)
+                        else -> MaterialTheme.colorScheme.primary
+                    }
                 )
             }
         }

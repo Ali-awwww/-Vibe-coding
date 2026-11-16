@@ -139,6 +139,9 @@ class TeamUsageViewModel(
                         failoverEvents = if (accountChanged) emptyList() else current.failoverEvents,
                         hasMeasuredUsage = if (accountChanged) false else current.hasMeasuredUsage,
                         hasConfirmedCost = if (accountChanged) false else current.hasConfirmedCost,
+                        selectedMemberId = if (accountChanged) null else current.selectedMemberId,
+                        searchQuery = if (accountChanged) "" else current.searchQuery,
+                        selectedPeriod = if (accountChanged) TeamUsagePeriod.LAST_30_DAYS else current.selectedPeriod,
                         loadError = null,
                         error = null
                     )
