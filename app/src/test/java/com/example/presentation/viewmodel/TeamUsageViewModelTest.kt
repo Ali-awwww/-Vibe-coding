@@ -97,8 +97,23 @@ class TeamUsageViewModelTest {
                 tokensInput = 20,
                 tokensOutput = 5,
                 totalTokens = 25,
-                status = "RATE_LIMITED",
+                status = "SUCCESS",
                 timestamp = now - 500
+            ),
+            record(
+                id = "usage-3",
+                modelId = "free-model",
+                modelName = "Free Model",
+                providerId = "provider-a",
+                providerName = "Provider A",
+                isFree = true,
+                isCostConfirmed = true,
+                costUsd = 0.0,
+                tokensInput = 0,
+                tokensOutput = 0,
+                totalTokens = 0,
+                status = "RATE_LIMITED",
+                timestamp = now - 250
             )
         )
         val viewModel = createViewModel()
@@ -107,7 +122,7 @@ class TeamUsageViewModelTest {
         val state = viewModel.uiState.value
         val summary = state.memberSummaries.single()
         assertTrue(state.hasMeasuredUsage)
-        assertEquals(2, state.totalRequests)
+        assertEquals(3, state.totalRequests)
         assertEquals(40, state.totalTokens)
         assertEquals(0.0, state.totalCostUsd, 0.0001)
         assertEquals(0.025, state.unconfirmedCostUsd, 0.0001)
@@ -118,6 +133,33 @@ class TeamUsageViewModelTest {
         assertEquals("عدة نماذج", summary.modelName)
         assertEquals("عدة مزودين", summary.providerName)
         assertEquals(1, state.rateLimitHits)
+    }
+
+    @Test
+    fun blockedPaidAttemptIsNotReportedAsSuccessfulPaidUsage() = runTest(dispatcher) {
+        teamRepository.seedTeam(
+            ModelTeam(
+                id = "team-1",
+                name = "Vibe team",
+                ownerId = "user-1",
+                governance = TeamGovernanceSettings(freeOnly = true)
+            )
+        )
+        teamRepository.usageRecords.value = listOf(
+            record(
+                id = "blocked-paid",
+                isFree = false,
+                isCostConfirmed = true,
+                costUsd = 0.0,
+                status = "BLOCKED_PAID"
+            )
+        )
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.hasMeasuredUsage)
+        assertFalse(viewModel.uiState.value.hasPaidUsageUnderFreeOnly)
     }
 
     @Test

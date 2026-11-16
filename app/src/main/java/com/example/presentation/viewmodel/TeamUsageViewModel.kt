@@ -211,7 +211,7 @@ class TeamUsageViewModel(
             unconfirmedCostUsd = periodRecords.filterNot { it.isCostConfirmed }.sumOf { it.costUsd },
             hasMeasuredUsage = periodRecords.isNotEmpty(),
             hasConfirmedCost = periodRecords.any { it.isCostConfirmed },
-            hasPaidUsageUnderFreeOnly = current.team?.governance?.freeOnly == true && periodRecords.any { !it.isFree },
+            hasPaidUsageUnderFreeOnly = current.team?.governance?.freeOnly == true && periodRecords.any { it.status == "SUCCESS" && !it.isFree },
             lastMeasuredAt = periodRecords.maxOfOrNull { it.timestamp },
             rateLimitHits = periodRecords.count { it.status == "RATE_LIMITED" }
         )
