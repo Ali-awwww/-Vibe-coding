@@ -140,6 +140,7 @@ class SupabaseTeamDataSource(
 
     suspend fun getTeamExecutions(teamId: String): List<TeamExecution> {
         val auth = requireAuth()
+        requireOwnedTeam(teamId, auth)
         return api.listTeamExecutions(
             publishableKey = publishableKey,
             bearerToken = auth.bearerToken,
@@ -148,6 +149,9 @@ class SupabaseTeamDataSource(
         ).map { row ->
             if (row.userId != auth.userId) {
                 throw SecurityException("Supabase returned an execution outside the active account.")
+            }
+            if (row.teamId != teamId) {
+                throw SecurityException("Supabase returned an execution outside the requested team.")
             }
             row.toDomain()
         }
@@ -164,6 +168,7 @@ class SupabaseTeamDataSource(
         if (row.userId != auth.userId) {
             throw SecurityException("Supabase returned an execution outside the active account.")
         }
+        requireOwnedTeam(row.teamId, auth)
         return row.toDomain()
     }
 
@@ -179,6 +184,7 @@ class SupabaseTeamDataSource(
             id = execution.id.ifBlank { UUID.randomUUID().toString() },
             userId = auth.userId
         )
+        requireOwnedTeam(prepared.teamId, auth)
         val row = api.upsertTeamExecution(
             publishableKey = publishableKey,
             bearerToken = auth.bearerToken,
@@ -187,7 +193,27 @@ class SupabaseTeamDataSource(
         if (row.userId != auth.userId) {
             throw SecurityException("Supabase saved an execution outside the active account.")
         }
+        if (row.teamId != prepared.teamId) {
+            throw SecurityException("Supabase saved an execution outside the requested team.")
+        }
         return row.toDomain()
+    }
+
+    private suspend fun requireOwnedTeam(teamId: String, auth: SupabaseTeamAuth) {
+        if (teamId.isBlank()) {
+            throw IllegalArgumentException("A team ID is required for execution access.")
+        }
+        val team = api.getTeamById(
+            publishableKey = publishableKey,
+            bearerToken = auth.bearerToken,
+            idFilter = "eq." + teamId,
+            ownerIdFilter = "eq." + auth.userId
+        ).firstOrNull() ?: throw NoSuchElementException(
+            "Team not found or not authorized for execution access."
+        )
+        if (team.ownerId != auth.userId) {
+            throw SecurityException("Execution access is restricted to the active team owner.")
+        }
     }
 
     private suspend fun requireAuth(expectedUserId: String? = null): SupabaseTeamAuth {

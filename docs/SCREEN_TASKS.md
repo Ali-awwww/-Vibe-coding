@@ -2144,3 +2144,28 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last area worked: Google Credential Manager missing-credential handling, following the Supabase team/execution adapter batch.
 - Next exact step: inspect the current commit's Android CI, APK and lint runs to terminal state; then resume TeamDetail by enforcing parent-team ownership before execution reads/writes and continue the Firebase-to-Supabase auth compatibility map. Do not close Login or TeamDetail based only on source changes.
 
+
+
+## 2026-11-18 — TeamDetail execution access now verifies parent-team ownership
+
+### Confirmed defect
+- The authenticated team adapter scoped execution queries by `user_id`, but did not verify that the referenced parent team was owned by the active account before listing, reading or writing executions.
+- Execution response mapping validated the account ID but did not validate that returned rows belonged to the requested team. The database RLS remains authoritative, but the Android data source lacked the planned fail-closed parent check and defense against an incorrectly scoped response.
+
+### Implementation
+- Added a shared parent-team ownership check using the same Supabase JWT and an owner-filtered `model_teams` lookup before execution list, detail and upsert requests.
+- Rejects missing/unowned parent teams before execution reads or writes.
+- Verifies `team_id` on every list response and on the persisted upsert representation, in addition to the existing `user_id` checks.
+- No production Supabase schema, RLS, Auth settings, data, Firebase configuration or secrets were changed.
+
+### Regression coverage
+- Added tests for an unowned parent on list and upsert, an execution response for a different team, a detail record whose parent is not owned, and an upsert response whose team ID differs from the requested parent.
+- Updated the successful upsert fixture to include an authenticated owner-scoped parent team.
+
+### Verification at commit time
+- Source and regression tests are committed together. Local JDK 21 is available, but Gradle, ADB and Android SDK are not installed in this execution environment; no local Gradle test/build or device test is claimed.
+- GitHub Actions for this implementation commit are pending and must be checked to terminal status before marking the tests as passed.
+
+### Persistent continuity
+- Last area worked: TeamDetail Supabase execution authorization boundary.
+- Next exact step: verify this commit's Android CI, APK and lint workflows to terminal state; fix any failures. Then continue the Firebase-backed team/auth call-site map and define the smallest safe app-wide Supabase Auth cutover slice without changing production Auth settings or removing Firebase capabilities still used by other features.

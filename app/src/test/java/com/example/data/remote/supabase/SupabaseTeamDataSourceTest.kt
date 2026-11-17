@@ -102,7 +102,7 @@ class SupabaseTeamDataSourceTest {
 
     @Test
     fun logExecutionUpsertsAuthenticatedUserAndPersistsTypedMessages() = runTest {
-        val api = FakeTeamApi()
+        val api = FakeTeamApi().apply { teamRows = listOf(teamRow()) }
         val source = createSource(api)
         val execution = TeamExecution(
             id = "execution-1",
@@ -126,9 +126,100 @@ class SupabaseTeamDataSourceTest {
         assertEquals("user-a", api.executionWrite?.userId)
         assertEquals("id", api.lastConflictTarget)
         assertEquals("resolution=merge-duplicates,return=representation", api.lastPrefer)
+        assertEquals("eq.user-a", api.lastOwnerFilter)
+        assertEquals(1, api.getTeamByIdCallCount)
+        assertEquals(1, api.upsertExecutionCallCount)
         assertEquals("Root cause identified", saved.messages.single().content)
         assertEquals(listOf("Null input is the root cause"), saved.consensusPoints)
     }
+
+
+    @Test
+    fun getTeamExecutionsRejectsUnownedParentBeforeReadingExecutionRows() = runTest {
+        val api = FakeTeamApi().apply { teamRows = listOf(teamRow(ownerId = "user-b")) }
+        val source = createSource(api)
+
+        val result = runCatching { source.getTeamExecutions("team-1") }
+
+        assertTrue(result.exceptionOrNull() is SecurityException)
+        assertEquals("eq.user-a", api.lastOwnerFilter)
+        assertEquals(1, api.getTeamByIdCallCount)
+        assertEquals(0, api.listExecutionsCallCount)
+    }
+
+    @Test
+    fun getTeamExecutionsRejectsRowsForAnotherTeam() = runTest {
+        val api = FakeTeamApi().apply {
+            teamRows = listOf(teamRow())
+            executionRows = listOf(
+                SupabaseTeamExecutionRow(id = "execution-1", teamId = "team-2", userId = "user-a")
+            )
+        }
+        val source = createSource(api)
+
+        val result = runCatching { source.getTeamExecutions("team-1") }
+
+        assertTrue(result.exceptionOrNull() is SecurityException)
+        assertEquals("eq.team-1", api.lastTeamIdFilter)
+        assertEquals("eq.user-a", api.lastExecutionUserIdFilter)
+        assertEquals(1, api.listExecutionsCallCount)
+    }
+
+    @Test
+    fun getExecutionByIdRejectsExecutionWhenParentTeamIsNotOwned() = runTest {
+        val api = FakeTeamApi().apply {
+            teamRows = listOf(teamRow(ownerId = "user-b"))
+            executionByIdRows = listOf(
+                SupabaseTeamExecutionRow(id = "execution-1", teamId = "team-1", userId = "user-a")
+            )
+        }
+        val source = createSource(api)
+
+        val result = runCatching { source.getExecutionById("execution-1") }
+
+        assertTrue(result.exceptionOrNull() is SecurityException)
+        assertEquals(1, api.getExecutionByIdCallCount)
+        assertEquals(1, api.getTeamByIdCallCount)
+    }
+
+    @Test
+    fun logExecutionRejectsUnownedParentBeforeUpsert() = runTest {
+        val api = FakeTeamApi().apply { teamRows = listOf(teamRow(ownerId = "user-b")) }
+        val source = createSource(api)
+
+        val result = runCatching {
+            source.logExecution(TeamExecution(teamId = "team-1", userId = "user-a"))
+        }
+
+        assertTrue(result.exceptionOrNull() is SecurityException)
+        assertEquals(1, api.getTeamByIdCallCount)
+        assertEquals(0, api.upsertExecutionCallCount)
+        assertNull(api.executionWrite)
+    }
+
+    @Test
+    fun logExecutionRejectsPersistedResponseForAnotherTeam() = runTest {
+        val api = FakeTeamApi().apply {
+            teamRows = listOf(teamRow())
+            upsertedExecutionRows = listOf(
+                SupabaseTeamExecutionRow(id = "execution-1", teamId = "team-2", userId = "user-a")
+            )
+        }
+        val source = createSource(api)
+
+        val result = runCatching {
+            source.logExecution(TeamExecution(id = "execution-1", teamId = "team-1", userId = "user-a"))
+        }
+
+        assertTrue(result.exceptionOrNull() is SecurityException)
+        assertEquals(1, api.upsertExecutionCallCount)
+    }
+
+    private fun teamRow(ownerId: String = "user-a") = SupabaseModelTeamRow(
+        id = "team-1",
+        ownerId = ownerId,
+        name = "Test team"
+    )
 
     @Test
     fun expiredSessionIsRejectedBeforeAnyPostgrestRequest() = runTest {
@@ -199,13 +290,23 @@ class SupabaseTeamDataSourceTest {
     private class FakeTeamApi : SupabaseTeamPostgrestApi {
         var teamRows: List<SupabaseModelTeamRow> = emptyList()
         var deleteRows: List<SupabaseModelTeamRow> = emptyList()
+        var executionRows: List<SupabaseTeamExecutionRow> = emptyList()
+        var executionByIdRows: List<SupabaseTeamExecutionRow> = emptyList()
+        var upsertedExecutionRows: List<SupabaseTeamExecutionRow>? = null
         var createdTeam: SupabaseModelTeamWrite? = null
         var executionWrite: SupabaseTeamExecutionWrite? = null
         var lastOwnerFilter: String? = null
+        var lastTeamIdFilter: String? = null
+        var lastExecutionUserIdFilter: String? = null
+        var lastExecutionIdFilter: String? = null
         var lastPublishableKey: String? = null
         var lastBearerToken: String? = null
         var lastConflictTarget: String? = null
         var lastPrefer: String? = null
+        var getTeamByIdCallCount: Int = 0
+        var listExecutionsCallCount: Int = 0
+        var getExecutionByIdCallCount: Int = 0
+        var upsertExecutionCallCount: Int = 0
         var requestCount: Int = 0
 
         override suspend fun listTeams(
@@ -228,6 +329,7 @@ class SupabaseTeamDataSourceTest {
             select: String
         ): List<SupabaseModelTeamRow> {
             record(publishableKey, bearerToken)
+            getTeamByIdCallCount += 1
             lastOwnerFilter = ownerIdFilter
             return teamRows.filter { "eq." + it.id == idFilter }
         }
@@ -295,7 +397,10 @@ class SupabaseTeamDataSourceTest {
             order: String
         ): List<SupabaseTeamExecutionRow> {
             record(publishableKey, bearerToken)
-            return emptyList()
+            listExecutionsCallCount += 1
+            lastTeamIdFilter = teamIdFilter
+            lastExecutionUserIdFilter = userIdFilter
+            return executionRows
         }
 
         override suspend fun getTeamExecutionById(
@@ -306,7 +411,10 @@ class SupabaseTeamDataSourceTest {
             select: String
         ): List<SupabaseTeamExecutionRow> {
             record(publishableKey, bearerToken)
-            return emptyList()
+            getExecutionByIdCallCount += 1
+            lastExecutionIdFilter = idFilter
+            lastExecutionUserIdFilter = userIdFilter
+            return executionByIdRows
         }
 
         override suspend fun upsertTeamExecution(
@@ -317,10 +425,11 @@ class SupabaseTeamDataSourceTest {
             request: SupabaseTeamExecutionWrite
         ): List<SupabaseTeamExecutionRow> {
             record(publishableKey, bearerToken)
+            upsertExecutionCallCount += 1
             executionWrite = request
             lastConflictTarget = onConflict
             lastPrefer = prefer
-            return listOf(request.toRow())
+            return upsertedExecutionRows ?: listOf(request.toRow())
         }
 
         private fun record(key: String, bearer: String) {
