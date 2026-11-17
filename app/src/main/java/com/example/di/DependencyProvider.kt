@@ -16,6 +16,8 @@ import com.example.data.remote.supabase.SupabasePostgrestApi
 import com.example.data.remote.supabase.SupabaseProjectDataSource
 import com.example.data.remote.supabase.SupabaseSessionStore
 import com.example.data.remote.supabase.SupabaseTeamDataSource
+import com.example.data.remote.supabase.EncryptedSupabaseIdentityLinkStore
+import com.example.data.remote.supabase.SupabaseIdentityLinkStore
 import com.example.data.remote.supabase.SupabaseTeamPostgrestApi
 import com.example.data.remote.*
 import com.example.data.repository.*
@@ -41,6 +43,7 @@ import java.util.concurrent.TimeUnit
 
 object DependencyProvider {
     private var authRepository: AuthRepository? = null
+    private var firebaseAuthRepository: AuthRepository? = null
     private var crashRepository: CrashRepository? = null
     private var liveTestingRepository: com.example.domain.repository.LiveTestingRepository? = null
     private var sdkIntegrationRepository: com.example.domain.repository.SdkIntegrationRepository? = null
@@ -55,6 +58,7 @@ object DependencyProvider {
     private var firebaseAuth: FirebaseAuth? = null
     private var supabaseProjectDataSource: SupabaseProjectDataSource? = null
     private var supabaseSessionStore: SupabaseSessionStore? = null
+    private var supabaseIdentityLinkStore: SupabaseIdentityLinkStore? = null
     private var supabaseAuthRepository: AuthRepository? = null
     private var supabaseTeamDataSource: SupabaseTeamDataSource? = null
 
@@ -207,13 +211,39 @@ object DependencyProvider {
         }
     }
 
-    fun provideAuthRepository(context: Context): AuthRepository {
+    private fun provideFirebaseAuthRepository(context: Context): AuthRepository {
         val appContext = context.applicationContext
-        return authRepository ?: synchronized(this) {
-            authRepository ?: FirebaseAuthRepository(
+        return firebaseAuthRepository ?: synchronized(this) {
+            firebaseAuthRepository ?: FirebaseAuthRepository(
                 context = appContext,
                 firestoreProvider = { getFirestore(appContext) },
                 firebaseAuthProvider = { getFirebaseAuth(appContext) }
+            ).also { firebaseAuthRepository = it }
+        }
+    }
+
+    private fun getSupabaseIdentityLinkStore(context: Context): SupabaseIdentityLinkStore {
+        val appContext = context.applicationContext
+        return supabaseIdentityLinkStore ?: synchronized(this) {
+            supabaseIdentityLinkStore ?: EncryptedSupabaseIdentityLinkStore(appContext).also {
+                supabaseIdentityLinkStore = it
+            }
+        }
+    }
+
+    fun provideAuthRepository(context: Context): AuthRepository {
+        val appContext = context.applicationContext
+        return authRepository ?: synchronized(this) {
+            authRepository ?: DualSessionAuthRepository(
+                firebaseRepository = provideFirebaseAuthRepository(appContext),
+                supabaseRepository = provideSupabaseAuthRepository(appContext),
+                identityLinkStore = getSupabaseIdentityLinkStore(appContext),
+                onSecondarySessionUnavailable = { error ->
+                    android.util.Log.w(
+                        "DualSessionAuth",
+                        "Supabase secondary session unavailable (${error.javaClass.simpleName})."
+                    )
+                }
             ).also { authRepository = it }
         }
     }
@@ -365,7 +395,8 @@ object DependencyProvider {
             firestore = getFirestore(context),
             firebaseAuth = getFirebaseAuth(context),
             aiProviderDaoOverride = getDatabase(context).aiProviderDao(),
-            supabaseTeamDataSource = provideSupabaseTeamDataSource(context)
+            supabaseTeamDataSource = provideSupabaseTeamDataSource(context),
+            supabaseIdentityLinkProvider = getSupabaseIdentityLinkStore(context)
         ).also { modelTeamRepository = it }
     }
 

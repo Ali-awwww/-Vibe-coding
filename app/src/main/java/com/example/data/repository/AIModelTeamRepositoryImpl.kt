@@ -8,6 +8,7 @@ import com.example.domain.model.*
 import com.example.domain.repository.AIModelTeamRepository
 import com.example.domain.repository.AuthRepository
 import com.example.data.remote.supabase.SupabaseTeamDataSource
+import com.example.data.remote.supabase.SupabaseIdentityLinkProvider
 import com.example.util.OperationType
 import com.example.util.handleFirestoreError
 import com.google.firebase.auth.FirebaseAuth
@@ -34,6 +35,7 @@ class AIModelTeamRepositoryImpl(
     private val aiProviderDaoOverride: AIProviderDao? = null,
     private val currentUserIdProvider: (() -> String?)? = null,
     private val supabaseTeamDataSource: SupabaseTeamDataSource? = null,
+    private val supabaseIdentityLinkProvider: SupabaseIdentityLinkProvider? = null,
     private val enableRemoteBackend: Boolean = true
 ) : AIModelTeamRepository {
 
@@ -85,8 +87,14 @@ class AIModelTeamRepositoryImpl(
         )
     }
 
-    private suspend fun usesSupabase(uid: String): Boolean =
-        supabaseTeamDataSource?.isAuthenticatedAs(uid) == true
+    private suspend fun resolveSupabaseUserId(firebaseUserId: String): String? {
+        val supabaseUserId = supabaseIdentityLinkProvider
+            ?.getSupabaseUserId(firebaseUserId)
+            ?.takeIf(String::isNotBlank)
+            ?: return null
+        val source = supabaseTeamDataSource ?: return null
+        return supabaseUserId.takeIf { source.isAuthenticatedAs(it) }
+    }
 
     private fun requireLegacyFirebaseIdentity(uid: String) {
         ProjectIdentityGuard.requireLegacyFirebaseIdentityMatch(
@@ -97,10 +105,15 @@ class AIModelTeamRepositoryImpl(
 
     override fun getTeams(userId: String): Flow<List<ModelTeam>> = flow {
         val uid = resolveAuthenticatedUserId(userId)
-        if (usesSupabase(uid)) {
-            val remoteTeams = requireNotNull(supabaseTeamDataSource).getTeams(uid)
+        val supabaseUid = resolveSupabaseUserId(uid)
+        if (supabaseUid != null) {
+            val remoteTeams = requireNotNull(supabaseTeamDataSource).getTeams(supabaseUid)
+            if (remoteTeams.any { it.ownerId != supabaseUid }) {
+                throw SecurityException("Supabase returned a team outside the linked account.")
+            }
+            val appTeams = remoteTeams.map { it.copy(ownerId = uid) }
             localTeamsState.update { current ->
-                current.filterValues { it.ownerId != uid } + remoteTeams.associateBy { it.id }
+                current.filterValues { it.ownerId != uid } + appTeams.associateBy { it.id }
             }
             emitAll(
                 localTeamsState.map { map ->
@@ -147,13 +160,15 @@ class AIModelTeamRepositoryImpl(
 
     override suspend fun getTeamById(teamId: String): ModelTeam? {
         val uid = resolveAuthenticatedUserId()
-        if (usesSupabase(uid)) {
+        val supabaseUid = resolveSupabaseUserId(uid)
+        if (supabaseUid != null) {
             val remote = requireNotNull(supabaseTeamDataSource).getTeamById(teamId)
-            if (remote != null && remote.ownerId != uid) {
-                throw SecurityException("Team access denied for the current account.")
+            if (remote != null && remote.ownerId != supabaseUid) {
+                throw SecurityException("Team access denied for the linked Supabase account.")
             }
-            if (remote != null) localTeamsState.update { it + (teamId to remote) }
-            return remote
+            val appTeam = remote?.copy(ownerId = uid)
+            if (appTeam != null) localTeamsState.update { it + (teamId to appTeam) }
+            return appTeam
         }
 
         val firestoreDb = db
@@ -208,10 +223,18 @@ class AIModelTeamRepositoryImpl(
             updatedAt = now
         )
 
-        val useSupabase = usesSupabase(uid)
+        val supabaseUid = resolveSupabaseUserId(uid)
+        val useSupabase = supabaseUid != null
         val firestoreDb = if (useSupabase) null else db
         val persistedTeam = when {
-            useSupabase -> requireNotNull(supabaseTeamDataSource).createTeam(finalTeam)
+            useSupabase -> {
+                val saved = requireNotNull(supabaseTeamDataSource)
+                    .createTeam(finalTeam.copy(ownerId = requireNotNull(supabaseUid)))
+                if (saved.ownerId != supabaseUid) {
+                    throw SecurityException("Supabase saved a team outside the linked account.")
+                }
+                saved.copy(ownerId = uid)
+            }
             firestoreDb != null -> {
                 requireLegacyFirebaseIdentity(uid)
                 firestoreDb.collection("users").document(uid)
@@ -242,10 +265,18 @@ class AIModelTeamRepositoryImpl(
             updatedAt = System.currentTimeMillis()
         )
 
-        val useSupabase = usesSupabase(uid)
+        val supabaseUid = resolveSupabaseUserId(uid)
+        val useSupabase = supabaseUid != null
         val firestoreDb = if (useSupabase) null else db
         val persistedTeam = when {
-            useSupabase -> requireNotNull(supabaseTeamDataSource).updateTeam(updated)
+            useSupabase -> {
+                val saved = requireNotNull(supabaseTeamDataSource)
+                    .updateTeam(updated.copy(ownerId = requireNotNull(supabaseUid)))
+                if (saved.ownerId != supabaseUid) {
+                    throw SecurityException("Supabase updated a team outside the linked account.")
+                }
+                saved.copy(ownerId = uid)
+            }
             firestoreDb != null -> {
                 requireLegacyFirebaseIdentity(uid)
                 firestoreDb.collection("users").document(uid)
@@ -268,7 +299,8 @@ class AIModelTeamRepositoryImpl(
             throw SecurityException("Cannot delete a team owned by another user.")
         }
 
-        val useSupabase = usesSupabase(uid)
+        val supabaseUid = resolveSupabaseUserId(uid)
+        val useSupabase = supabaseUid != null
         val firestoreDb = if (useSupabase) null else db
         when {
             useSupabase -> requireNotNull(supabaseTeamDataSource).deleteTeam(teamId)
@@ -288,12 +320,14 @@ class AIModelTeamRepositoryImpl(
 
     override fun getTeamExecutions(teamId: String): Flow<List<TeamExecution>> = flow {
         val uid = resolveAuthenticatedUserId()
-        if (usesSupabase(uid)) {
+        val supabaseUid = resolveSupabaseUserId(uid)
+        if (supabaseUid != null) {
             val remote = requireNotNull(supabaseTeamDataSource).getTeamExecutions(teamId)
-            if (remote.any { it.userId != uid }) {
-                throw SecurityException("Execution access denied for the current account.")
+            if (remote.any { it.userId != supabaseUid }) {
+                throw SecurityException("Execution access denied for the linked Supabase account.")
             }
-            localExecutionsState.update { current -> current + remote.associateBy { it.id } }
+            val appExecutions = remote.map { it.copy(userId = uid) }
+            localExecutionsState.update { current -> current + appExecutions.associateBy { it.id } }
             emitAll(
                 localExecutionsState.map { map ->
                     map.values.filter { it.teamId == teamId && it.userId == uid }
@@ -341,13 +375,15 @@ class AIModelTeamRepositoryImpl(
 
     override suspend fun getExecutionById(executionId: String): TeamExecution? {
         val uid = resolveAuthenticatedUserId()
-        if (usesSupabase(uid)) {
+        val supabaseUid = resolveSupabaseUserId(uid)
+        if (supabaseUid != null) {
             val remote = requireNotNull(supabaseTeamDataSource).getExecutionById(executionId)
-            if (remote != null && remote.userId != uid) {
-                throw SecurityException("Execution access denied for the current account.")
+            if (remote != null && remote.userId != supabaseUid) {
+                throw SecurityException("Execution access denied for the linked Supabase account.")
             }
-            if (remote != null) localExecutionsState.update { it + (executionId to remote) }
-            return remote
+            val appExecution = remote?.copy(userId = uid)
+            if (appExecution != null) localExecutionsState.update { it + (executionId to appExecution) }
+            return appExecution
         }
 
         val firestoreDb = db
@@ -396,10 +432,18 @@ class AIModelTeamRepositoryImpl(
         val id = if (execution.id.isBlank()) UUID.randomUUID().toString() else execution.id
         val finalExec = execution.copy(id = id, userId = uid)
 
-        val useSupabase = usesSupabase(uid)
+        val supabaseUid = resolveSupabaseUserId(uid)
+        val useSupabase = supabaseUid != null
         val firestoreDb = if (useSupabase) null else db
         val persistedExecution = when {
-            useSupabase -> requireNotNull(supabaseTeamDataSource).logExecution(finalExec)
+            useSupabase -> {
+                val saved = requireNotNull(supabaseTeamDataSource)
+                    .logExecution(finalExec.copy(userId = requireNotNull(supabaseUid)))
+                if (saved.userId != supabaseUid) {
+                    throw SecurityException("Supabase saved an execution outside the linked account.")
+                }
+                saved.copy(userId = uid)
+            }
             firestoreDb != null -> {
                 requireLegacyFirebaseIdentity(uid)
                 firestoreDb.collection("users").document(uid)
@@ -468,7 +512,7 @@ class AIModelTeamRepositoryImpl(
         )
         val scopedRecord = record.copy(userId = uid)
 
-        if (!usesSupabase(uid)) {
+        if (resolveSupabaseUserId(uid) == null) {
             val firestoreDb = db
             if (firestoreDb != null) {
                 requireLegacyFirebaseIdentity(uid)

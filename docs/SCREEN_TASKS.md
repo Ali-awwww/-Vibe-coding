@@ -2208,3 +2208,39 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: TeamDetail parent-team authorization and the Supabase Auth Google ID-token capability.
 - Next exact step: build a dual-session compatibility layer for Google sign-in that keeps Firebase identity available to remaining Firestore repositories while preserving the distinct Supabase user ID for RLS-backed data. Then migrate the CrashRepository project/application slice and wire `SupabaseProjectDataSource`; do not switch the app-wide provider until the remaining Firestore consumers have tested replacements.
+
+
+## 2026-11-18 — Dual Firebase/Supabase Google identity bridge
+
+### Implementation
+- Added `DualSessionAuthRepository`: Firebase remains the app-wide identity and keeps its existing UID for legacy Firestore features; the same Google ID token is also exchanged with Supabase.
+- The Firebase identity is hidden from navigation while the secondary exchange is in progress, so team/project screens cannot start with a half-established identity.
+- The bridge stores only the Firebase UID ↔ Supabase UID mapping and normalized Google email in a separate Android-Keystore-encrypted preference. OAuth access/refresh tokens remain in their existing provider-specific stores.
+- The mapping is written only after both providers return active users with the same non-blank email. A failed or mismatched secondary exchange clears the link and Supabase session but does not misreport the Firebase login as failed.
+- Team repository operations now resolve the linked Supabase subject and independently validate the Supabase session before using PostgREST. Supabase owner/user IDs are translated back to the Firebase UID in domain objects, preserving existing ViewModel and Firestore identity contracts.
+- Supabase remains optional during this migration slice; when no valid link/session exists, the repository uses its existing authenticated Firebase path or fails closed if no remote backend is available.
+- No production Supabase schema, RLS, Auth provider settings, data, Firebase configuration, or secrets were changed.
+
+### Regression coverage
+- Added tests for same-token dual sign-in, distinct provider subject IDs, normalized email matching, stale-link removal, secondary-provider failure, primary-provider failure, sign-out across both providers, and hiding the app identity until the second exchange completes.
+- Added encrypted-link storage tests for account matching, ciphertext-only persistence, and corruption cleanup.
+- Added a repository integration test proving a Firebase UID can safely operate on a Supabase team owned by its separately issued Supabase UID while the presentation model continues to expose the Firebase UID.
+
+### Verification boundaries
+- The new tests are committed with the implementation; they have not yet been executed in this automation environment.
+- Local Gradle, Android SDK, ADB and emulator/device are not available here. GitHub Actions for this commit must be checked to terminal status before any test/build criterion is marked PASS.
+- No live Supabase Auth exchange, production RLS write, provider configuration change, or device sign-in is claimed.
+
+### Criterion status
+| Area | Criterion | State | Evidence / blocker |
+|---|---|---|---|
+| Identity | Firebase remains the app-facing UID while Supabase receives the same Google ID token | IN_PROGRESS | Dual-session repository and fake-provider tests added; CI and device sign-in pending |
+| Identity | Persisted provider mapping is encrypted and account-scoped | IN_PROGRESS | Android Keystore-backed store and Robolectric tests added; CI pending |
+| ModelTeams / TeamDetail | Translate app UID to Supabase UID only after a matching active session | IN_PROGRESS | Repository mapping and fake PostgREST integration test added; CI and live RLS/device checks pending |
+| Login | Rendered sign-in, provider configuration and lifecycle verification | BLOCKED | No emulator/device attached; Supabase Google provider setting was not changed or verified |
+| Projects / Applications | Activate Supabase project data source through the same validated identity bridge | TODO | Next migration slice; current CrashRepository still has its Supabase project source disabled |
+
+### Persistent continuity
+- Last area worked: dual-provider Google identity, encrypted subject mapping, and activation of the existing Supabase team adapter without changing the app-facing Firebase UID.
+- Next exact step: inspect this commit's Android CI, APK and lint workflows to terminal status; fix all compile/test/lint failures. Then migrate the CrashRepository project/application path to use the same validated identity mapping and wire `SupabaseProjectDataSource`, retaining Firebase only as the explicitly supported legacy path. Do not change production schema, RLS or Auth settings, and do not close TeamDetail while realtime, usage persistence, live RLS negative tests or device review remain open.
+- Repository AGENTS.md / agents.md files: none found in the inspected main tree.
