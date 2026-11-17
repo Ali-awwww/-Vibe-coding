@@ -164,10 +164,6 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 private fun resolveWebClientId(context: Context): String? {
-    val direct = runCatching { context.getString(R.string.default_web_client_id) }
-        .getOrNull()
-        ?.takeIf { it.isNotBlank() }
-    if (direct != null) return direct
     val resId = context.resources.getIdentifier(
         "default_web_client_id",
         "string",
