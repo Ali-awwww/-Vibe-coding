@@ -9,6 +9,7 @@ import com.example.auth.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
 import com.example.auth.SUPABASE_EMAIL_CONFIRMATION_REDIRECT_URI
 import com.example.data.remote.supabase.SupabaseAuthResponse
 import com.example.data.remote.supabase.SupabasePasswordGrantRequest
+import com.example.data.remote.supabase.SupabaseIdTokenGrantRequest
 import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
 import com.example.data.remote.supabase.SupabaseSessionStore
 import com.example.data.remote.supabase.SupabaseSignUpRequest
@@ -288,12 +289,30 @@ class AuthRepositoryImpl(
         }
     }
 
-    override suspend fun signInWithGoogle(idToken: String): Result<Unit> =
-        Result.failure(
-            UnsupportedOperationException(
-                "تسجيل الدخول عبر Google لم يُربط بعد بمزوّد OAuth في Supabase."
+    override suspend fun signInWithGoogle(idToken: String): Result<Unit> = authResult {
+        require(idToken.isNotBlank()) { "Google ID token must not be blank." }
+        requireConfiguredBackend()
+        sessionMutex.withLock {
+            val requestGeneration = synchronized(sessionStateLock) { sessionGeneration }
+            val response = api.signInWithIdToken(
+                publishableKey = publishableKey,
+                request = SupabaseIdTokenGrantRequest(
+                    provider = "google",
+                    idToken = idToken
+                )
             )
-        )
+            val body = requireSuccessfulBody(response)
+            val session = body.toStoredSession()
+                ?: throw IllegalStateException("لم يُرجع Supabase جلسة Google صالحة.")
+            synchronized(sessionStateLock) {
+                check(sessionGeneration == requestGeneration) {
+                    "تم إلغاء تسجيل الدخول عبر Google بسبب تسجيل الخروج."
+                }
+                sessionStore.write(session)
+                _currentUser.value = session.user.toAccount()
+            }
+        }
+    }
 
     private suspend fun refreshStoredSessionIfNeeded() = sessionMutex.withLock {
         val snapshot = synchronized(sessionStateLock) {

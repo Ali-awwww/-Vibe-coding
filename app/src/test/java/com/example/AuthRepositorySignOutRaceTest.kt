@@ -6,6 +6,7 @@ import com.example.data.remote.supabase.SupabaseAuthApi
 import com.example.data.remote.supabase.SupabaseAuthResponse
 import com.example.data.remote.supabase.SupabaseAuthUser
 import com.example.data.remote.supabase.SupabasePasswordGrantRequest
+import com.example.data.remote.supabase.SupabaseIdTokenGrantRequest
 import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
 import com.example.data.remote.supabase.SupabaseSessionStore
@@ -160,6 +161,12 @@ class AuthRepositorySignOutRaceTest {
             grantType: String,
             request: SupabasePasswordGrantRequest
         ): Response<SupabaseAuthResponse> = throw IOException("Unexpected signin request")
+
+        override suspend fun signInWithIdToken(
+            publishableKey: String,
+            grantType: String,
+            request: SupabaseIdTokenGrantRequest
+        ): Response<SupabaseAuthResponse> = throw IOException("Unexpected Google sign-in request")
 
         override suspend fun refreshSession(
             publishableKey: String,

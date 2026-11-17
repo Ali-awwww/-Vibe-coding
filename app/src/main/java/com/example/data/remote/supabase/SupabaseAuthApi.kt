@@ -23,6 +23,13 @@ interface SupabaseAuthApi {
     ): Response<SupabaseAuthResponse>
 
     @POST("auth/v1/token")
+    suspend fun signInWithIdToken(
+        @Header("apikey") publishableKey: String,
+        @Query("grant_type") grantType: String = "id_token",
+        @Body request: SupabaseIdTokenGrantRequest
+    ): Response<SupabaseAuthResponse>
+
+    @POST("auth/v1/token")
     suspend fun refreshSession(
         @Header("apikey") publishableKey: String,
         @Query("grant_type") grantType: String = "refresh_token",

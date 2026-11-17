@@ -23,6 +23,12 @@ data class SupabasePasswordGrantRequest(
 )
 
 @JsonClass(generateAdapter = true)
+data class SupabaseIdTokenGrantRequest(
+    val provider: String,
+    @Json(name = "id_token") val idToken: String
+)
+
+@JsonClass(generateAdapter = true)
 data class SupabaseRefreshGrantRequest(
     @Json(name = "refresh_token") val refreshToken: String
 )

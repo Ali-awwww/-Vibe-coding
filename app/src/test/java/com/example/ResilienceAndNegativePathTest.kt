@@ -95,7 +95,7 @@ class ResilienceAndNegativePathTest {
 
     @Test
     fun `test invalid login credentials return failure result`() = runTest(testDispatcher) {
-        val unavailableAuthApi = object : SupabaseAuthApi {
+        val unavailableAuthApi = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
             override suspend fun signUp(
                 publishableKey: String,
                 redirectTo: String?,
@@ -149,7 +149,7 @@ class ResilienceAndNegativePathTest {
 
     @Test
     fun `successful sign in immediately publishes current user to active collectors`() = runTest(testDispatcher) {
-        val successfulAuthApi = object : SupabaseAuthApi {
+        val successfulAuthApi = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
             override suspend fun signUp(
                 publishableKey: String,
                 redirectTo: String?,
@@ -223,7 +223,7 @@ class ResilienceAndNegativePathTest {
 
     @Test
     fun `signup requiring email confirmation is not treated as an authenticated session`() = runTest(testDispatcher) {
-        val confirmationRequiredApi = object : SupabaseAuthApi {
+        val confirmationRequiredApi = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
             override suspend fun signUp(
                 publishableKey: String,
                 redirectTo: String?,
@@ -418,6 +418,12 @@ class ResilienceAndNegativePathTest {
             grantType: String,
             request: SupabasePasswordGrantRequest
         ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
+
+        override suspend fun signInWithIdToken(
+            publishableKey: String,
+            grantType: String,
+            request: SupabaseIdTokenGrantRequest
+        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("Unexpected Google sign-in request")
 
         override suspend fun refreshSession(
             publishableKey: String,

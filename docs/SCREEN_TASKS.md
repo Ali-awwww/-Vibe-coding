@@ -2124,7 +2124,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Criterion status
 | Screen / area | Criterion | State | Evidence / blocker |
 |---|---|---|---|
-| TeamDetail | Supabase team CRUD and owner-scoped execution persistence adapter | IN_PROGRESS | Adapter and contract tests added; CI pending; production activation depends on Supabase Auth becoming the app-wide identity |
+| TeamDetail | Supabase team CRUD and owner-scoped execution persistence adapter | IN_PROGRESS | Parent ownership checks now guard execution list/detail/upsert; production activation still depends on the Supabase session being available to the app and on realtime/device verification |
 | TeamDetail | Cross-device realtime team/execution updates | BLOCKED | Current adapter fetches remote state and updates in-process flows after local mutations; no Supabase Realtime subscription is wired |
 | TeamUsage | Persisted usage ledger and RLS verification | BLOCKED | No public.team_usage_records table in the inspected schema; Room remains the local ledger |
 | TeamDetail / TeamUsage | Live negative authorization tests | BLOCKED | Production RLS is read-only; no disposable Supabase test project/branch was created |
@@ -2169,3 +2169,34 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: TeamDetail Supabase execution authorization boundary.
 - Next exact step: verify this commit's Android CI, APK and lint workflows to terminal state; fix any failures. Then continue the Firebase-backed team/auth call-site map and define the smallest safe app-wide Supabase Auth cutover slice without changing production Auth settings or removing Firebase capabilities still used by other features.
+
+
+## 2026-11-18 — TeamDetail CI verification and Supabase Google ID-token exchange
+
+### Previous implementation verification
+- Parent-team execution ownership implementation: `d518913608a94a32477a86a743f265ceccde0917`.
+- Android CI/CD run 44188693536 completed SUCCESS. The uploaded JUnit reports contain 283 tests, 0 failures, 0 errors and 4 skipped; the new parent-team ownership regression cases all executed and passed.
+- APK run 44188693601 completed SUCCESS. Debug APK artifact 14375413018 and signed Release APK artifact 14375697737 were uploaded; unit-test reports are artifact 14375068632.
+- Code Quality run 44188693804 completed SUCCESS. Android Lint reported 193 warnings and 0 errors; the earlier CredentialManagerMisuse warning is absent. No warning in the report points to the parent-team guard or its tests.
+- Local Gradle, ADB and Android SDK remain unavailable; no local build or emulator/device validation is claimed.
+
+### Auth compatibility map — confirmed current wiring
+- `DependencyProvider.provideAuthRepository()` still returns `FirebaseAuthRepository`; `AppNavigation` injects this provider into `MainViewModel`. The visible LoginScreen Google action therefore authenticates against Firebase today.
+- `provideSupabaseAuthRepository()` separately constructs `AuthRepositoryImpl` and is injected into `SupabaseProjectDataSource` and `SupabaseTeamDataSource`; it is not the app-wide Login provider.
+- `provideCrashRepository()` currently passes a Firebase Auth/Firestore path and `supabaseProjectDataSource = null`; project/application reads and writes have not yet switched to the Supabase project adapter.
+- `provideAIModelTeamRepository()` supplies the Supabase team adapter, but the repository only selects it when a valid Supabase session matches the active app identity. The normal Login route does not currently create that Supabase session, so the adapter must not be described as the active production team backend yet.
+- A direct switch of the app-wide provider would strand remaining Firestore consumers. Keep Firebase initialization and SDKs until those slices have an authenticated, tested replacement.
+
+### Implementation — Supabase native Google sign-in
+- Added the Supabase Auth `POST /auth/v1/token?grant_type=id_token` contract for provider `google`.
+- `AuthRepositoryImpl.signInWithGoogle` now validates the ID token, exchanges it through Supabase, validates the returned session, and persists it through the existing mutex/session-generation protections. Blank tokens are rejected before any network request.
+- Added regression tests for the Google token request shape, session persistence/current-user publication, and blank-token rejection.
+- This enables the Supabase repository path but does not switch the Login UI or app-wide auth provider. The Supabase Google provider must be enabled/configured with the matching Google client ID; its production setting was not inspected or changed.
+
+### Verification for this implementation
+- The new Google auth tests are committed with the API/model/repository changes. GitHub Actions for this commit are pending; do not mark these tests PASS until Android CI, APK and lint reach terminal success.
+- No live Supabase Auth request, provider-configuration check, production Auth setting change, device sign-in or Firebase removal was performed.
+
+### Persistent continuity
+- Last area worked: TeamDetail parent-team authorization and the Supabase Auth Google ID-token capability.
+- Next exact step: build a dual-session compatibility layer for Google sign-in that keeps Firebase identity available to remaining Firestore repositories while preserving the distinct Supabase user ID for RLS-backed data. Then migrate the CrashRepository project/application slice and wire `SupabaseProjectDataSource`; do not switch the app-wide provider until the remaining Firestore consumers have tested replacements.

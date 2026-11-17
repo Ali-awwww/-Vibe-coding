@@ -6,6 +6,7 @@ import com.example.data.remote.supabase.SupabaseAuthApi
 import com.example.data.remote.supabase.SupabaseAuthResponse
 import com.example.data.remote.supabase.SupabaseAuthUser
 import com.example.data.remote.supabase.SupabasePasswordGrantRequest
+import com.example.data.remote.supabase.SupabaseIdTokenGrantRequest
 import com.example.data.remote.supabase.SupabaseRecoveryRequest
 import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
 import com.example.data.remote.supabase.SupabaseSessionStore
@@ -23,6 +24,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -54,6 +56,71 @@ class AuthRepositoryPasswordRecoveryTest {
     @After
     fun tearDown() {
         sessionStore.clear()
+    }
+
+
+    @Test
+    fun googleIdTokenExchangePersistsSupabaseSessionAndPublishesUser() = runTest {
+        var receivedPublishableKey: String? = null
+        var receivedGrantType: String? = null
+        var receivedRequest: SupabaseIdTokenGrantRequest? = null
+        val api = object : SupabaseAuthApi by unusedApi() {
+            override suspend fun signInWithIdToken(
+                publishableKey: String,
+                grantType: String,
+                request: SupabaseIdTokenGrantRequest
+            ): Response<SupabaseAuthResponse> {
+                receivedPublishableKey = publishableKey
+                receivedGrantType = grantType
+                receivedRequest = request
+                return Response.success(
+                    SupabaseAuthResponse(
+                        accessToken = "google-access",
+                        refreshToken = "google-refresh",
+                        expiresIn = 3_600L,
+                        user = SupabaseAuthUser(
+                            id = "google-user",
+                            email = "google@example.com"
+                        )
+                    )
+                )
+            }
+        }
+        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
+
+        val result = repository.signInWithGoogle("google-id-token")
+
+        assertTrue(result.isSuccess)
+        assertEquals("publishable-test-key", receivedPublishableKey)
+        assertEquals("id_token", receivedGrantType)
+        assertEquals("google", receivedRequest?.provider)
+        assertEquals("google-id-token", receivedRequest?.idToken)
+        assertEquals("google-user", repository.getCurrentUserSync()?.id)
+        assertEquals("google-access", sessionStore.read()?.accessToken)
+        assertEquals("google-refresh", sessionStore.read()?.refreshToken)
+    }
+
+    @Test
+    fun blankGoogleIdTokenIsRejectedBeforeCallingSupabase() = runTest {
+        var requestCalled = false
+        val api = object : SupabaseAuthApi by unusedApi() {
+            override suspend fun signInWithIdToken(
+                publishableKey: String,
+                grantType: String,
+                request: SupabaseIdTokenGrantRequest
+            ): Response<SupabaseAuthResponse> {
+                requestCalled = true
+                throw IOException("The API must not receive a blank Google token.")
+            }
+        }
+        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
+
+        val result = repository.signInWithGoogle("   ")
+
+        assertTrue(result.isFailure)
+        assertFalse(requestCalled)
+        assertNull(sessionStore.read())
+        assertNull(repository.getCurrentUserSync())
     }
 
     @Test
@@ -261,6 +328,12 @@ class AuthRepositoryPasswordRecoveryTest {
             grantType: String,
             request: SupabasePasswordGrantRequest
         ): Response<SupabaseAuthResponse> = throw IOException("Unexpected sign-in request")
+
+        override suspend fun signInWithIdToken(
+            publishableKey: String,
+            grantType: String,
+            request: SupabaseIdTokenGrantRequest
+        ): Response<SupabaseAuthResponse> = throw IOException("Unexpected Google sign-in request")
 
         override suspend fun refreshSession(
             publishableKey: String,
