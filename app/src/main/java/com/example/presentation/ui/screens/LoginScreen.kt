@@ -42,6 +42,7 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import com.example.R
 import com.example.presentation.viewmodel.AuthDiagnosticInfo
 import com.example.presentation.viewmodel.AuthUiMessage
@@ -219,6 +220,8 @@ fun LoginScreen(
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (e: NoCredentialException) {
+                Log.d("Auth", "No previously authorized Google credential is available.")
             } catch (e: GetCredentialException) {
                 Log.w("Auth", "Silent Google Sign-In unavailable (${e.type}): ${e.message}", e)
             } catch (e: Exception) {
@@ -271,6 +274,9 @@ fun LoginScreen(
                     } catch (cancelled: CancellationException) {
                         viewModel.setAuthLoading(false)
                         throw cancelled
+                    } catch (e: NoCredentialException) {
+                        Log.w("Auth", "No Google credential is available for this account.", e)
+                        viewModel.handleGoogleSignInFailure(e)
                     } catch (e: GetCredentialCancellationException) {
                         Log.w("Auth", "Google Sign-In cancelled (${e.type}): ${e.message}", e)
                         viewModel.handleGoogleSignInFailure(e)

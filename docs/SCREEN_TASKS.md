@@ -2114,7 +2114,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Tests and verification
 - Added SupabaseTeamDataSourceTest coverage for owner scoping, nested JSONB mapping, owner spoof rejection, authenticated execution upsert, expired-session rejection and delete-without-representation failure.
 - Added a repository regression test proving production reads/writes do not report an in-memory team as persisted when no remote backend is available.
-- GitHub Actions for the implementation commit are pending at commit time; the next run must inspect Android CI, APK build and lint to terminal state before changing these states to PASS.
+- Implementation commit: d521f6d461f51adfabe1d29d6cd454eade76dfc7.
+- Android CI/CD run 44184564227 completed successfully: 277 tests, 0 failures, 0 errors and 4 skipped; Debug APK build passed.
+- APK workflow run 44184564243 completed successfully: Debug APK and signed Release APK artifacts uploaded (14374006447 and 14375185146).
+- Code Quality run 44184564464 completed successfully. Android lint completed, but its report still contains warnings. One actionable CredentialManagerMisuse warning was confirmed at both Google Credential Manager calls in LoginScreen and is addressed by the follow-up change below.
 - No local Gradle/Android SDK, emulator/device, live Supabase write, or live RLS negative-authorization test is claimed.
 - The live schema is read-only and has model_teams / team_executions with RLS enabled. The initial table-creation migration remains absent from supabase/migrations; only the later index migration is version-controlled. This source/schema drift remains open and must be reconciled with the exact deployed migration and policies before treating fresh-environment provisioning as reproducible.
 
@@ -2130,4 +2133,14 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: Supabase team/execution PostgREST adapter and production persistence fail-closed behavior.
 - Next exact step: inspect the implementation commit's Android CI, APK build and lint runs to terminal state; fix any compile/test/lint failures. Then map all current Firebase-backed team/auth call sites and migrate the app-wide Auth provider only with a compatibility plan for the remaining Firebase data slices. Do not claim team screens complete while auth activation, realtime, usage persistence, RLS negative tests or device review remain open.
+
+## 2026-11-18 — Google Credential Manager missing-credential handling
+
+- Fresh lint evidence from run 44184564464 identified CredentialManagerMisuse at the silent and interactive Google credential calls in LoginScreen.
+- The silent path now treats NoCredentialException as an expected absence of a previously authorized account and continues without turning it into an authentication failure.
+- The interactive path now forwards NoCredentialException to the existing localized GOOGLE_NO_CREDENTIAL state and clears the loading state through the existing MainViewModel failure resolver.
+- Added a regression test for the dedicated localized message and diagnostic code.
+- This is a targeted return to Login/Identity based on a new lint finding, not a recurring default priority. The screen remains IN_PROGRESS until the new CI run passes and device-level sign-in behavior is verified.
+- Last area worked: Google Credential Manager missing-credential handling, following the Supabase team/execution adapter batch.
+- Next exact step: inspect the current commit's Android CI, APK and lint runs to terminal state; then resume TeamDetail by enforcing parent-team ownership before execution reads/writes and continue the Firebase-to-Supabase auth compatibility map. Do not close Login or TeamDetail based only on source changes.
 

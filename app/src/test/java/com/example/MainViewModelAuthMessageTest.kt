@@ -1,6 +1,7 @@
 package com.example
 
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
@@ -245,6 +246,18 @@ class MainViewModelAuthMessageTest {
         assertEquals(400, state.diagnostic?.httpStatusCode)
         assertFalse(state.toString().contains("raw invalid login credentials"))
         assertTrue(state.diagnostic?.exceptionType == "SupabaseHttpException")
+    }
+
+    @Test
+    fun missingGoogleCredentialUsesDedicatedLocalizedMessageAndDiagnostic() {
+        val viewModel = MainViewModel(RecordingAuthRepository())
+
+        viewModel.handleGoogleSignInFailure(NoCredentialException("No Google credential is available."))
+
+        val state = viewModel.actionState.value
+        assertEquals(AuthUiMessage.GOOGLE_NO_CREDENTIAL, state.errorMessage)
+        assertEquals("GOOGLE_NO_CREDENTIAL", state.diagnostic?.code)
+        assertEquals("NoCredentialException", state.diagnostic?.exceptionType)
     }
 
     @Test
