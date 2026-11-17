@@ -184,6 +184,8 @@ jobs:
               )
               if not store_type:
                   raise ValueError("Could not determine keystore type")
+              if store_type.upper() == "PKCS12":
+                  data["keyPassword"] = data["storePassword"]
 
               with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
                   env_file.write(f"KEYSTORE_PATH={keystore_path}\n")
