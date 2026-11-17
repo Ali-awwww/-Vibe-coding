@@ -145,21 +145,29 @@ jobs:
               if list_result.returncode != 0:
                   raise ValueError("Keystore or alias validation failed")
 
-              key_result = subprocess.run(
-                  [
-                      "keytool", "-certreq", "-keystore", str(keystore_path),
-                      "-storepass:env", "VIBE_RELEASE_STORE_PASSWORD",
-                      "-alias", data["keyAlias"],
-                      "-keypass:env", "VIBE_RELEASE_KEY_PASSWORD",
-                      "-file", str(csr_path)
-                  ],
-                  stdout=subprocess.DEVNULL,
-                  stderr=subprocess.PIPE,
-                  text=True,
-                  env=validation_env
-              )
+              def validate_key_password(password):
+                  validation_env["VIBE_RELEASE_KEY_PASSWORD"] = password
+                  return subprocess.run(
+                      [
+                          "keytool", "-certreq", "-keystore", str(keystore_path),
+                          "-storepass:env", "VIBE_RELEASE_STORE_PASSWORD",
+                          "-alias", data["keyAlias"],
+                          "-keypass:env", "VIBE_RELEASE_KEY_PASSWORD",
+                          "-file", str(csr_path)
+                      ],
+                      stdout=subprocess.DEVNULL,
+                      stderr=subprocess.PIPE,
+                      text=True,
+                      env=validation_env
+                  )
+
+              key_result = validate_key_password(data["keyPassword"])
               if key_result.returncode != 0:
-                  raise ValueError("Private key password validation failed")
+                  key_result = validate_key_password(data["storePassword"])
+                  if key_result.returncode == 0:
+                      data["keyPassword"] = data["storePassword"]
+                  else:
+                      raise ValueError("Private key password validation failed")
 
               metadata = subprocess.check_output(
                   [
