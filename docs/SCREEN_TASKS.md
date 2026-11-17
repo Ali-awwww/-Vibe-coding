@@ -2226,21 +2226,27 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added encrypted-link storage tests for account matching, ciphertext-only persistence, and corruption cleanup.
 - Added a repository integration test proving a Firebase UID can safely operate on a Supabase team owned by its separately issued Supabase UID while the presentation model continues to expose the Firebase UID.
 
-### Verification boundaries
-- The new tests are committed with the implementation; they have not yet been executed in this automation environment.
-- Local Gradle, Android SDK, ADB and emulator/device are not available here. GitHub Actions for this commit must be checked to terminal status before any test/build criterion is marked PASS.
-- No live Supabase Auth exchange, production RLS write, provider configuration change, or device sign-in is claimed.
+### Verification and evidence
+- GitHub Actions completed successfully on commit `b258110a43b8adc560f928f9f0111cf501d447f4`:
+  - [Android CI](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44194819629): unit tests and Debug APK build/upload succeeded.
+  - [Build & Package APK](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44194819620): unit tests, Debug APK and Release APK builds/uploads succeeded.
+  - [Code Quality](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44194819682): `lintDebug` succeeded.
+- The uploaded JUnit report contains 296 tests, 0 failures, 0 errors and 4 skipped. The new suites passed: DualSessionAuthRepositoryTest (6), SupabaseIdentityLinkStoreTest (2), and AIModelTeamRepositorySupabaseIdentityTest (1).
+- Debug and Release APK artifacts were uploaded by GitHub Actions; no APK was published or distributed outside the workflow artifacts.
+- The lint HTML report records 195 warnings and no lint errors. Two warnings were on the new store's synchronous `SharedPreferences.commit()`; the follow-up applies a narrow `UseKtx` suppression because durable commit success is checked before exposing/removing an identity link.
+- This environment still has no local Gradle installation, Android SDK, ADB or emulator. CI compilation/build is verified, but runtime installation, visual review, RTL/LTR device checks and live Google sign-in remain unverified.
+- No live Supabase Auth exchange, production RLS write, schema/policy change, provider-setting change, Firebase change, or secret change was performed. The Supabase skill was not available in the installed skill catalog, so no live Supabase operation was attempted.
 
 ### Criterion status
 | Area | Criterion | State | Evidence / blocker |
 |---|---|---|---|
-| Identity | Firebase remains the app-facing UID while Supabase receives the same Google ID token | IN_PROGRESS | Dual-session repository and fake-provider tests added; CI and device sign-in pending |
-| Identity | Persisted provider mapping is encrypted and account-scoped | IN_PROGRESS | Android Keystore-backed store and Robolectric tests added; CI pending |
-| ModelTeams / TeamDetail | Translate app UID to Supabase UID only after a matching active session | IN_PROGRESS | Repository mapping and fake PostgREST integration test added; CI and live RLS/device checks pending |
+| Identity | Firebase remains the app-facing UID while Supabase receives the same Google ID token | IN_PROGRESS | Dual-session code and 6 passing CI tests; live provider/device sign-in still pending |
+| Identity | Persisted provider mapping is encrypted, account-scoped and excluded from backup | IN_PROGRESS | Keystore-backed store, 2 passing Robolectric tests, and backup-rule exclusions; device/restore validation pending |
+| ModelTeams / TeamDetail | Translate app UID to Supabase UID only after a matching active session | IN_PROGRESS | Fake PostgREST repository test passed; live RLS negative tests and device checks pending |
 | Login | Rendered sign-in, provider configuration and lifecycle verification | BLOCKED | No emulator/device attached; Supabase Google provider setting was not changed or verified |
-| Projects / Applications | Activate Supabase project data source through the same validated identity bridge | TODO | Next migration slice; current CrashRepository still has its Supabase project source disabled |
+| Projects / Applications | Activate Supabase project data source through the same validated identity bridge | TODO | Next migration slice; CrashRepository still has its Supabase project source disabled |
 
 ### Persistent continuity
-- Last area worked: dual-provider Google identity, encrypted subject mapping, and activation of the existing Supabase team adapter without changing the app-facing Firebase UID.
-- Next exact step: inspect this commit's Android CI, APK and lint workflows to terminal status; fix all compile/test/lint failures. Then migrate the CrashRepository project/application path to use the same validated identity mapping and wire `SupabaseProjectDataSource`, retaining Firebase only as the explicitly supported legacy path. Do not change production schema, RLS or Auth settings, and do not close TeamDetail while realtime, usage persistence, live RLS negative tests or device review remain open.
+- Last area worked: dual-provider Google identity, encrypted subject mapping, Supabase team repository UID translation, logout consistency, and backup exclusion.
+- Next exact step: verify CI for the backup/logout hardening commit. Then migrate the CrashRepository project/application path to use the same validated identity mapping and wire `SupabaseProjectDataSource`, retaining Firebase only as the explicitly supported legacy path. Do not change production schema, RLS or Auth settings. Do not close TeamDetail while realtime, usage persistence, live RLS negative tests or device review remain open.
 - Repository AGENTS.md / agents.md files: none found in the inspected main tree.

@@ -81,10 +81,9 @@ class DualSessionAuthRepository(
                 }
 
                 try {
-                    // Remove any previous provider link/session before attempting the new account.
+                    // Remove the previous link first. The Supabase repository replaces its stored
+                    // session atomically during the token exchange; failures clear any old session.
                     identityLinkStore.clear()
-                    supabaseRepository.signOut()
-
                     val supabaseResult = supabaseRepository.signInWithGoogle(idToken)
                     if (supabaseResult.isFailure) {
                         val error = supabaseResult.exceptionOrNull()
@@ -133,8 +132,21 @@ class DualSessionAuthRepository(
         identityMutationMutex.withLock {
             identityMutationInProgress.value = true
             try {
-                clearSecondarySession()
-                firebaseRepository.signOut()
+                try {
+                    identityLinkStore.clear()
+                } catch (error: Exception) {
+                    reportSecondaryFailure(error)
+                }
+                try {
+                    firebaseRepository.signOut()
+                } finally {
+                    // Firebase is the app-facing identity, so clear it before remote token revocation.
+                    try {
+                        supabaseRepository.signOut()
+                    } catch (error: Exception) {
+                        reportSecondaryFailure(error)
+                    }
+                }
             } finally {
                 identityMutationInProgress.value = false
             }

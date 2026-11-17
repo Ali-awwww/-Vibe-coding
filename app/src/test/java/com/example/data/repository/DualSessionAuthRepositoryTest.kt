@@ -61,7 +61,7 @@ class DualSessionAuthRepositoryTest {
         assertTrue(result.isSuccess)
         assertEquals("firebase-uid", repository.getCurrentUserSync()?.id)
         assertNull(repository.getSupabaseUserId("firebase-uid"))
-        assertTrue(supabase.signOutCalls >= 2)
+        assertTrue(supabase.signOutCalls >= 1)
         assertEquals(1, reported.size)
     }
 
@@ -130,6 +130,26 @@ class DualSessionAuthRepositoryTest {
     }
 
     @Test
+    fun supabaseLogoutFailureDoesNotPreventFirebaseLogout() = runTest {
+        val firebase = FakeAuthRepository().apply {
+            nextGoogleUser = user("firebase-uid", "person@example.com")
+        }
+        val supabase = FakeAuthRepository().apply {
+            nextGoogleUser = user("supabase-uid", "person@example.com")
+        }
+        val links = FakeIdentityLinkStore()
+        val repository = DualSessionAuthRepository(firebase, supabase, links)
+
+        assertTrue(repository.signInWithGoogle("google-token").isSuccess)
+        supabase.signOutFailure = IOException("remote token revocation failed")
+
+        repository.signOut()
+
+        assertNull(firebase.getCurrentUserSync())
+        assertNull(repository.getSupabaseUserId("firebase-uid"))
+    }
+
+    @Test
     fun signOutClearsTheLinkAndAttemptsBothProviderLogouts() = runTest {
         val firebase = FakeAuthRepository().apply {
             nextGoogleUser = user("firebase-uid", "person@example.com")
@@ -157,6 +177,7 @@ class DualSessionAuthRepositoryTest {
         var googleSignInHandler: (suspend (String) -> Result<Unit>)? = null
         var lastGoogleToken: String? = null
         var signOutCalls = 0
+        var signOutFailure: Exception? = null
 
         override fun getCurrentUserSync(): UserAccount? = state.value
 
@@ -173,6 +194,7 @@ class DualSessionAuthRepositoryTest {
         override suspend fun signOut() {
             signOutCalls += 1
             state.value = null
+            signOutFailure?.let { throw it }
         }
 
         override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =

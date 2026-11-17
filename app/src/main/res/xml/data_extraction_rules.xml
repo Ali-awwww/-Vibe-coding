@@ -3,6 +3,7 @@
     <cloud-backup>
         <!-- Supabase session ciphertext is bound to the local Android Keystore key. -->
         <exclude domain="sharedpref" path="supabase_secure_session.xml" />
+        <exclude domain="sharedpref" path="supabase_identity_link.xml" />
     </cloud-backup>
     <device-transfer>
         <!-- Do not transfer an encrypted session without its non-exportable Keystore key. -->

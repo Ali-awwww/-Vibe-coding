@@ -1,5 +1,6 @@
 package com.example.data.remote.supabase
 
+import android.annotation.SuppressLint
 import android.content.Context
 import com.example.util.SecurityUtils
 import com.squareup.moshi.Json
@@ -48,6 +49,7 @@ class EncryptedSupabaseIdentityLinkStore(
         return read()?.takeIf { it.firebaseUserId == firebaseUserId }?.supabaseUserId
     }
 
+    @SuppressLint("UseKtx")
     @Synchronized
     override fun write(firebaseUserId: String, supabaseUserId: String, email: String) {
         val normalizedFirebaseId = firebaseUserId.trim()
@@ -55,7 +57,7 @@ class EncryptedSupabaseIdentityLinkStore(
         val normalizedEmail = email.trim().lowercase(Locale.ROOT)
         require(normalizedFirebaseId.isNotBlank()) { "Firebase user ID is required." }
         require(normalizedSupabaseId.isNotBlank()) { "Supabase user ID is required." }
-        require(normalizedEmail.isNotBlank()) { "A verified Google email is required for identity linking." }
+        require(normalizedEmail.isNotBlank()) { "A Google email is required for identity linking." }
 
         val encrypted = encryptSecret(
             adapter.toJson(
@@ -66,13 +68,16 @@ class EncryptedSupabaseIdentityLinkStore(
                 )
             )
         )
+        // A synchronous commit is required before the matching app identity becomes visible.
         check(preferences.edit().putString(SESSION_KEY, encrypted).commit()) {
             "Unable to persist the provider identity link securely."
         }
     }
 
+    @SuppressLint("UseKtx")
     @Synchronized
     override fun clear() {
+        // Synchronous removal prevents a stale provider mapping after account switch or logout.
         check(preferences.edit().remove(SESSION_KEY).commit()) {
             "Unable to clear the provider identity link."
         }

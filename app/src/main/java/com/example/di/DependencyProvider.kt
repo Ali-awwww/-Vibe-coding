@@ -195,7 +195,7 @@ object DependencyProvider {
 
     /**
      * Dedicated Supabase identity/session repository for Supabase data sources.
-     * The app-wide login provider remains unchanged until legacy Firebase feature slices are migrated.
+     * The composite app login establishes this session while retaining Firebase as the app-facing UID.
      */
     fun provideSupabaseAuthRepository(context: Context): AuthRepository {
         val appContext = context.applicationContext
