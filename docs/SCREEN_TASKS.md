@@ -2227,13 +2227,14 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added a repository integration test proving a Firebase UID can safely operate on a Supabase team owned by its separately issued Supabase UID while the presentation model continues to expose the Firebase UID.
 
 ### Verification and evidence
-- GitHub Actions completed successfully on commit `b258110a43b8adc560f928f9f0111cf501d447f4`:
-  - [Android CI](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44194819629): unit tests and Debug APK build/upload succeeded.
-  - [Build & Package APK](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44194819620): unit tests, Debug APK and Release APK builds/uploads succeeded.
-  - [Code Quality](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44194819682): `lintDebug` succeeded.
-- The uploaded JUnit report contains 296 tests, 0 failures, 0 errors and 4 skipped. The new suites passed: DualSessionAuthRepositoryTest (6), SupabaseIdentityLinkStoreTest (2), and AIModelTeamRepositorySupabaseIdentityTest (1).
+- GitHub Actions completed successfully on the dual-session hardening commit `b6615509e7750e67e462a99367b0445b2fdc80e6`:
+  - [Android CI](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44196291948): unit tests and Debug APK build/upload succeeded.
+  - [Build & Package APK](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44196292030): unit tests, Debug APK and Release APK builds/uploads succeeded.
+  - [Code Quality](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44196292321): `lintDebug` succeeded.
+- The uploaded JUnit report contains 297 tests, 0 failures, 0 errors and 4 skipped. The new suites passed: DualSessionAuthRepositoryTest (7), SupabaseIdentityLinkStoreTest (2), and AIModelTeamRepositorySupabaseIdentityTest (1).
+- The earlier hardening commit `ce5db9c` exposed one stale test expectation (the new logout path performs one Supabase revocation rather than two); the assertion was corrected in `b6615509`, and all 297 tests then passed.
 - Debug and Release APK artifacts were uploaded by GitHub Actions; no APK was published or distributed outside the workflow artifacts.
-- The lint HTML report records 195 warnings and no lint errors. Two warnings were on the new store's synchronous `SharedPreferences.commit()`; the follow-up applies a narrow `UseKtx` suppression because durable commit success is checked before exposing/removing an identity link.
+- The lint HTML report records 193 warnings and no lint errors. The two new synchronous-commit `UseKtx` warnings were removed with a narrow suppression because durable commit success is checked before exposing/removing an identity link.
 - This environment still has no local Gradle installation, Android SDK, ADB or emulator. CI compilation/build is verified, but runtime installation, visual review, RTL/LTR device checks and live Google sign-in remain unverified.
 - No live Supabase Auth exchange, production RLS write, schema/policy change, provider-setting change, Firebase change, or secret change was performed. The Supabase skill was not available in the installed skill catalog, so no live Supabase operation was attempted.
 
@@ -2248,5 +2249,34 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### Persistent continuity
 - Last area worked: dual-provider Google identity, encrypted subject mapping, Supabase team repository UID translation, logout consistency, and backup exclusion.
-- Next exact step: verify CI for the backup/logout hardening commit. Then migrate the CrashRepository project/application path to use the same validated identity mapping and wire `SupabaseProjectDataSource`, retaining Firebase only as the explicitly supported legacy path. Do not change production schema, RLS or Auth settings. Do not close TeamDetail while realtime, usage persistence, live RLS negative tests or device review remain open.
+- The dual-session source/tests are verified by CI; the remaining identity gates are real provider configuration, live RLS checks and device sign-in.
+- Current screen task: TeamValidation report correctness. The latest implementation had a concrete false-success label for partially failed or unexecuted models; this batch corrects it and exposes failed/skipped/pending counts.
+- Next exact step after this batch: verify the TeamValidation Compose tests in CI, then continue only with validation checks that can produce real orchestrator evidence. Keep checks without an actual execution/persistence harness SKIPPED. Resume CrashRepository project/application migration only when the required Supabase guidance is available; do not change production schema, RLS or Auth settings.
 - Repository AGENTS.md / agents.md files: none found in the inspected main tree.
+
+## 2026-11-18 — TeamValidation report truthfulness
+
+### Implementation
+- Model outcomes now distinguish full success, partial success, failure, and no execution. A model with zero calls is no longer shown in green as `ناجح (0/0)`.
+- Failed, skipped and pending matrix counts are displayed explicitly rather than leaving them implicit in the passed/total ratio.
+- The model list is described as tested/attempted models, not as successfully connected models.
+- Per-model cost remains labelled unmeasured unless the report carries actual measured cost evidence.
+
+### Regression coverage
+- Added Compose tests for all four model outcomes, failed/skipped/pending counts, and the unmeasured-versus-measured per-model cost label.
+
+### Verification
+- Source changes and tests are committed; CI for this batch is pending.
+- No emulator/device visual verification is available in this environment.
+
+### Criterion status
+| Area | Criterion | State | Evidence / blocker |
+|---|---|---|---|
+| TeamValidation | Model result badges reflect actual success/failure counts | IN_PROGRESS | Compose regression tests added; CI pending |
+| TeamValidation | Failed, skipped and pending checks are visible and never implied to pass | IN_PROGRESS | Explicit count summary added; Compose tests pending CI |
+| TeamValidation | Model cost is shown only when measured | IN_PROGRESS | Existing report-level measurement gate retained; per-model label test added |
+| TeamValidation | Full orchestration, persisted execution and lifecycle checks | BLOCKED | Checks without a real orchestrator/persistence/restart harness remain SKIPPED; no synthetic PASS is introduced |
+
+### Persistent continuity
+- Last area worked: TeamValidation report UI and status semantics.
+- Next exact step: run the new Compose tests and full CI; fix failures before proceeding. Then implement the next independently testable validation/orchestration behavior without converting unavailable checks to PASS.

@@ -68,7 +68,8 @@ fun ValidationReportTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .testTag("validation_report_list"),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(vertical = 12.dp)
     ) {
@@ -176,6 +177,13 @@ fun ValidationReportTab(
                             modifier = Modifier.weight(1f)
                         )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "فاشلة: ${report.failedCount} • متجاوزة: ${report.skippedCount} • معلّقة: ${report.pendingCount}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("validation_non_pass_counts")
+                    )
                 }
             }
         }
@@ -193,7 +201,7 @@ fun ValidationReportTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "النماذج التي تم الاتصال بها فعليًا:",
+                            text = "النماذج التي جرت محاولة استخدامها فعليًا:",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -202,7 +210,7 @@ fun ValidationReportTab(
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
-                                text = "${report.modelsContacted.size} نماذج متصلة",
+                                text = "${report.modelsContacted.size} نماذج مختبرة",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -221,6 +229,19 @@ fun ValidationReportTab(
                     }
 
                     report.modelsContacted.forEach { model ->
+                        val modelCallCount = model.successCount + model.failureCount
+                        val modelStatus = when {
+                            modelCallCount == 0 -> "لم يُختبر"
+                            model.failureCount == 0 -> "ناجح (${model.successCount}/$modelCallCount)"
+                            model.successCount == 0 -> "فشل (${model.successCount}/$modelCallCount)"
+                            else -> "نجاح جزئي (${model.successCount}/$modelCallCount)"
+                        }
+                        val modelStatusColor = when {
+                            modelCallCount == 0 -> MaterialTheme.colorScheme.outline
+                            model.failureCount == 0 -> Color(0xFF2E7D32)
+                            model.successCount == 0 -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.tertiary
+                        }
                         Surface(
                             color = MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(8.dp),
@@ -247,15 +268,17 @@ fun ValidationReportTab(
                                         )
                                     }
                                     Surface(
-                                        color = Color(0xFF2E7D32).copy(alpha = 0.12f),
+                                        color = modelStatusColor.copy(alpha = 0.12f),
                                         shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
-                                            text = "ناجح (${model.successCount}/${model.successCount + model.failureCount})",
+                                            text = modelStatus,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF2E7D32),
+                                            color = modelStatusColor,
                                             fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            modifier = Modifier
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                .testTag("validation_model_status_${model.modelId}")
                                         )
                                     }
                                 }
@@ -279,7 +302,8 @@ fun ValidationReportTab(
                                         },
                                         style = MaterialTheme.typography.labelSmall,
                                         fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.testTag("validation_model_cost_${model.modelId}")
                                     )
                                 }
                             }
