@@ -51,19 +51,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "1053575820530-65g4lpae1n44b8mj1sq599dllcssasig.apps.googleusercontent.com",
+          "client_id": "1053575820530-u3cj33iaepa0nhlj0vau3l9tu0d2o8ur.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.aistudio.crashintelligence.vyfrip",
-            "certificate_hash": "daab686e5a747d03b1749d8ace40f0d7a6ca41b8"
-          }
-        },
-        {
-          "client_id": "1053575820530-s45donchdh15d0spdc96vce2eutosslc.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.aistudio.crashintelligence.vyfrip",
-            "certificate_hash": "2d383706350fb49da0b8370972ea1afc92bf3ef5"
+            "certificate_hash": "e0a7c3933c5c0d8124f3bfd5432042c06fc5703a"
           }
         },
         {
