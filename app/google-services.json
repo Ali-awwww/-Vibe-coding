@@ -59,6 +59,14 @@
           }
         },
         {
+          "client_id": "1053575820530-s45donchdh15d0spdc96vce2eutosslc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.crashintelligence.vyfrip",
+            "certificate_hash": "2d383706350fb49da0b8370972ea1afc92bf3ef5"
+          }
+        },
+        {
           "client_id": "1053575820530-nelpk0t9er5b2h9nhqdilp6ou6auh35p.apps.googleusercontent.com",
           "client_type": 3
         }
