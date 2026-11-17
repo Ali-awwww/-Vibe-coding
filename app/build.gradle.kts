@@ -6,7 +6,12 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
-  alias(libs.plugins.google.services)
+}
+
+// Firebase configuration is environment-specific and is not committed.
+// Apply the Google Services plugin only when app/google-services.json exists.
+if (file("google-services.json").exists()) {
+  apply(plugin = "com.google.gms.google-services")
 }
 
 android {
