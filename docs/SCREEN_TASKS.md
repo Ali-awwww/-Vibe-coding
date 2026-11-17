@@ -2198,7 +2198,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - JUnit artifact 14376935688 contains 285 tests, 0 failures, 0 errors and 4 skipped. Both new Google sign-in tests executed and passed.
 - Debug APK artifact 14375369967 and signed Release APK artifact 14376043228 were uploaded successfully.
 - Lint artifact 14376526477 reports 193 warnings and 0 errors; no lint finding references the changed Supabase Auth files.
-- This follow-up adds an additional regression case ensuring an incomplete token response cannot create a local session; its own CI run is pending.
+- Test follow-up commit `600424c3465ad37e8836be22df1124e987f9eb87` passed Android CI/CD run 44191073093, APK run 44191072816, and Code Quality run 44191072792.
+- Its JUnit artifact 14377410899 contains 286 tests, 0 failures, 0 errors and 4 skipped; the incomplete-session regression test passed.
+- Debug APK artifact 14376033496 and signed Release APK artifact 14376208069 were uploaded successfully.
+- Lint artifact 14375769976 reports 193 warnings and 0 errors.
+- This follow-up adds a serialization regression test asserting the Google grant uses Supabase's exact `provider` and `id_token` JSON fields; its own CI run is pending.
 - No live Supabase Auth request, provider-configuration check, production Auth setting change, device sign-in or Firebase removal was performed.
 
 ### Persistent continuity

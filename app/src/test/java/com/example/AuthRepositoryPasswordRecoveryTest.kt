@@ -17,6 +17,7 @@ import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
 import com.example.auth.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
 import com.example.data.repository.AuthRepositoryImpl
 import com.example.domain.repository.PasswordRecoveryCredentials
+import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
@@ -58,6 +59,19 @@ class AuthRepositoryPasswordRecoveryTest {
         sessionStore.clear()
     }
 
+
+
+    @Test
+    fun googleIdTokenGrantUsesSupabaseWireFieldNames() {
+        val json = Moshi.Builder()
+            .build()
+            .adapter(SupabaseIdTokenGrantRequest::class.java)
+            .toJson(SupabaseIdTokenGrantRequest(provider = "google", idToken = "google-id-token"))
+
+        assertTrue(json.contains("\"provider\":\"google\""))
+        assertTrue(json.contains("\"id_token\":\"google-id-token\""))
+        assertFalse(json.contains("\"idToken\""))
+    }
 
     @Test
     fun googleIdTokenExchangePersistsSupabaseSessionAndPublishesUser() = runTest {
