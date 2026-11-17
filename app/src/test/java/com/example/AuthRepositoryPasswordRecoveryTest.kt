@@ -123,6 +123,32 @@ class AuthRepositoryPasswordRecoveryTest {
         assertNull(repository.getCurrentUserSync())
     }
 
+
+    @Test
+    fun googleIdTokenResponseWithoutCompleteSessionIsRejectedWithoutPersistence() = runTest {
+        val api = object : SupabaseAuthApi by unusedApi() {
+            override suspend fun signInWithIdToken(
+                publishableKey: String,
+                grantType: String,
+                request: SupabaseIdTokenGrantRequest
+            ): Response<SupabaseAuthResponse> = Response.success(
+                SupabaseAuthResponse(
+                    user = SupabaseAuthUser(
+                        id = "google-user",
+                        email = "google@example.com"
+                    )
+                )
+            )
+        }
+        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
+
+        val result = repository.signInWithGoogle("google-id-token")
+
+        assertTrue(result.isFailure)
+        assertNull(sessionStore.read())
+        assertNull(repository.getCurrentUserSync())
+    }
+
     @Test
     fun recoveryRequestUsesTheRegisteredAppRedirectAndDoesNotCreateASession() = runTest {
         var requestedEmail: String? = null

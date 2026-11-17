@@ -2193,8 +2193,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added regression tests for the Google token request shape, session persistence/current-user publication, and blank-token rejection.
 - This enables the Supabase repository path but does not switch the Login UI or app-wide auth provider. The Supabase Google provider must be enabled/configured with the matching Google client ID; its production setting was not inspected or changed.
 
-### Verification for this implementation
-- The new Google auth tests are committed with the API/model/repository changes. GitHub Actions for this commit are pending; do not mark these tests PASS until Android CI, APK and lint reach terminal success.
+### Verification for the Google ID-token implementation commit
+- Commit `7b7d2aafd44deaf44a748ba4901c36abf72d1a02` passed all three workflows: Android CI/CD run 44190056502, APK run 44190056372, and Code Quality run 44190056397.
+- JUnit artifact 14376935688 contains 285 tests, 0 failures, 0 errors and 4 skipped. Both new Google sign-in tests executed and passed.
+- Debug APK artifact 14375369967 and signed Release APK artifact 14376043228 were uploaded successfully.
+- Lint artifact 14376526477 reports 193 warnings and 0 errors; no lint finding references the changed Supabase Auth files.
+- This follow-up adds an additional regression case ensuring an incomplete token response cannot create a local session; its own CI run is pending.
 - No live Supabase Auth request, provider-configuration check, production Auth setting change, device sign-in or Firebase removal was performed.
 
 ### Persistent continuity
