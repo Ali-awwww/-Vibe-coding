@@ -32,6 +32,7 @@ android {
   val releaseStorePassword = System.getenv("STORE_PASSWORD")
   val releaseKeyAlias = System.getenv("KEY_ALIAS")
   val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+  val releaseStoreType = System.getenv("KEYSTORE_TYPE")
   val releaseSigningConfigured = listOf(
     releaseKeystorePath,
     releaseStorePassword,
@@ -61,6 +62,7 @@ android {
         storePassword = requireNotNull(releaseStorePassword)
         keyAlias = requireNotNull(releaseKeyAlias)
         keyPassword = requireNotNull(releaseKeyPassword)
+        if (!releaseStoreType.isNullOrBlank()) storeType = releaseStoreType
       }
     }
   }
