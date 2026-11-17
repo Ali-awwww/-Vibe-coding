@@ -282,6 +282,11 @@
     <string name="auth_diag_copied">Copied</string>
     <string name="auth_diag_code_label">Code</string>
     <string name="auth_diag_exception_label">Exception</string>
+    <string name="auth_diag_type_label">Credential Type</string>
+    <string name="auth_diag_detail_label">Detail</string>
+    <string name="auth_diag_package_label">Package</string>
+    <string name="auth_diag_sha1_label">Signing SHA-1</string>
+    <string name="auth_diag_gms_label">Play Services</string>
     <string name="auth_diag_host_label">Host</string>
     <string name="auth_diag_network_label">Network</string>
     <string name="auth_diag_vpn_label">VPN</string>

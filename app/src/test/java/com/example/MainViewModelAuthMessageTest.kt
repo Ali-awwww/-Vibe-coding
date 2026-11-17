@@ -1,5 +1,6 @@
 package com.example
 
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
@@ -244,6 +245,42 @@ class MainViewModelAuthMessageTest {
         assertEquals(400, state.diagnostic?.httpStatusCode)
         assertFalse(state.toString().contains("raw invalid login credentials"))
         assertTrue(state.diagnostic?.exceptionType == "SupabaseHttpException")
+    }
+
+    @Test
+    fun credentialCancellationIncludesCredentialDetailAndSigningTelemetry() = runMainViewModelTest {
+        val repository = RecordingAuthRepository()
+        val viewModel = MainViewModel(repository) {
+            AuthNetworkSnapshot(
+                endpointHost = "firebaseauth.googleapis.com",
+                vpnActive = false,
+                networkValidated = true,
+                transportSummary = "Wi-Fi",
+                appPackageName = "com.aistudio.crashintelligence.vyfrip",
+                signingSha1 = "DA:AB:68:6E:5A:74:7D:03:B1:74:9D:8A:CE:40:F0:D7:A6:CA:41:B8",
+                playServicesStatus = "AVAILABLE"
+            )
+        }
+
+        viewModel.handleGoogleSignInFailure(
+            GetCredentialCancellationException("activity is cancelled by the user.")
+        )
+
+        val state = viewModel.actionState.value
+        assertEquals(AuthUiMessage.GOOGLE_SIGN_IN_CANCELLED, state.errorMessage)
+        assertEquals("GOOGLE_SIGN_IN_CANCELLED", state.diagnostic?.code)
+        assertEquals("GetCredentialCancellationException", state.diagnostic?.exceptionType)
+        assertEquals(
+            "android.credentials.GetCredentialException.TYPE_USER_CANCELED",
+            state.diagnostic?.credentialErrorType
+        )
+        assertEquals("activity is cancelled by the user.", state.diagnostic?.errorDetail)
+        assertEquals("com.aistudio.crashintelligence.vyfrip", state.diagnostic?.appPackageName)
+        assertEquals(
+            "DA:AB:68:6E:5A:74:7D:03:B1:74:9D:8A:CE:40:F0:D7:A6:CA:41:B8",
+            state.diagnostic?.signingSha1
+        )
+        assertEquals("AVAILABLE", state.diagnostic?.playServicesStatus)
     }
 }
 

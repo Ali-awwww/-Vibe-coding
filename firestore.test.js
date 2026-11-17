@@ -7,7 +7,7 @@ const { test, before, after, beforeEach } = require("node:test");
 const fs = require("node:fs");
 
 const PROJECT_ID = process.env.GCP_PROJECT || "demo-no-project";
-const DATABASE_ID = "ai-studio-android-vibecodi-e4471e48-df5a-44fd-adfd-c9cc33662178";
+const DATABASE_ID = "ai-studio-android-vibecodi-b9616c61-b596-4737-827c-f09ede972b66";
 const ALICE_UID = "alice_uid_123";
 const BOB_UID = "bob_uid_456";
 

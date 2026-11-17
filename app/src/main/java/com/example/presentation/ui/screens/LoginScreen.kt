@@ -3,6 +3,7 @@ package com.example.presentation.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -33,10 +35,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import com.example.R
 import com.example.presentation.viewmodel.AuthDiagnosticInfo
@@ -48,6 +52,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 private val SpaceBackground = VibeDesignTokens.Color.SpaceBackground
@@ -159,6 +164,10 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 private fun resolveWebClientId(context: Context): String? {
+    val direct = runCatching { context.getString(R.string.default_web_client_id) }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() }
+    if (direct != null) return direct
     val resId = context.resources.getIdentifier(
         "default_web_client_id",
         "string",
@@ -183,48 +192,62 @@ fun LoginScreen(
     val actionErrorMessage = actionState.errorMessage?.let(::authMessageResource)?.let { stringResource(it) }
     val actionSuccessMessage = actionState.successMessage?.let(::authMessageResource)?.let { stringResource(it) }
 
+    val currentUser by viewModel.currentUser.collectAsState()
+    var silentSignInJob by remember { mutableStateOf<Job?>(null) }
+
     LaunchedEffect(Unit) {
         viewModel.refreshNetworkDiagnostics()
+        if (currentUser != null) return@LaunchedEffect
         val webClientId = resolveWebClientId(context) ?: return@LaunchedEffect
-        val activityContext = context.findActivity() ?: context
-        try {
-            val googleIdOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(true)
-                .setAutoSelectEnabled(true)
-                .setServerClientId(webClientId)
-                .build()
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(googleIdOption)
-                .build()
-            val result = CredentialManager.create(activityContext)
-                .getCredential(request = request, context = activityContext)
-            val credential = result.credential
-            if (credential is CustomCredential &&
-                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-            ) {
-                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                viewModel.signInWithGoogleIdToken(googleIdTokenCredential.idToken) { success ->
-                    if (success) onAuthSuccess()
+        val activityContext = context.findActivity() ?: return@LaunchedEffect
+        val job = coroutineScope.launch {
+            try {
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(true)
+                    .setAutoSelectEnabled(true)
+                    .setServerClientId(webClientId)
+                    .build()
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+                val result = CredentialManager.create(activityContext)
+                    .getCredential(request = request, context = activityContext)
+                val credential = result.credential
+                if (credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    viewModel.signInWithGoogleIdToken(googleIdTokenCredential.idToken) { success ->
+                        if (success) onAuthSuccess()
+                    }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: GetCredentialException) {
+                Log.w("Auth", "Silent Google Sign-In unavailable (${e.type}): ${e.message}", e)
+            } catch (e: Exception) {
+                Log.w("Auth", "Silent Google Sign-In skipped: ${e.message}", e)
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: GetCredentialException) {
-            // Silent auto sign-in found no eligible credential; allow manual tap cleanly.
-        } catch (_: Exception) {
-            // Do not surface noisy startup error before user triggers sign-in.
         }
+        silentSignInJob = job
+        job.join()
     }
 
     val launchGoogleSignIn: () -> Unit = {
         if (!actionState.isLoading) {
+            silentSignInJob?.cancel()
+            silentSignInJob = null
             val webClientId = resolveWebClientId(context)
+            val activityContext = context.findActivity()
             if (webClientId == null) {
                 viewModel.handleGoogleSignInFailure(
                     IllegalStateException("Firebase default_web_client_id is missing.")
                 )
+            } else if (activityContext == null) {
+                viewModel.handleGoogleSignInFailure(
+                    IllegalStateException("Google Sign-In requires an Activity context.")
+                )
             } else {
-                val activityContext = context.findActivity() ?: context
                 viewModel.setAuthLoading(true)
                 coroutineScope.launch {
                     try {
@@ -252,7 +275,11 @@ fun LoginScreen(
                     } catch (cancelled: CancellationException) {
                         viewModel.setAuthLoading(false)
                         throw cancelled
+                    } catch (e: GetCredentialCancellationException) {
+                        Log.w("Auth", "Google Sign-In cancelled (${e.type}): ${e.message}", e)
+                        viewModel.handleGoogleSignInFailure(e)
                     } catch (e: Exception) {
+                        Log.e("Auth", "Google Sign-In failed: ${e.message}", e)
                         viewModel.handleGoogleSignInFailure(e)
                     }
                 }
@@ -623,7 +650,14 @@ private fun AuthDiagnosticPanel(diagnostic: AuthDiagnosticInfo) {
     val summaryText = buildString {
         append("code=${diagnostic.code}")
         append("\nexception=${diagnostic.exceptionType}")
+        diagnostic.credentialErrorType?.let { append("\ntype=$it") }
+        diagnostic.errorDetail?.let { append("\ndetail=$it") }
         diagnostic.httpStatusCode?.let { append("\nhttp=$it") }
+        if (diagnostic.appPackageName.isNotBlank()) {
+            append("\npackage=${diagnostic.appPackageName}")
+        }
+        diagnostic.signingSha1?.let { append("\nsha1=$it") }
+        diagnostic.playServicesStatus?.let { append("\ngms=$it") }
         if (diagnostic.endpointHost.isNotBlank()) {
             append("\nhost=${diagnostic.endpointHost}")
         }
@@ -707,12 +741,27 @@ private fun AuthDiagnosticPanel(diagnostic: AuthDiagnosticInfo) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     DiagnosticLine(stringResource(R.string.auth_diag_code_label), diagnostic.code)
                     DiagnosticLine(stringResource(R.string.auth_diag_exception_label), diagnostic.exceptionType)
+                    diagnostic.credentialErrorType?.let {
+                        DiagnosticLine(stringResource(R.string.auth_diag_type_label), it)
+                    }
+                    diagnostic.errorDetail?.let {
+                        DiagnosticLine(stringResource(R.string.auth_diag_detail_label), it)
+                    }
                     diagnostic.httpStatusCode?.let {
                         DiagnosticLine(stringResource(R.string.auth_diag_http_label), it.toString())
+                    }
+                    if (diagnostic.appPackageName.isNotBlank()) {
+                        DiagnosticLine(stringResource(R.string.auth_diag_package_label), diagnostic.appPackageName)
+                    }
+                    diagnostic.signingSha1?.let {
+                        DiagnosticLine(stringResource(R.string.auth_diag_sha1_label), it)
+                    }
+                    diagnostic.playServicesStatus?.let {
+                        DiagnosticLine(stringResource(R.string.auth_diag_gms_label), it)
                     }
                     if (diagnostic.endpointHost.isNotBlank()) {
                         DiagnosticLine(stringResource(R.string.auth_diag_host_label), diagnostic.endpointHost)
@@ -727,22 +776,24 @@ private fun AuthDiagnosticPanel(diagnostic: AuthDiagnosticInfo) {
 
 @Composable
 private fun DiagnosticLine(label: String, value: String) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Text(
             text = "$label:",
             style = MaterialTheme.typography.labelSmall,
             color = MutedText
         )
-        Text(
-            text = value,
-            fontFamily = JetBrainsMono,
-            style = MaterialTheme.typography.labelMedium,
-            color = VibeDesignTokens.Color.TextPrimary
-        )
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Text(
+                text = value,
+                fontFamily = JetBrainsMono,
+                style = MaterialTheme.typography.labelSmall,
+                color = VibeDesignTokens.Color.TextPrimary,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 

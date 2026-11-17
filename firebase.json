@@ -1,7 +1,7 @@
 {
   "firestore": [
     {
-      "database": "ai-studio-android-vibecodi-e4471e48-df5a-44fd-adfd-c9cc33662178",
+      "database": "ai-studio-android-vibecodi-b9616c61-b596-4737-827c-f09ede972b66",
       "rules": "firestore.rules"
     }
   ],

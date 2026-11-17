@@ -282,6 +282,11 @@
     <string name="auth_diag_copied">تم النسخ</string>
     <string name="auth_diag_code_label">الرمز</string>
     <string name="auth_diag_exception_label">الاستثناء</string>
+    <string name="auth_diag_type_label">نوع الاعتماد</string>
+    <string name="auth_diag_detail_label">التفاصيل</string>
+    <string name="auth_diag_package_label">الحزمة</string>
+    <string name="auth_diag_sha1_label">بصمة SHA-1</string>
+    <string name="auth_diag_gms_label">خدمات Google Play</string>
     <string name="auth_diag_host_label">المضيف</string>
     <string name="auth_diag_network_label">الشبكة</string>
     <string name="auth_diag_vpn_label">VPN</string>

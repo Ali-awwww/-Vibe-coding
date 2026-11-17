@@ -68,7 +68,10 @@ data class AuthNetworkSnapshot(
     val endpointHost: String = "",
     val vpnActive: Boolean? = null,
     val networkValidated: Boolean? = null,
-    val transportSummary: String? = null
+    val transportSummary: String? = null,
+    val appPackageName: String = "",
+    val signingSha1: String? = null,
+    val playServicesStatus: String? = null
 )
 
 data class AuthDiagnosticInfo(
@@ -78,7 +81,12 @@ data class AuthDiagnosticInfo(
     val vpnActive: Boolean? = null,
     val networkValidated: Boolean? = null,
     val transportSummary: String? = null,
-    val httpStatusCode: Int? = null
+    val httpStatusCode: Int? = null,
+    val appPackageName: String = "",
+    val signingSha1: String? = null,
+    val playServicesStatus: String? = null,
+    val credentialErrorType: String? = null,
+    val errorDetail: String? = null
 )
 
 data class AuthActionState(
@@ -258,6 +266,19 @@ class MainViewModel(
 
         val resolvedHost = unconfigured?.endpointHost?.takeIf(String::isNotBlank)
             ?: snapshot.endpointHost
+        val credentialException = credentialCancelled ?: noCredential ?: credentialError
+        val credentialErrorType = credentialException?.type?.takeIf(String::isNotBlank)
+        val sdkDetailException: Throwable? = when {
+            credentialException != null -> credentialException
+            firebaseAuthError != null -> firebaseAuthError
+            firebaseNetworkError != null -> firebaseNetworkError
+            else -> null
+        }
+        val errorDetail = sdkDetailException?.message
+            ?.replace(Regex("\\s+"), " ")
+            ?.trim()
+            ?.take(220)
+            ?.takeIf(String::isNotBlank)
 
         return AuthActionState(
             isLoading = false,
@@ -269,7 +290,12 @@ class MainViewModel(
                 vpnActive = snapshot.vpnActive,
                 networkValidated = snapshot.networkValidated,
                 transportSummary = snapshot.transportSummary,
-                httpStatusCode = httpError?.statusCode
+                httpStatusCode = httpError?.statusCode,
+                appPackageName = snapshot.appPackageName,
+                signingSha1 = snapshot.signingSha1,
+                playServicesStatus = snapshot.playServicesStatus,
+                credentialErrorType = credentialErrorType,
+                errorDetail = errorDetail
             )
         )
     }

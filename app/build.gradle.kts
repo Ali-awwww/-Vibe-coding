@@ -1,4 +1,5 @@
 import java.time.Duration
+import java.util.Base64
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -33,7 +34,22 @@ android {
     releaseKeyPassword
   ).all { !it.isNullOrBlank() }
 
+  val rootDebugKeystore = rootProject.file("debug.keystore")
+  val rootDebugKeystoreBase64 = rootProject.file("debug.keystore.base64")
+  if (!rootDebugKeystore.exists() && rootDebugKeystoreBase64.exists()) {
+    val decodedBytes = Base64.getMimeDecoder().decode(rootDebugKeystoreBase64.readText().trim())
+    rootDebugKeystore.writeBytes(decodedBytes)
+  }
+
   signingConfigs {
+    if (rootDebugKeystore.exists()) {
+      create("debugConfig") {
+        storeFile = rootDebugKeystore
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
+    }
     if (releaseSigningConfigured) {
       create("release") {
         storeFile = file(requireNotNull(releaseKeystorePath))
@@ -53,7 +69,9 @@ android {
       if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
     }
     debug {
-      // Use Android Gradle Plugin's standard debug signing configuration.
+      if (rootDebugKeystore.exists()) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      }
     }
   }
   compileOptions {

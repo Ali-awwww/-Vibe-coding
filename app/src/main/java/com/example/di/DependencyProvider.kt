@@ -18,11 +18,16 @@ import com.example.data.remote.supabase.SupabaseSessionStore
 import com.example.data.remote.*
 import com.example.data.repository.*
 import com.example.domain.repository.*
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 import com.example.presentation.viewmodel.AuthNetworkSnapshot
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import java.security.MessageDigest
 import okhttp3.ConnectionPool
 import okhttp3.Dns
 import okhttp3.OkHttpClient
@@ -181,8 +186,12 @@ object DependencyProvider {
     }
 
     fun inspectAuthNetwork(context: Context): AuthNetworkSnapshot {
+        val appContext = context.applicationContext
+        val packageName = appContext.packageName
+        val signingSha1 = resolveSigningSha1(appContext)
+        val playServicesStatus = resolvePlayServicesStatus(appContext)
         return runCatching {
-            val cm = context.applicationContext
+            val cm = appContext
                 .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             val network = cm?.activeNetwork
             val caps = if (network != null) cm.getNetworkCapabilities(network) else null
@@ -191,7 +200,10 @@ object DependencyProvider {
                     endpointHost = FIREBASE_AUTH_ENDPOINT_HOST,
                     vpnActive = false,
                     networkValidated = false,
-                    transportSummary = "No active network"
+                    transportSummary = "No active network",
+                    appPackageName = packageName,
+                    signingSha1 = signingSha1,
+                    playServicesStatus = playServicesStatus
                 )
             } else {
                 val hasVpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
@@ -206,12 +218,62 @@ object DependencyProvider {
                     endpointHost = FIREBASE_AUTH_ENDPOINT_HOST,
                     vpnActive = hasVpn,
                     networkValidated = validated,
-                    transportSummary = transports.ifEmpty { listOf("Other") }.joinToString(" + ")
+                    transportSummary = transports.ifEmpty { listOf("Other") }.joinToString(" + "),
+                    appPackageName = packageName,
+                    signingSha1 = signingSha1,
+                    playServicesStatus = playServicesStatus
                 )
             }
         }.getOrElse {
-            AuthNetworkSnapshot(endpointHost = FIREBASE_AUTH_ENDPOINT_HOST)
+            AuthNetworkSnapshot(
+                endpointHost = FIREBASE_AUTH_ENDPOINT_HOST,
+                appPackageName = packageName,
+                signingSha1 = signingSha1,
+                playServicesStatus = playServicesStatus
+            )
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveSigningSha1(context: Context): String? {
+        return runCatching {
+            val pm = context.packageManager
+            val certBytes: ByteArray? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val info = pm.getPackageInfo(
+                    context.packageName,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                )
+                val signingInfo = info.signingInfo
+                val signatures = if (signingInfo?.hasMultipleSigners() == true) {
+                    signingInfo.apkContentsSigners
+                } else {
+                    signingInfo?.signingCertificateHistory
+                }
+                signatures?.firstOrNull()?.toByteArray()
+            } else {
+                val info = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+                info.signatures?.firstOrNull()?.toByteArray()
+            }
+            certBytes?.let { bytes ->
+                MessageDigest.getInstance("SHA-1")
+                    .digest(bytes)
+                    .joinToString(":") { byte -> "%02X".format(byte) }
+            }
+        }.getOrNull()
+    }
+
+    private fun resolvePlayServicesStatus(context: Context): String? {
+        return runCatching {
+            when (val status = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)) {
+                ConnectionResult.SUCCESS -> "AVAILABLE"
+                ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED -> "UPDATE_REQUIRED"
+                ConnectionResult.SERVICE_UPDATING -> "UPDATING"
+                ConnectionResult.SERVICE_MISSING -> "MISSING"
+                ConnectionResult.SERVICE_DISABLED -> "DISABLED"
+                ConnectionResult.SERVICE_INVALID -> "INVALID"
+                else -> "CODE_$status"
+            }
+        }.getOrNull()
     }
 
     fun provideSupabaseProjectDataSource(context: Context): SupabaseProjectDataSource {

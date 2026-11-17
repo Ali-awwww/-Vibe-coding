@@ -25,6 +25,20 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
+      - name: Configure Unified Debug Signing
+        env:
+          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          python3 - <<'PY'
+          import base64, os, pathlib
+          ks_path = pathlib.Path("debug.keystore")
+          b64_secret = os.environ.get("ANDROID_DEBUG_KEYSTORE_BASE64", "").strip()
+          if b64_secret:
+              ks_path.write_bytes(base64.b64decode(b64_secret))
+          elif pathlib.Path("debug.keystore.base64").exists():
+              ks_path.write_bytes(base64.b64decode(pathlib.Path("debug.keystore.base64").read_text().strip()))
+          PY
+
       - name: Run Unit Tests
         run: gradle testDebugUnitTest --no-daemon
 
@@ -37,3 +51,7 @@ jobs:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
+
+      - name: Clean Up Debug Keystore
+        if: always()
+        run: rm -f "debug.keystore"
