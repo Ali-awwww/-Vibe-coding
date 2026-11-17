@@ -2100,3 +2100,34 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - APK run `43977660816` reached terminal SUCCESS, but its `assembleRelease` step internally failed with `UnrecoverableKeyException / BadPaddingException` while reading alias `vibe_release_key`. The following upload reported no release APK files. The workflow's `continue-on-error: true` masked this failure; only the Debug APK and unit-test reports were actually uploaded.
 - The signing payload is not modified. The workflow now validates the keystore, alias, and private-key password with `keytool` before exporting signing variables. Invalid or absent signing credentials select an explicitly named unsigned release artifact; a real release build failure is no longer suppressed, and artifact upload fails if no APK exists.
 - This is a workflow-only fix and does not change GitHub secrets, Android signing credentials, production services, or release distribution.
+
+## 2026-11-18 — Supabase team/execution adapter and fail-closed persistence
+
+### Implementation
+- Added an authenticated PostgREST contract for public.model_teams and public.team_executions, using the dedicated Vibe Coding Supabase session and publishable key only.
+- Added owner-scoped team reads/updates/deletes, owner-bound creates, user-scoped execution reads, and execution upserts. Requests include explicit owner_id / user_id filters as defense in depth; the user's JWT remains the authorization credential and RLS remains authoritative.
+- Added JSONB mapping for team members/settings/governance and execution steps, memory, messages, usage summaries, failovers, estimation, attachments and consensus evidence.
+- Added a separate Supabase auth/session provider for Supabase data sources without changing the app-wide Firebase login provider during this migration slice. The team repository selects Supabase only when the current app identity matches a valid stored Supabase session; a mismatched stored Supabase session is rejected rather than silently falling back to another account.
+- Removed production in-memory success fallbacks for team and execution CRUD. Local in-memory state remains available only when enableRemoteBackend=false (test/local mode). Team usage records remain Room-local because the inspected public schema has no team_usage_records table.
+- No production DDL/DML, Auth configuration, RLS, storage policy, Firebase configuration, or secret was changed.
+
+### Tests and verification
+- Added SupabaseTeamDataSourceTest coverage for owner scoping, nested JSONB mapping, owner spoof rejection, authenticated execution upsert, expired-session rejection and delete-without-representation failure.
+- Added a repository regression test proving production reads/writes do not report an in-memory team as persisted when no remote backend is available.
+- GitHub Actions for the implementation commit are pending at commit time; the next run must inspect Android CI, APK build and lint to terminal state before changing these states to PASS.
+- No local Gradle/Android SDK, emulator/device, live Supabase write, or live RLS negative-authorization test is claimed.
+- The live schema is read-only and has model_teams / team_executions with RLS enabled. The initial table-creation migration remains absent from supabase/migrations; only the later index migration is version-controlled. This source/schema drift remains open and must be reconciled with the exact deployed migration and policies before treating fresh-environment provisioning as reproducible.
+
+### Criterion status
+| Screen / area | Criterion | State | Evidence / blocker |
+|---|---|---|---|
+| TeamDetail | Supabase team CRUD and owner-scoped execution persistence adapter | IN_PROGRESS | Adapter and contract tests added; CI pending; production activation depends on Supabase Auth becoming the app-wide identity |
+| TeamDetail | Cross-device realtime team/execution updates | BLOCKED | Current adapter fetches remote state and updates in-process flows after local mutations; no Supabase Realtime subscription is wired |
+| TeamUsage | Persisted usage ledger and RLS verification | BLOCKED | No public.team_usage_records table in the inspected schema; Room remains the local ledger |
+| TeamDetail / TeamUsage | Live negative authorization tests | BLOCKED | Production RLS is read-only; no disposable Supabase test project/branch was created |
+| TeamDetail | Rendered RTL/LTR, device sizes and accessibility review | BLOCKED | No Android emulator/device is attached to this automation environment |
+
+### Persistent continuity
+- Last area worked: Supabase team/execution PostgREST adapter and production persistence fail-closed behavior.
+- Next exact step: inspect the implementation commit's Android CI, APK build and lint runs to terminal state; fix any compile/test/lint failures. Then map all current Firebase-backed team/auth call sites and migrate the app-wide Auth provider only with a compatibility plan for the remaining Firebase data slices. Do not claim team screens complete while auth activation, realtime, usage persistence, RLS negative tests or device review remain open.
+

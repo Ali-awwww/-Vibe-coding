@@ -195,4 +195,29 @@ class AIModelTeamRepositoryImplTest {
         assertEquals(1, userARecords.size)
         assertEquals("u-1", userARecords.first().id)
     }
+    @Test
+    fun productionModeDoesNotReportAnInMemoryTeamAsSavedWithoutARemoteBackend() = runTest {
+        activeUserId = "user-a"
+        val productionRepository = AIModelTeamRepositoryImpl(
+            context = context,
+            authRepository = null,
+            firestore = null,
+            firebaseAuth = null,
+            aiProviderDaoOverride = aiProviderDao,
+            currentUserIdProvider = { activeUserId },
+            enableRemoteBackend = true
+        )
+
+        val result = productionRepository.createTeam(
+            ModelTeam(id = "not-persisted", name = "Must fail", ownerId = "user-a")
+        )
+
+        assertTrue("A production write without a remote backend must fail", result.isFailure)
+        assertNotNull("The failed write must expose a persistence error", result.exceptionOrNull())
+
+        val readResult = runCatching { productionRepository.getTeams("user-a").first() }
+        assertTrue("Production reads must not silently return the in-memory cache", readResult.isFailure)
+    }
+
+
 }

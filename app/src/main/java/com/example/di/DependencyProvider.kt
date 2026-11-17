@@ -15,6 +15,8 @@ import com.example.data.remote.supabase.SupabaseConfig
 import com.example.data.remote.supabase.SupabasePostgrestApi
 import com.example.data.remote.supabase.SupabaseProjectDataSource
 import com.example.data.remote.supabase.SupabaseSessionStore
+import com.example.data.remote.supabase.SupabaseTeamDataSource
+import com.example.data.remote.supabase.SupabaseTeamPostgrestApi
 import com.example.data.remote.*
 import com.example.data.repository.*
 import com.example.domain.repository.*
@@ -52,6 +54,9 @@ object DependencyProvider {
     private var firestore: FirebaseFirestore? = null
     private var firebaseAuth: FirebaseAuth? = null
     private var supabaseProjectDataSource: SupabaseProjectDataSource? = null
+    private var supabaseSessionStore: SupabaseSessionStore? = null
+    private var supabaseAuthRepository: AuthRepository? = null
+    private var supabaseTeamDataSource: SupabaseTeamDataSource? = null
 
     private fun getFirestore(context: Context): FirebaseFirestore? {
         return firestore ?: synchronized(this) {
@@ -143,6 +148,7 @@ object DependencyProvider {
 
     private val supabaseAuthApi = supabaseRetrofit.create(SupabaseAuthApi::class.java)
     private val supabasePostgrestApi = supabaseRetrofit.create(SupabasePostgrestApi::class.java)
+    private val supabaseTeamPostgrestApi = supabaseRetrofit.create(SupabaseTeamPostgrestApi::class.java)
 
     private val openRouterRetrofit = Retrofit.Builder()
         .baseUrl("https://openrouter.ai/api/v1/")
@@ -173,6 +179,33 @@ object DependencyProvider {
     }
 
     fun provideDatabase(context: Context): AppDatabase = getDatabase(context)
+
+    private fun getSupabaseSessionStore(context: Context): SupabaseSessionStore {
+        val appContext = context.applicationContext
+        return supabaseSessionStore ?: synchronized(this) {
+            supabaseSessionStore ?: SupabaseSessionStore(appContext).also {
+                supabaseSessionStore = it
+            }
+        }
+    }
+
+    /**
+     * Dedicated Supabase identity/session repository for Supabase data sources.
+     * The app-wide login provider remains unchanged until legacy Firebase feature slices are migrated.
+     */
+    fun provideSupabaseAuthRepository(context: Context): AuthRepository {
+        val appContext = context.applicationContext
+        return supabaseAuthRepository ?: synchronized(this) {
+            supabaseAuthRepository ?: AuthRepositoryImpl(
+                api = supabaseAuthApi,
+                publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
+                sessionStore = getSupabaseSessionStore(appContext),
+                endpointHost = BuildConfig.SUPABASE_URL.substringAfter("://").substringBefore("/")
+                    .ifBlank { "unconfigured" },
+                isBackendConfigured = { SupabaseConfig.isConfigured() }
+            ).also { supabaseAuthRepository = it }
+        }
+    }
 
     fun provideAuthRepository(context: Context): AuthRepository {
         val appContext = context.applicationContext
@@ -280,10 +313,21 @@ object DependencyProvider {
         return supabaseProjectDataSource ?: synchronized(this) {
             supabaseProjectDataSource ?: SupabaseProjectDataSource(
                 api = supabasePostgrestApi,
-                authRepository = provideAuthRepository(context),
-                sessionStore = SupabaseSessionStore(context.applicationContext),
+                authRepository = provideSupabaseAuthRepository(context),
+                sessionStore = getSupabaseSessionStore(context),
                 publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
             ).also { supabaseProjectDataSource = it }
+        }
+    }
+
+    fun provideSupabaseTeamDataSource(context: Context): SupabaseTeamDataSource {
+        return supabaseTeamDataSource ?: synchronized(this) {
+            supabaseTeamDataSource ?: SupabaseTeamDataSource(
+                api = supabaseTeamPostgrestApi,
+                authRepository = provideSupabaseAuthRepository(context),
+                sessionStore = getSupabaseSessionStore(context),
+                publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
+            ).also { supabaseTeamDataSource = it }
         }
     }
 
@@ -320,7 +364,8 @@ object DependencyProvider {
             authRepository = provideAuthRepository(context),
             firestore = getFirestore(context),
             firebaseAuth = getFirebaseAuth(context),
-            aiProviderDaoOverride = getDatabase(context).aiProviderDao()
+            aiProviderDaoOverride = getDatabase(context).aiProviderDao(),
+            supabaseTeamDataSource = provideSupabaseTeamDataSource(context)
         ).also { modelTeamRepository = it }
     }
 
