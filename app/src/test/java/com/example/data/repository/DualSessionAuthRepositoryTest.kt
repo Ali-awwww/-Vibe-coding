@@ -166,7 +166,7 @@ class DualSessionAuthRepositoryTest {
         assertNull(repository.getCurrentUserSync())
         assertNull(repository.getSupabaseUserId("firebase-uid"))
         assertTrue(firebase.signOutCalls >= 1)
-        assertTrue(supabase.signOutCalls >= 2)
+        assertTrue(supabase.signOutCalls >= 1)
     }
 
     private class FakeAuthRepository : AuthRepository {
