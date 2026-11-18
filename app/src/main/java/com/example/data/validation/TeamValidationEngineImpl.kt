@@ -1,5 +1,7 @@
 package com.example.data.validation
 
+import com.example.data.governance.TeamGovernanceEngineImpl
+import com.example.domain.governance.TeamGovernanceException
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
 import com.example.domain.repository.AIModelTeamRepository
@@ -404,6 +406,135 @@ class TeamValidationEngineImpl(
                         durationMs = elapsed(startTime),
                         evidence = "Persisted and re-read the leader/member relationship on a temporary team, then removed the team. No model was invoked.",
                         modelsInvolved = listOf(leader.name)
+                    )
+                }
+
+
+                15 -> {
+                    val failedMember = TeamMember(
+                        id = validationId("rate-limited-member"),
+                        name = "Rate-limit validation member",
+                        modelId = "paid-model",
+                        role = TeamRole.SENIOR_DEVELOPER
+                    )
+                    val team = ModelTeam(
+                        id = validationId("rate-limit-team"),
+                        name = "Rate-limit fallback fixture",
+                        ownerId = userId,
+                        members = listOf(failedMember),
+                        leaderMemberId = failedMember.id,
+                        governance = TeamGovernanceSettings(
+                            freeOnly = true,
+                            autoFallbackToFree = true
+                        )
+                    )
+                    val paidModel = AIModel(
+                        id = "paid-model",
+                        providerId = "validation-provider",
+                        apiId = "paid-model",
+                        name = "Paid validation model",
+                        isFree = false,
+                        inputPricePer1M = 1.0,
+                        outputPricePer1M = 1.0
+                    )
+                    val freeModel = AIModel(
+                        id = "free-model",
+                        providerId = "validation-provider",
+                        apiId = "openrouter/free",
+                        name = "Free fallback validation model",
+                        isFree = true,
+                        category = AIModelCategory.FREE
+                    )
+                    val failover = TeamGovernanceEngineImpl(teamRepository)
+                        .handleQuotaExhaustion(
+                            userId = userId,
+                            team = team,
+                            failedMember = failedMember,
+                            error = IllegalStateException("HTTP 429 Too Many Requests"),
+                            availableModels = listOf(paidModel, freeModel)
+                        )
+                        .getOrThrow()
+                    check(failover.replacementModel.id == freeModel.id) {
+                        "A controlled HTTP 429 did not select the available free fallback."
+                    }
+                    check(failover.failoverEvent.originalModelId == paidModel.id)
+                    check(failover.failoverEvent.replacementModelId == freeModel.id)
+                    check(failover.failoverEvent.isFree)
+
+                    base.copy(
+                        status = ValidationStatus.PASSED,
+                        durationMs = elapsed(startTime),
+                        evidence = "Controlled HTTP 429 fixture: TeamGovernanceEngineImpl selected the available free fallback and produced a failover event linking the failed paid model to the free replacement. No provider request or paid inference was sent.",
+                        modelsInvolved = listOf("TeamGovernanceEngineImpl", "Controlled HTTP 429 fixture")
+                    )
+                }
+
+                17 -> {
+                    val member = TeamMember(
+                        id = validationId("free-only-member"),
+                        name = "Free-only validation member",
+                        modelId = "paid-model",
+                        role = TeamRole.TEAM_LEADER
+                    )
+                    val team = ModelTeam(
+                        id = validationId("free-only-team"),
+                        name = "Free-only guard fixture",
+                        ownerId = userId,
+                        members = listOf(member),
+                        leaderMemberId = member.id,
+                        governance = TeamGovernanceSettings(freeOnly = true)
+                    )
+                    val execution = TeamExecution(
+                        id = validationId("free-only-execution"),
+                        teamId = team.id,
+                        userId = userId,
+                        prompt = "Verify Free Only blocks paid inference."
+                    )
+                    val guard = TeamGovernanceEngineImpl(teamRepository)
+                    val paidModel = AIModel(
+                        id = "paid-model",
+                        providerId = "validation-provider",
+                        apiId = "paid-model",
+                        name = "Paid validation model",
+                        isFree = false,
+                        inputPricePer1M = 1.0,
+                        outputPricePer1M = 1.0
+                    )
+                    val paidDecision = guard.validateMemberCall(
+                        team,
+                        member,
+                        execution,
+                        paidModel
+                    )
+                    check(paidDecision.isFailure &&
+                        paidDecision.exceptionOrNull() is TeamGovernanceException.PaidModelBlocked
+                    ) {
+                        "Free Only did not reject the paid model before inference."
+                    }
+                    val freeModel = AIModel(
+                        id = "free-model",
+                        providerId = "validation-provider",
+                        apiId = "free-model",
+                        name = "Free validation model",
+                        isFree = true,
+                        category = AIModelCategory.FREE
+                    )
+                    check(
+                        guard.validateMemberCall(
+                            team,
+                            member.copy(modelId = freeModel.id),
+                            execution,
+                            freeModel
+                        ).isSuccess
+                    ) {
+                        "Free Only rejected a zero-priced free model."
+                    }
+
+                    base.copy(
+                        status = ValidationStatus.PASSED,
+                        durationMs = elapsed(startTime),
+                        evidence = "TeamGovernanceEngineImpl rejected a paid model with PaidModelBlocked and accepted a zero-priced free model before inference. This controlled in-memory guard test sent no provider request.",
+                        modelsInvolved = listOf("TeamGovernanceEngineImpl", "In-memory paid/free model fixture")
                     )
                 }
 

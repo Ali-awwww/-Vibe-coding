@@ -28,9 +28,9 @@ class TeamValidationEngineImplTest {
         assertFalse(finalProgress.isRunning)
         assertTrue(teams.records.isEmpty())
         assertTrue(providers.records.isEmpty())
-        assertEquals(6, finalProgress.summaryReport?.passedCount)
-        assertEquals(14, finalProgress.summaryReport?.skippedCount)
-        assertFalse(finalProgress.summaryReport?.isFreeOnlyProtected ?: true)
+        assertEquals(8, finalProgress.summaryReport?.passedCount)
+        assertEquals(12, finalProgress.summaryReport?.skippedCount)
+        assertTrue(finalProgress.summaryReport?.isFreeOnlyProtected == true)
         assertTrue(finalProgress.summaryReport?.userKeyIsolationVerified == true)
         assertFalse(finalProgress.summaryReport?.backendUserIsolationVerified ?: true)
         assertFalse(finalProgress.summaryReport?.actualCostMeasured ?: true)
@@ -38,10 +38,10 @@ class TeamValidationEngineImplTest {
         assertTrue(finalProgress.summaryReport?.modelsContacted.isNullOrEmpty())
 
         val results = finalProgress.items.associateBy { it.id }
-        listOf(1, 2, 3, 5, 6, 20).forEach { id ->
+        listOf(1, 2, 3, 5, 6, 15, 17, 20).forEach { id ->
             assertEquals("test $id", ValidationStatus.PASSED, results[id]?.status)
         }
-        (4..19).filter { it !in setOf(5, 6) }.forEach { id ->
+        (4..19).filter { it !in setOf(5, 6, 15, 17) }.forEach { id ->
             assertEquals("test $id", ValidationStatus.SKIPPED, results[id]?.status)
             assertNotNull("test $id must explain why it was skipped", results[id]?.errorMessage)
         }
@@ -80,6 +80,72 @@ class TeamValidationEngineImplTest {
 
         assertEquals(ValidationStatus.SKIPPED, result.status)
         assertNotNull(result.errorMessage)
+    }
+
+
+    @Test
+    fun rateLimitFixtureSelectsOnlyTheFreeFallbackWithoutSendingInference() = runTest {
+        val providers = FakeAIModelRepository()
+        val result = engine(providers, FakeAIModelTeamRepository())
+            .runSingleTest("owner-1", 15)
+            .toList()
+            .last()
+
+        assertEquals(ValidationStatus.PASSED, result.status)
+        assertTrue(result.evidence?.contains("HTTP 429") == true)
+        assertTrue(result.evidence?.contains("free fallback") == true)
+        assertEquals(0, providers.inferenceCalls)
+    }
+
+    @Test
+    fun freeOnlyGuardRejectsPaidModelsBeforeAnyProviderRequest() = runTest {
+        val providers = FakeAIModelRepository()
+        val result = engine(providers, FakeAIModelTeamRepository())
+            .runSingleTest("owner-1", 17)
+            .toList()
+            .last()
+
+        assertEquals(ValidationStatus.PASSED, result.status)
+        assertTrue(result.evidence?.contains("PaidModelBlocked") == true)
+        assertEquals(0, providers.inferenceCalls)
+    }
+
+    @Test
+    fun rateLimitFallbackFailsClosedWhenNoFreeCandidateExists() = runTest {
+        val member = com.example.domain.model.TeamMember(
+            id = "member-1",
+            name = "Paid member",
+            modelId = "paid-model"
+        )
+        val team = com.example.domain.model.ModelTeam(
+            id = "team-1",
+            ownerId = "owner-1",
+            members = listOf(member),
+            leaderMemberId = member.id,
+            governance = com.example.domain.model.TeamGovernanceSettings(
+                freeOnly = true,
+                autoFallbackToFree = true
+            )
+        )
+        val paidModel = com.example.domain.model.AIModel(
+            id = "paid-model",
+            name = "Paid model",
+            isFree = false,
+            inputPricePer1M = 1.0,
+            outputPricePer1M = 1.0
+        )
+
+        val result = TeamGovernanceEngineImpl(FakeAIModelTeamRepository())
+            .handleQuotaExhaustion(
+                userId = "owner-1",
+                team = team,
+                failedMember = member,
+                error = IllegalStateException("HTTP 429 Too Many Requests"),
+                availableModels = listOf(paidModel)
+            )
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is TeamGovernanceException.QuotaExhausted)
     }
 
     @Test
@@ -142,6 +208,8 @@ class TeamValidationEngineImplTest {
 
     private class FakeAIModelRepository : AIModelRepository {
         val records = linkedMapOf<String, AIProvider>()
+        var inferenceCalls: Int = 0
+            private set
 
         override fun getProviders(userId: String): Flow<List<AIProvider>> =
             flowOf(records.values.filter { it.userId == userId })
@@ -204,7 +272,10 @@ class TeamValidationEngineImplTest {
             systemInstruction: String?,
             taskId: String?,
             taskType: AITaskType
-        ): Result<String> = Result.success("test response")
+        ): Result<String> {
+            inferenceCalls += 1
+            return Result.success("test response")
+        }
     }
 
     private class FakeAIModelTeamRepository : AIModelTeamRepository {

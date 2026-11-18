@@ -2280,3 +2280,33 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: TeamValidation report UI and status semantics.
 - Next exact step: run the new Compose tests and full CI; fix failures before proceeding. Then implement the next independently testable validation/orchestration behavior without converting unavailable checks to PASS.
+
+
+## 2026-11-19 — TeamValidation quota fallback and Free Only guard probes
+
+### Implementation
+- Replaced the permanently skipped rate-limit failover probe (#15) with a controlled HTTP 429 fixture passed through the production `TeamGovernanceEngineImpl`. The check requires an available free replacement and verifies the failover event links the failed paid model to that free model.
+- Replaced the skipped Free Only probe (#17) with the production pre-inference guard: a paid model must fail with `PaidModelBlocked`, while a zero-priced free model remains eligible.
+- Both probes are explicitly labeled as in-memory fixtures. They make no provider/network request and send no paid inference.
+- The validation suite now has eight locally executable checks; the other twelve remain skipped until their real orchestration, retry/cooldown, usage-ledger and process-recreation harnesses exist.
+
+### Regression coverage
+- Updated full-suite expectations to 8 passed / 12 skipped.
+- Added tests that assert both probes pass without any inference call, and that rate-limit failover fails closed when no free candidate exists.
+
+### Verification
+- Source and regression tests are committed together. GitHub Actions verification is pending; no test pass is claimed yet.
+- No live provider request, Supabase write, or production data mutation was performed.
+
+### Criterion status
+| TeamValidation criterion | State | Evidence / blocker |
+|---|---|---|
+| #15 Model failure and free failover | IN_PROGRESS | Controlled HTTP 429 fixture exercises the production free-fallback selector; CI pending |
+| #17 Free Only pre-inference protection | IN_PROGRESS | Production guard rejects paid and accepts zero-priced free models without inference; CI pending |
+| #16 Rate-limit retry/cooldown | BLOCKED | No deterministic Retry-After/cooldown harness is wired yet; this batch does not claim retry behavior |
+| #7–14, #18–19 | BLOCKED | Require real orchestration, cancellation/restart, persisted usage or process-recreation harnesses; no synthetic PASS is introduced |
+| TeamValidation visual/device gate | BLOCKED | No emulator/device visual evidence is available in this execution environment |
+
+### Persistent continuity
+- Last area worked: TeamValidation controlled quota failover and Free Only pre-inference safety.
+- Next exact step: inspect the three CI workflows for this commit to terminal state and confirm the new validation tests execute. Then add a deterministic rate-limit Retry-After/cooldown policy and tests for #16 without sending real 429 or paid requests. Keep the screen open until its remaining acceptance criteria and rendered RTL/LTR/device checks are verified.
