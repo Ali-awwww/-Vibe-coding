@@ -2447,7 +2447,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - TeamUsageViewModel already has coverage separating confirmed cost from unconfirmed cost and excluding blocked paid attempts from successful usage.
 
 ### Verification boundary
-- This batch's Android CI, APK build and Code Quality runs are pending.
+- First CI attempt for usage commit 94ffe5004d788ef41ceceb04cae051f6d1a00876 failed at Kotlin test compilation because TeamGovernanceEngineImplTest.kt was missing the class-closing brace. The unit tests did not run on that attempt; the failure was a test-source syntax error, not an application-source failure.
+- Added the missing class closure in the correction commit. Android CI, APK and Code Quality reruns are pending.
 - No remote usage table, Supabase schema, RLS policy or production data was changed. The existing TeamUsage ledger remains local Room storage; cross-device/server durability is still unverified.
 - The UI's token totals are estimates, not provider-reported token usage. The UI now labels them accordingly.
 
@@ -2458,4 +2459,4 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### Persistent continuity
 - Last area worked: local usage-ledger integrity and truthful measured-versus-estimated reporting.
-- Next exact step: inspect CI for this usage-ledger commit to terminal status. Then inspect the VibeLivePreviewPanel WebView security boundary; JavaScript is enabled for generated workspace HTML, so verify CSP, navigation restrictions and network access before changing the preview sandbox.
+- Next exact step: inspect CI for the usage-ledger test correction to terminal status. Then inspect the VibeLivePreviewPanel WebView security boundary; JavaScript is enabled for generated workspace HTML, so verify CSP, navigation restrictions and network access before changing the preview sandbox.

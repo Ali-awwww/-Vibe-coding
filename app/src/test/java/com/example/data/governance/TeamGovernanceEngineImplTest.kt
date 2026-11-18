@@ -121,3 +121,4 @@ class TeamGovernanceEngineImplTest {
         name = "Paid model",
         isFree = false
     )
+}
