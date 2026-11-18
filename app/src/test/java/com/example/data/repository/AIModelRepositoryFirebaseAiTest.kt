@@ -225,7 +225,7 @@ class AIModelRepositoryFirebaseAiTest {
             .apply { retryAfter?.let { header("Retry-After", it) } }
             .build()
         val body = "rate limited".toResponseBody("application/json".toMediaType())
-        return HttpException(Response.error(body, rawResponse))
+        return HttpException(Response.error<com.example.data.remote.OpenRouterChatResponse>(body, rawResponse))
     }
 
     @Test
