@@ -1,6 +1,7 @@
 package com.example.data.validation
 
 import com.example.data.governance.TeamGovernanceEngineImpl
+import com.example.data.repository.RateLimitRetryPolicy
 import com.example.domain.governance.TeamGovernanceException
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
@@ -466,6 +467,42 @@ class TeamValidationEngineImpl(
                         durationMs = elapsed(startTime),
                         evidence = "Controlled HTTP 429 fixture: TeamGovernanceEngineImpl selected the available free fallback and produced a failover event linking the failed paid model to the free replacement. No provider request or paid inference was sent.",
                         modelsInvolved = listOf("TeamGovernanceEngineImpl", "Controlled HTTP 429 fixture")
+                    )
+                }
+
+                16 -> {
+                    val policy = RateLimitRetryPolicy()
+                    val now = 1_000_000L
+                    val retryDelay = policy.delayBeforeRetry(
+                        retryAttempt = 1,
+                        retryAfterHeader = "2",
+                        nowMillis = now
+                    )
+                    val exhaustedRetry = policy.delayBeforeRetry(
+                        retryAttempt = 2,
+                        retryAfterHeader = "2",
+                        nowMillis = now
+                    )
+                    val boundedDelay = policy.delayBeforeRetry(
+                        retryAttempt = 1,
+                        retryAfterHeader = "120",
+                        nowMillis = now
+                    )
+                    check(retryDelay == 2_000L) {
+                        "Retry-After seconds were not converted into a millisecond cooldown."
+                    }
+                    check(exhaustedRetry == null) {
+                        "The rate-limit policy allowed more retries than configured."
+                    }
+                    check(boundedDelay == 30_000L) {
+                        "The Retry-After cooldown was not capped at the configured maximum."
+                    }
+
+                    base.copy(
+                        status = ValidationStatus.PASSED,
+                        durationMs = elapsed(startTime),
+                        evidence = "Controlled Retry-After fixture: a 2-second header produced a 2000ms cooldown, the single retry budget was enforced, and a 120-second header was capped at 30000ms. The same policy is used by OpenRouter inference; no provider request was sent by this probe.",
+                        modelsInvolved = listOf("RateLimitRetryPolicy", "Controlled Retry-After fixture")
                     )
                 }
 

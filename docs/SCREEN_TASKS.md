@@ -2310,3 +2310,34 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: TeamValidation controlled quota failover and Free Only pre-inference safety.
 - Next exact step: inspect the three CI workflows for this commit to terminal state and confirm the new validation tests execute. Then add a deterministic rate-limit Retry-After/cooldown policy and tests for #16 without sending real 429 or paid requests. Keep the screen open until its remaining acceptance criteria and rendered RTL/LTR/device checks are verified.
+
+
+## 2026-11-19 — TeamValidation bounded Retry-After cooldown
+
+### Implementation
+- Added a shared bounded `RateLimitRetryPolicy` for OpenRouter HTTP 429 responses. It parses integer-second and RFC-1123 `Retry-After` values, uses a 1-second fallback when the header is missing/invalid, caps waits at 30 seconds, and permits one retry by default.
+- OpenRouter inference now retries the same request once after the calculated cooldown before moving to the existing model failover chain. Coroutine cancellation still propagates; non-429 HTTP errors are not delayed.
+- TeamValidation check #16 exercises the same policy with a controlled header fixture. It verifies the requested wait, retry budget and maximum cooldown without sending a provider request.
+- Checks #15 and #17 remain controlled in-memory probes: #15 verifies the real free-model failover selector; #17 verifies the real Free Only pre-inference guard.
+
+### Regression coverage
+- Added repository integration tests for a 429 followed by a successful retry and for a bounded retry that still fails after the configured attempt limit. The delay function is injected, so tests do not sleep or contact OpenRouter.
+- Updated the full validation suite expectation to 9 passed / 11 skipped.
+
+### Verification
+- The first CI attempt for the previous commit failed Kotlin test compilation because the newly added governance test imports were missing. Commit `17e17e65e5fb13bdb56974349851c0b0e4922a66` added the missing imports; its Android CI, APK and lint reruns were still in progress when this batch was prepared.
+- New Retry-After source and tests are committed with this entry; their CI verification is pending.
+- No live provider request, Supabase write, production data mutation, or real paid inference was performed.
+
+### Criterion status
+| TeamValidation criterion | State | Evidence / blocker |
+|---|---|---|
+| #15 Model failure and free failover | IN_PROGRESS | Controlled HTTP 429 fixture exercises the production free-fallback selector; latest CI rerun pending |
+| #16 Rate-limit retry/cooldown | IN_PROGRESS | Shared policy is wired into OpenRouter inference and tested with injected delay; CI pending |
+| #17 Free Only pre-inference protection | IN_PROGRESS | Production guard rejects paid and accepts zero-priced free models without inference; latest CI rerun pending |
+| #7–14, #18–19 | BLOCKED | Require real orchestration, cancellation/restart, persisted usage or process-recreation harnesses; no synthetic PASS is introduced |
+| TeamValidation visual/device gate | BLOCKED | No emulator/device visual evidence is available in this execution environment |
+
+### Persistent continuity
+- Last area worked: TeamValidation controlled quota failover, Retry-After cooldown and Free Only pre-inference safety.
+- Next exact step: verify CI for the bounded-retry implementation to terminal state and inspect the JUnit report for all three new validation probes plus both repository retry tests. Then continue with the next independently testable TeamValidation criterion; keep the screen open until its remaining real orchestration/persistence and rendered RTL/LTR/device criteria are verified.

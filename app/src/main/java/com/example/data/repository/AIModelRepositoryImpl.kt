@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import retrofit2.HttpException
 import java.io.IOException
@@ -39,7 +40,10 @@ class AIModelRepositoryImpl internal constructor(
     private val encryptSecret: (String) -> String = SecurityUtils::encryptSecret,
     private val decryptSecret: (String) -> String = SecurityUtils::decryptSecret,
     private val enablePlatformFirebaseAi: Boolean = false,
-    private val firebaseAiRunner: (suspend (modelName: String, prompt: String, systemInstruction: String?) -> FirebaseAiGenerationOutput)? = null
+    private val firebaseAiRunner: (suspend (modelName: String, prompt: String, systemInstruction: String?) -> FirebaseAiGenerationOutput)? = null,
+    private val rateLimitRetryPolicy: RateLimitRetryPolicy = RateLimitRetryPolicy(),
+    private val rateLimitDelay: suspend (Long) -> Unit = { delay(it) },
+    private val nowMillis: () -> Long = System::currentTimeMillis
 ) : AIModelRepository {
 
     constructor(
@@ -459,6 +463,27 @@ class AIModelRepositoryImpl internal constructor(
         }
     }
 
+    private suspend fun generateOpenRouterCompletionWithRetry(
+        token: String,
+        request: OpenRouterChatRequest
+    ): OpenRouterChatResponse {
+        var retryAttempt = 0
+        while (true) {
+            try {
+                return openRouterApi.generateCompletion(token, request)
+            } catch (rateLimit: HttpException) {
+                if (rateLimit.code() != 429) throw rateLimit
+                retryAttempt += 1
+                val waitMillis = rateLimitRetryPolicy.delayBeforeRetry(
+                    retryAttempt = retryAttempt,
+                    retryAfterHeader = rateLimit.response()?.headers()?.get("Retry-After"),
+                    nowMillis = nowMillis()
+                ) ?: throw rateLimit
+                rateLimitDelay(waitMillis)
+            }
+        }
+    }
+
     private suspend fun executeInference(
         userId: String,
         model: AIModel,
@@ -519,7 +544,7 @@ class AIModelRepositoryImpl internal constructor(
                 AIProviderType.OPEN_ROUTER -> {
                     val apiKey = provider.apiKey?.let(decryptSecret)
                         ?: throw Exception("API Key missing for provider ${provider.name}")
-                    val response = openRouterApi.generateCompletion(
+                    val response = generateOpenRouterCompletionWithRetry(
                         "Bearer $apiKey",
                         OpenRouterChatRequest(
                             model = model.apiId,

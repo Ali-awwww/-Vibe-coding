@@ -30,8 +30,8 @@ class TeamValidationEngineImplTest {
         assertFalse(finalProgress.isRunning)
         assertTrue(teams.records.isEmpty())
         assertTrue(providers.records.isEmpty())
-        assertEquals(8, finalProgress.summaryReport?.passedCount)
-        assertEquals(12, finalProgress.summaryReport?.skippedCount)
+        assertEquals(9, finalProgress.summaryReport?.passedCount)
+        assertEquals(11, finalProgress.summaryReport?.skippedCount)
         assertTrue(finalProgress.summaryReport?.isFreeOnlyProtected == true)
         assertTrue(finalProgress.summaryReport?.userKeyIsolationVerified == true)
         assertFalse(finalProgress.summaryReport?.backendUserIsolationVerified ?: true)
@@ -40,10 +40,10 @@ class TeamValidationEngineImplTest {
         assertTrue(finalProgress.summaryReport?.modelsContacted.isNullOrEmpty())
 
         val results = finalProgress.items.associateBy { it.id }
-        listOf(1, 2, 3, 5, 6, 15, 17, 20).forEach { id ->
+        listOf(1, 2, 3, 5, 6, 15, 16, 17, 20).forEach { id ->
             assertEquals("test $id", ValidationStatus.PASSED, results[id]?.status)
         }
-        (4..19).filter { it !in setOf(5, 6, 15, 17) }.forEach { id ->
+        (4..19).filter { it !in setOf(5, 6, 15, 16, 17) }.forEach { id ->
             assertEquals("test $id", ValidationStatus.SKIPPED, results[id]?.status)
             assertNotNull("test $id must explain why it was skipped", results[id]?.errorMessage)
         }
@@ -96,6 +96,20 @@ class TeamValidationEngineImplTest {
         assertEquals(ValidationStatus.PASSED, result.status)
         assertTrue(result.evidence?.contains("HTTP 429") == true)
         assertTrue(result.evidence?.contains("free fallback") == true)
+        assertEquals(0, providers.inferenceCalls)
+    }
+
+    @Test
+    fun rateLimitRetryPolicyHonorsRetryAfterAndEnforcesBoundedCooldown() = runTest {
+        val providers = FakeAIModelRepository()
+        val result = engine(providers, FakeAIModelTeamRepository())
+            .runSingleTest("owner-1", 16)
+            .toList()
+            .last()
+
+        assertEquals(ValidationStatus.PASSED, result.status)
+        assertTrue(result.evidence?.contains("2000ms") == true)
+        assertTrue(result.evidence?.contains("30000ms") == true)
         assertEquals(0, providers.inferenceCalls)
     }
 
