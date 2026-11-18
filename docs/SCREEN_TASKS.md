@@ -2350,3 +2350,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The earlier `f8a2f1be` run also exposed missing imports in the new test file; commit `17e17e65` added them. Subsequent Retry-After changes add the shared policy import and explicit Retrofit response type.
 - The latest CI runs for the bounded Retry-After implementation and this regression-test correction are pending. No pass is claimed until the final run completes.
 - Next exact step: inspect the newest Android CI/CD, APK and Code Quality runs to terminal state; use the JUnit report to confirm the Free Only, quota failover and Retry-After tests executed. Fix any remaining compile/test/lint failure before proceeding.
+
+
+## 2026-11-19 — Retry-After compile correction
+
+- CI for the bounded-retry change exposed a Kotlin compile error: `AIModelRepositoryImpl` used the new `OpenRouterChatResponse` return type without importing it. This caused the downstream `choices` and `usage` type-resolution errors. Added the missing import.
+- The #17 end-to-end test still expected `SKIPPED` after the production guard was implemented; commit `3fd96e43162c5c800eaa99653efa6fa530de1296` updates it to assert `PASSED` and the actual `PaidModelBlocked` evidence.
+- The bounded-retry integration test now specifies the Retrofit error response type explicitly. Latest full CI for the combined fixes is pending; no build or test pass is claimed.
+- Next exact step: monitor the newest main-head workflows, inspect complete job logs and JUnit results, and correct any remaining compile, test or lint issues.
