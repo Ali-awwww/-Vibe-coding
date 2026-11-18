@@ -386,62 +386,121 @@ class TeamChatViewModel(
     }
 
     fun pauseTeam() {
-        val execId = _uiState.value.currentExecution?.id ?: return
+        val execution = _uiState.value.currentExecution ?: return
+        if (execution.status != ExecutionStatus.EXECUTING) return
+
         viewModelScope.launch {
-            teamOrchestrator.pauseExecution(execId)
-            _uiState.update { it.copy(isPaused = true, isExecuting = false, statusMessage = "تم إيقاف عمل الفريق مؤقتًا") }
-            stopTimer()
+            try {
+                teamOrchestrator.pauseExecution(execution.id)
+                _uiState.update { current ->
+                    if (current.currentExecution?.id != execution.id) {
+                        current
+                    } else {
+                        current.copy(
+                            currentExecution = current.currentExecution?.copy(status = ExecutionStatus.PAUSED),
+                            isPaused = true,
+                            isExecuting = false,
+                            statusMessage = "تم طلب الإيقاف المؤقت؛ ستكتمل الخطوة الجارية أولاً",
+                            error = null
+                        )
+                    }
+                }
+                stopTimer()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _uiState.update { it.copy(error = error.message ?: "تعذر إيقاف التنفيذ مؤقتًا.") }
+            }
         }
     }
 
     fun resumeTeam() {
         val exec = _uiState.value.currentExecution ?: return
+        if (exec.status != ExecutionStatus.PAUSED) return
         val team = _uiState.value.selectedTeam ?: return
         val userId = getUserId() ?: run {
             _uiState.update { it.copy(error = AUTH_REQUIRED_ACTION) }
             return
         }
 
-        _uiState.update { it.copy(isPaused = false, isExecuting = true, statusMessage = "جارٍ استكمال مهام الفريق") }
-        startTimer()
-
-        executionJob?.cancel()
-        executionJob = viewModelScope.launch {
+        viewModelScope.launch {
             teamOrchestrator.resumeExecution(exec.id, userId, team)
-                .catch { e ->
-                    if (e is CancellationException) throw e
+                .catch { error ->
+                    if (error is CancellationException) throw error
                     stopTimer()
-                    _uiState.update {
-                        it.copy(isExecuting = false, isPaused = false, error = e.message)
+                    _uiState.update { current ->
+                        if (current.currentExecution?.id != exec.id) {
+                            current
+                        } else {
+                            current.copy(
+                                isExecuting = false,
+                                isPaused = true,
+                                error = error.message ?: "تعذر استئناف تنفيذ الفريق."
+                            )
+                        }
                     }
                 }
                 .collect { updated ->
                     _uiState.update { current ->
-                        current.copy(
-                            currentExecution = updated,
-                            isExecuting = updated.status == ExecutionStatus.EXECUTING,
-                            isPaused = updated.status == ExecutionStatus.PAUSED
-                        )
+                        if (current.currentExecution?.id != exec.id) {
+                            current
+                        } else {
+                            current.copy(
+                                currentExecution = updated,
+                                isExecuting = updated.status == ExecutionStatus.EXECUTING,
+                                isPaused = updated.status == ExecutionStatus.PAUSED,
+                                statusMessage = if (updated.status == ExecutionStatus.EXECUTING) {
+                                    "جارٍ استكمال مهام الفريق"
+                                } else {
+                                    current.statusMessage
+                                },
+                                error = null
+                            )
+                        }
                     }
-                    if (updated.status == ExecutionStatus.COMPLETED || updated.status == ExecutionStatus.FAILED) {
+                    if (updated.status == ExecutionStatus.EXECUTING) {
+                        startTimer()
+                    } else if (isTerminalExecution(updated.status)) {
                         stopTimer()
                     }
                 }
         }
     }
 
+    private fun isTerminalExecution(status: ExecutionStatus): Boolean =
+        status == ExecutionStatus.COMPLETED ||
+            status == ExecutionStatus.FAILED ||
+            status == ExecutionStatus.CANCELLED
+
     fun stopTeam() {
-        val execId = _uiState.value.currentExecution?.id ?: return
+        val execution = _uiState.value.currentExecution ?: return
+        if (execution.status != ExecutionStatus.EXECUTING && execution.status != ExecutionStatus.PAUSED) return
+
         viewModelScope.launch {
-            teamOrchestrator.stopExecution(execId)
-            executionJob?.cancel()
-            stopTimer()
-            _uiState.update {
-                it.copy(
-                    isExecuting = false,
-                    isPaused = false,
-                    statusMessage = "تم إيقاف تنفيذ الفريق كليًا"
-                )
+            try {
+                teamOrchestrator.stopExecution(execution.id)
+                executionJob?.cancel()
+                stopTimer()
+                _uiState.update { current ->
+                    if (current.currentExecution?.id != execution.id) {
+                        current
+                    } else {
+                        current.copy(
+                            currentExecution = current.currentExecution?.copy(
+                                status = ExecutionStatus.CANCELLED,
+                                completedAt = System.currentTimeMillis()
+                            ),
+                            isExecuting = false,
+                            isPaused = false,
+                            statusMessage = "تم إيقاف تنفيذ الفريق كليًا",
+                            error = null
+                        )
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _uiState.update { it.copy(error = error.message ?: "تعذر إيقاف تنفيذ الفريق.") }
             }
         }
     }

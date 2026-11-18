@@ -8,8 +8,15 @@ import com.example.domain.model.*
 import com.example.domain.repository.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,6 +28,7 @@ import java.lang.reflect.Proxy
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class TeamOrchestratorExecutionFixtureTest {
 
     @Test
@@ -54,6 +62,121 @@ class TeamOrchestratorExecutionFixtureTest {
         })
         assertEquals(5, provider.calls.size)
         assertEquals(1, repository.maxConcurrentStatusWrites)
+    }
+
+    @Test
+    fun pauseAndResumeWaitsAtAPersistedCheckpointWithoutRepeatingCompletedWork() = runTest {
+        val proposalCalls = AtomicInteger()
+        val proposalsStarted = CompletableDeferred<Unit>()
+        val releaseProposals = CompletableDeferred<Unit>()
+        val provider = DeterministicAIModelRepository(
+            beforeResponse = { call ->
+                if (call.prompt.contains("Provide your best solution independently.")) {
+                    if (proposalCalls.incrementAndGet() == 2) proposalsStarted.complete(Unit)
+                    releaseProposals.await()
+                }
+            }
+        )
+        val repository = RecordingTeamRepository()
+        val orchestrator = createOrchestrator(provider, repository)
+        val team = sampleTeam()
+        val updates = Channel<TeamExecution>(Channel.UNLIMITED)
+        val executionJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            orchestrator.executeTask("owner-1", team, "Design a safe API").collect { updates.send(it) }
+        }
+
+        val initial = updates.receive()
+        proposalsStarted.await()
+        orchestrator.pauseExecution(initial.id)
+        releaseProposals.complete(Unit)
+
+        val paused = withTimeout(5_000) {
+            var event: TeamExecution
+            do {
+                event = updates.receive()
+            } while (event.status != ExecutionStatus.PAUSED)
+            event
+        }
+
+        assertEquals(ExecutionStatus.PAUSED, repository.executions[initial.id]?.status)
+        assertEquals(2, paused.messages.count { it.type == MessageType.REGULAR })
+        assertEquals(2, provider.calls.size)
+
+        val resumed = orchestrator.resumeExecution(initial.id, "owner-1", team).toList().last()
+        assertEquals(ExecutionStatus.EXECUTING, resumed.status)
+
+        val completed = withTimeout(5_000) {
+            var event: TeamExecution
+            do {
+                event = updates.receive()
+            } while (event.status != ExecutionStatus.COMPLETED)
+            event
+        }
+        executionJob.join()
+
+        assertEquals(5, provider.calls.size)
+        assertEquals(2, provider.calls.count { it.prompt.contains("Provide your best solution independently.") })
+        assertEquals(2, completed.messages.count { it.type == MessageType.CRITIQUE })
+        assertEquals(1, completed.messages.count { it.type == MessageType.CONSENSUS })
+        assertTrue(repository.snapshots.any { it.status == ExecutionStatus.PAUSED })
+        assertEquals(completed, repository.executions[completed.id])
+        updates.close()
+    }
+
+    @Test
+    fun pausedExecutionCannotBeRestartedWhenItsActiveWorkerHasGoneAway() = runTest {
+        val proposalCalls = AtomicInteger()
+        val proposalsStarted = CompletableDeferred<Unit>()
+        val releaseProposals = CompletableDeferred<Unit>()
+        val provider = DeterministicAIModelRepository(
+            beforeResponse = { call ->
+                if (call.prompt.contains("Provide your best solution independently.")) {
+                    if (proposalCalls.incrementAndGet() == 2) proposalsStarted.complete(Unit)
+                    releaseProposals.await()
+                }
+            }
+        )
+        val repository = RecordingTeamRepository()
+        val orchestrator = createOrchestrator(provider, repository)
+        val team = sampleTeam()
+        val updates = Channel<TeamExecution>(Channel.UNLIMITED)
+        val executionJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            orchestrator.executeTask("owner-1", team, "Design a safe API").collect { updates.send(it) }
+        }
+
+        val initial = updates.receive()
+        proposalsStarted.await()
+        orchestrator.pauseExecution(initial.id)
+        releaseProposals.complete(Unit)
+        withTimeout(5_000) {
+            var event: TeamExecution
+            do {
+                event = updates.receive()
+            } while (event.status != ExecutionStatus.PAUSED)
+        }
+        executionJob.cancelAndJoin()
+
+        val foreignFailure = try {
+            orchestrator.resumeExecution(initial.id, "another-user", team).toList()
+            null
+        } catch (error: Throwable) {
+            error
+        }
+        assertTrue(foreignFailure is IllegalStateException)
+        assertTrue(foreignFailure?.message?.contains("not owned") == true)
+
+        val failure = try {
+            orchestrator.resumeExecution(initial.id, "owner-1", team).toList()
+            null
+        } catch (error: Throwable) {
+            error
+        }
+
+        assertTrue(failure is IllegalStateException)
+        assertTrue(failure?.message?.contains("no active worker") == true)
+        assertEquals(ExecutionStatus.PAUSED, repository.executions[initial.id]?.status)
+        assertEquals(2, provider.calls.size)
+        updates.close()
     }
 
     @Test
@@ -281,7 +404,8 @@ class TeamOrchestratorExecutionFixtureTest {
     )
 
     private class DeterministicAIModelRepository(
-        private val failingModelId: String? = null
+        private val failingModelId: String? = null,
+        private val beforeResponse: suspend (ProviderCall) -> Unit = {}
     ) : AIModelRepository {
         val calls = CopyOnWriteArrayList<ProviderCall>()
 
@@ -321,7 +445,9 @@ class TeamOrchestratorExecutionFixtureTest {
             taskId: String?,
             taskType: AITaskType
         ): Result<String> {
-            calls += ProviderCall(modelId, prompt, taskType)
+            val call = ProviderCall(modelId, prompt, taskType)
+            calls += call
+            beforeResponse(call)
             if (modelId == failingModelId) {
                 return Result.failure(IllegalStateException("deterministic provider failure"))
             }

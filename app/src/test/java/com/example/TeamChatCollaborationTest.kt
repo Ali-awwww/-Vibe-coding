@@ -176,7 +176,7 @@ class TeamChatCollaborationTest {
     }
 
     @Test
-    fun testPauseAndResumeTeamExecutionControls() = runTest(testDispatcher) {
+    fun terminalTeamExecutionCannotBePausedOrResumed() = runTest(testDispatcher) {
         val mockTeamRepo = createMockTeamRepo(listOf(fakeTeam))
         val mockOrchestrator = createMockOrchestrator()
         val mockCrashRepo = createMockCrashRepo(listOf(fakeProject))
@@ -194,20 +194,19 @@ class TeamChatCollaborationTest {
         )
 
         advanceUntilIdle()
-
         viewModel.setTaskPrompt("Generate comprehensive unit tests for PaymentProcessor")
         viewModel.sendTask(skipEstimationCheck = true)
         advanceUntilIdle()
 
-        // Pause
+        assertEquals(ExecutionStatus.COMPLETED, viewModel.uiState.value.currentExecution?.status)
         viewModel.pauseTeam()
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.isPaused)
+        assertFalse(viewModel.uiState.value.isPaused)
 
-        // Resume
         viewModel.resumeTeam()
         advanceUntilIdle()
         assertFalse(viewModel.uiState.value.isPaused)
+        assertEquals(ExecutionStatus.COMPLETED, viewModel.uiState.value.currentExecution?.status)
     }
 
     @Test
