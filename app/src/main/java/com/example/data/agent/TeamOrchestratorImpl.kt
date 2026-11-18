@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
@@ -84,7 +85,7 @@ class TeamOrchestratorImpl(
         prompt: String,
         attachedFiles: List<AttachedFileContext>,
         projectId: String?
-    ): Flow<TeamExecution> = flow {
+    ): Flow<TeamExecution> = channelFlow {
         val executionId = UUID.randomUUID().toString()
         val control = ExecutionControl()
         var lastExecution: TeamExecution? = null
@@ -148,7 +149,7 @@ class TeamOrchestratorImpl(
                         control.latestExecution = snapshot
                         currentExecution = snapshot
                         lastExecution = snapshot
-                        emit(snapshot)
+                        send(snapshot)
                         snapshot
                     }
         
@@ -174,7 +175,7 @@ class TeamOrchestratorImpl(
                     completedAt = System.currentTimeMillis()
                 )
                 publish(currentExecution)
-                return@flow
+                return@channelFlow
             }
 
             try {
@@ -213,7 +214,7 @@ class TeamOrchestratorImpl(
                     }
                 }
             }
-            cancelledExecution?.let { emit(it) }
+            cancelledExecution?.let { send(it) }
         } finally {
             activeJob?.let { activeExecutionJobs.remove(executionId, it) }
             executionControls.remove(executionId, control)
@@ -338,8 +339,8 @@ class TeamOrchestratorImpl(
         executionId: String,
         userId: String,
         team: ModelTeam
-    ): Flow<TeamExecution> = flow {
-        val existingExec = teamRepository.getExecutionById(executionId) ?: return@flow
+    ): Flow<TeamExecution> = channelFlow {
+        val existingExec = teamRepository.getExecutionById(executionId) ?: return@channelFlow
         check(existingExec.userId == userId && existingExec.teamId == team.id) {
             "Execution is not owned by the authenticated user and selected team."
         }
@@ -386,7 +387,7 @@ class TeamOrchestratorImpl(
                     control.latestExecution = snapshot
                     currentExecution = snapshot
                     lastExecution = snapshot
-                    emit(snapshot)
+                    send(snapshot)
                     snapshot
                 }
     
@@ -437,7 +438,7 @@ class TeamOrchestratorImpl(
                     }
                 }
             }
-            cancelledExecution?.let { emit(it) }
+            cancelledExecution?.let { send(it) }
         } finally {
             activeJob?.let { activeExecutionJobs.remove(executionId, it) }
             executionControls.remove(executionId, control)

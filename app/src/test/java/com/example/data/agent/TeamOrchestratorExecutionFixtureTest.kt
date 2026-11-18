@@ -180,6 +180,123 @@ class TeamOrchestratorExecutionFixtureTest {
     }
 
     @Test
+    fun sequentialExecutionPausesAndResumesFromAChildCoroutineCheckpoint() = runTest {
+        val providerStarted = CompletableDeferred<Unit>()
+        val releaseProvider = CompletableDeferred<Unit>()
+        val provider = DeterministicAIModelRepository(
+            beforeResponse = {
+                providerStarted.complete(Unit)
+                releaseProvider.await()
+            }
+        )
+        val repository = RecordingTeamRepository()
+        val planner = object : TaskPlanner {
+            override suspend fun plan(
+                userId: String,
+                team: ModelTeam,
+                prompt: String,
+                projectContext: String
+            ): Result<List<ExecutionStep>> = Result.success(
+                listOf(
+                    ExecutionStep(
+                        id = "step-1",
+                        memberId = "member-a",
+                        memberName = "Architect",
+                        role = TeamRole.SOFTWARE_ARCHITECT.name,
+                        task = prompt,
+                        input = prompt
+                    )
+                )
+            )
+        }
+        val contextStore = object : SharedContextStore {
+            override fun prepareAgentContext(
+                member: TeamMember,
+                execution: TeamExecution,
+                currentStep: ExecutionStep
+            ): String = "fixture context"
+
+            override fun updateMemory(
+                execution: TeamExecution,
+                member: TeamMember,
+                output: String,
+                type: MemoryType
+            ): SharedMemory = execution.sharedMemory
+        }
+        val evaluator = object : ResultEvaluator {
+            override suspend fun evaluate(
+                userId: String,
+                member: TeamMember,
+                task: String,
+                output: String
+            ): EvaluationResult = EvaluationResult(isAccepted = true)
+        }
+        val composer = object : ResponseComposer {
+            override suspend fun compose(
+                userId: String,
+                team: ModelTeam,
+                execution: TeamExecution
+            ): Result<String> = Result.success("sequential result")
+        }
+        val governance = TestGovernanceEngine { member ->
+            AIModel(
+                id = member.modelId,
+                providerId = "fixture",
+                apiId = member.modelId,
+                name = member.name,
+                isFree = true
+            )
+        }
+        val orchestrator = createOrchestrator(
+            provider = provider,
+            repository = repository,
+            taskPlanner = planner,
+            sharedContextStore = contextStore,
+            resultEvaluator = evaluator,
+            responseComposer = composer,
+            governanceEngine = governance
+        )
+        val team = sampleTeam().copy(collaborationStyle = CollaborationStyle.SEQUENTIAL)
+        val updates = Channel<TeamExecution>(Channel.UNLIMITED)
+        val executionJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            orchestrator.executeTask("owner-1", team, "Implement a bounded worker").collect { updates.send(it) }
+        }
+
+        val initial = updates.receive()
+        providerStarted.await()
+        orchestrator.pauseExecution(initial.id)
+        releaseProvider.complete(Unit)
+
+        val paused = withTimeout(5_000) {
+            var event: TeamExecution
+            do {
+                event = updates.receive()
+            } while (event.status != ExecutionStatus.PAUSED)
+            event
+        }
+        assertEquals(ExecutionStatus.PAUSED, repository.executions[initial.id]?.status)
+        assertEquals(StepStatus.COMPLETED, paused.steps.single().status)
+        assertEquals(1, provider.calls.size)
+
+        val resumed = orchestrator.resumeExecution(initial.id, "owner-1", team).toList().last()
+        assertEquals(ExecutionStatus.EXECUTING, resumed.status)
+
+        val completed = withTimeout(5_000) {
+            var event: TeamExecution
+            do {
+                event = updates.receive()
+            } while (event.status != ExecutionStatus.COMPLETED)
+            event
+        }
+        executionJob.join()
+
+        assertEquals(1, provider.calls.size)
+        assertEquals(StepStatus.COMPLETED, completed.steps.single().status)
+        assertEquals("sequential result", completed.finalResult)
+        updates.close()
+    }
+
+    @Test
     fun providerFailureIsPersistedAsFailedWithoutConsensus() = runTest {
         val provider = DeterministicAIModelRepository(failingModelId = "model-b")
         val repository = RecordingTeamRepository()
@@ -245,7 +362,12 @@ class TeamOrchestratorExecutionFixtureTest {
 
     private fun createOrchestrator(
         provider: DeterministicAIModelRepository,
-        repository: RecordingTeamRepository
+        repository: RecordingTeamRepository,
+        taskPlanner: TaskPlanner? = null,
+        sharedContextStore: SharedContextStore? = null,
+        resultEvaluator: ResultEvaluator? = null,
+        responseComposer: ResponseComposer? = null,
+        governanceEngine: TeamGovernanceEngine = TestGovernanceEngine()
     ): TeamOrchestratorImpl {
         val unusedVibeAgent = object : VibeAgentOrchestrator {
             override suspend fun processInstruction(
@@ -264,7 +386,7 @@ class TeamOrchestratorExecutionFixtureTest {
             teamRepository = repository,
             vibeRepository = unusedVibeRepository(),
             orchestratorProvider = { unusedVibeAgent },
-            taskPlanner = object : TaskPlanner {
+            taskPlanner = taskPlanner ?: object : TaskPlanner {
                 override suspend fun plan(
                     userId: String,
                     team: ModelTeam,
@@ -273,7 +395,7 @@ class TeamOrchestratorExecutionFixtureTest {
                 ): Result<List<ExecutionStep>> =
                     Result.failure(UnsupportedOperationException("Not used by the debate fixture."))
             },
-            sharedContextStore = object : SharedContextStore {
+            sharedContextStore = sharedContextStore ?: object : SharedContextStore {
                 override fun prepareAgentContext(
                     member: TeamMember,
                     execution: TeamExecution,
@@ -287,7 +409,7 @@ class TeamOrchestratorExecutionFixtureTest {
                     type: MemoryType
                 ): SharedMemory = execution.sharedMemory
             },
-            resultEvaluator = object : ResultEvaluator {
+            resultEvaluator = resultEvaluator ?: object : ResultEvaluator {
                 override suspend fun evaluate(
                     userId: String,
                     member: TeamMember,
@@ -295,14 +417,14 @@ class TeamOrchestratorExecutionFixtureTest {
                     output: String
                 ): EvaluationResult = EvaluationResult(isAccepted = true)
             },
-            responseComposer = object : ResponseComposer {
+            responseComposer = responseComposer ?: object : ResponseComposer {
                 override suspend fun compose(
                     userId: String,
                     team: ModelTeam,
                     execution: TeamExecution
                 ): Result<String> = Result.success("unused")
             },
-            governanceEngine = TestGovernanceEngine()
+            governanceEngine = governanceEngine
         )
     }
 
@@ -350,7 +472,9 @@ class TeamOrchestratorExecutionFixtureTest {
         )
     }
 
-    private class TestGovernanceEngine : TeamGovernanceEngine {
+    private class TestGovernanceEngine(
+        private val modelForMember: (TeamMember) -> AIModel? = { null }
+    ) : TeamGovernanceEngine {
         override fun maskSecrets(text: String): String = text
 
         override suspend fun estimateResources(
@@ -370,7 +494,11 @@ class TeamOrchestratorExecutionFixtureTest {
             member: TeamMember,
             currentExecution: TeamExecution,
             targetModel: AIModel?
-        ): Result<AIModel> = Result.failure(UnsupportedOperationException("Not used by the debate fixture."))
+        ): Result<AIModel> {
+            val model = modelForMember(member)
+                ?: return Result.failure(UnsupportedOperationException("Not used by the debate fixture."))
+            return Result.success(model)
+        }
 
         override suspend fun handleQuotaExhaustion(
             userId: String,
