@@ -2395,3 +2395,40 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: TeamValidation governance and provider rate-limit safety.
 - Next exact step: verify the new HTTP-date/error-classification tests and final APK workflow to terminal state. Then implement the first independently testable orchestrator job lifecycle criterion (#14 pause/resume) using the existing TeamOrchestrator fixture harness, without issuing paid/live provider requests. Keep TeamValidation open until remaining job/persistence and RTL/LTR/device gates are resolved.
+
+
+## 2026-11-19 — DAG checkpoint recovery and concurrent execution integrity
+
+### Implementation
+- DagOrchestrator restores completed steps from persisted execution snapshots instead of rerunning completed work after a process interruption.
+- Persisted IN_PROGRESS steps are returned to PENDING with a bounded retry-count increment. The execution receives an explicit recovery message because a provider response that was not persisted may be billed again.
+- Sequential collaboration now enforces one concurrent request. Parallel/DAG workers retain configured concurrency while execution snapshots and team-member status writes are serialized to prevent lost updates and whole-team document overwrites.
+- Dependency cycles, missing dependencies and empty plans fail closed; the orchestrator no longer composes a final result while steps remain unresolved.
+- Provider failover accounting uses the replacement model for model identity and estimated cost. Text-length-derived token/cost values are marked unconfirmed rather than measured.
+- TeamOrchestratorImpl.resumeExecution can recover stale PAUSED / EXECUTING jobs for sequential, parallel and DAG styles after the previous worker is gone. Ownership checks and an atomic worker claim prevent duplicate recovery workers. Unsupported orchestration styles remain blocked rather than replaying non-idempotent work.
+
+### Regression coverage
+- Added process-recreation coverage proving a completed step is not repeated and an interrupted in-progress step is retried from its persisted checkpoint.
+- Added parallel-worker coverage for concurrent execution updates and serialized team-status writes.
+- Added a cyclic dependency test proving the job fails rather than being reported as completed.
+- Existing active-worker pause/resume, cancellation and persistence-failure tests remain in place.
+
+### Verification boundary
+- Baseline before this batch: main HEAD 93e9e07af131908fadc27df5d24a675dc21305e9; Android CI, APK packaging and Code Quality workflows all reached terminal SUCCESS. The JUnit artifact contained 309 tests, 0 failures, 0 errors and 4 skipped; TeamOrchestratorExecutionFixtureTest had 8 passing tests and TeamValidationEngineImplTest had 12 passing tests.
+- Baseline artifacts: Debug APK, signed Release APK and JUnit reports were uploaded by the workflows. These are evidence for the baseline commit only, not this new batch.
+- This batch's CI/build/test/lint runs are pending until the workflows triggered by its commit reach terminal status.
+- No local Gradle execution, Android emulator/device screenshot, RTL/LTR visual review, live provider request, Supabase write or production-data mutation is claimed.
+
+### Criterion status
+| TeamValidation criterion | State | Evidence / blocker |
+|---|---|---|
+| #14 Active-worker pause/resume | IN_PROGRESS | Deterministic orchestration fixture verifies persisted pause/resume checkpoints; live authenticated provider/device verification remains open |
+| #19 Sequential/parallel DAG process recovery | IN_PROGRESS | New process-recreation fixture verifies persisted checkpoint recovery; production database durability and Android process-restart verification remain open |
+| #7–#13 Real execution evidence | BLOCKED | User-facing checks still require configured provider jobs with persisted versioned inputs/outputs; unit fixtures are not reported as runtime PASS |
+| #18 Persisted member usage ledger | BLOCKED | No confirmed remote usage-ledger table/RLS contract is available; estimated usage is not presented as measured billing |
+| TeamValidation visual/device gate | BLOCKED | No Android emulator/device screenshot or RTL/LTR interaction evidence is available |
+
+### Persistent continuity
+- Last area worked: DAG execution integrity, pause/resume, process recovery, parallel state serialization and truthful retry accounting.
+- Next exact step: inspect Android CI, APK and Code Quality workflows for the new main HEAD to terminal status; fix any failures. Then continue with the next independent TeamValidation acceptance item that can be verified without production writes, starting with the usage-accounting contract and its measured-versus-estimated semantics.
+- Repository AGENTS.md / agents.md files: none found in the recursive main tree inspected for this batch.

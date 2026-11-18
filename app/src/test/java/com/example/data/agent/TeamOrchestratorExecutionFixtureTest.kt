@@ -173,7 +173,7 @@ class TeamOrchestratorExecutionFixtureTest {
         }
 
         assertTrue(failure is IllegalStateException)
-        assertTrue(failure?.message?.contains("no active worker") == true)
+        assertTrue(failure?.message?.contains("Process recovery is currently supported only") == true)
         assertEquals(ExecutionStatus.PAUSED, repository.executions[initial.id]?.status)
         assertEquals(2, provider.calls.size)
         updates.close()
@@ -294,6 +294,318 @@ class TeamOrchestratorExecutionFixtureTest {
         assertEquals(StepStatus.COMPLETED, completed.steps.single().status)
         assertEquals("sequential result", completed.finalResult)
         updates.close()
+    }
+
+    @Test
+    fun sequentialDagRecoveryResumesPersistedStepsAfterOrchestratorRecreation() = runTest {
+        val firstStepCalls = AtomicInteger()
+        val secondStepCalls = AtomicInteger()
+        val secondStepStarted = CompletableDeferred<Unit>()
+        val releaseInterruptedAttempt = CompletableDeferred<Unit>()
+        val provider = DeterministicAIModelRepository(
+            beforeResponse = { call ->
+                when (call.prompt) {
+                    "step-one" -> firstStepCalls.incrementAndGet()
+                    "step-two" -> {
+                        if (secondStepCalls.incrementAndGet() == 1) {
+                            secondStepStarted.complete(Unit)
+                            releaseInterruptedAttempt.await()
+                        }
+                    }
+                }
+            }
+        )
+        val repository = RecordingTeamRepository()
+        val planner = object : TaskPlanner {
+            override suspend fun plan(
+                userId: String,
+                team: ModelTeam,
+                prompt: String,
+                projectContext: String
+            ): Result<List<ExecutionStep>> = Result.success(
+                listOf(
+                    ExecutionStep(
+                        id = "step-one",
+                        memberId = "member-a",
+                        memberName = "Architect",
+                        role = TeamRole.SOFTWARE_ARCHITECT.name,
+                        task = "step-one",
+                        input = "step-one"
+                    ),
+                    ExecutionStep(
+                        id = "step-two",
+                        memberId = "member-b",
+                        memberName = "Reviewer",
+                        role = TeamRole.CODE_REVIEWER.name,
+                        task = "step-two",
+                        input = "step-two",
+                        dependsOnIds = listOf("step-one")
+                    )
+                )
+            )
+        }
+        val contextStore = object : SharedContextStore {
+            override fun prepareAgentContext(
+                member: TeamMember,
+                execution: TeamExecution,
+                currentStep: ExecutionStep
+            ): String = currentStep.task
+
+            override fun updateMemory(
+                execution: TeamExecution,
+                member: TeamMember,
+                output: String,
+                type: MemoryType
+            ): SharedMemory = execution.sharedMemory
+        }
+        val evaluator = object : ResultEvaluator {
+            override suspend fun evaluate(
+                userId: String,
+                member: TeamMember,
+                task: String,
+                output: String
+            ): EvaluationResult = EvaluationResult(isAccepted = true)
+        }
+        val composer = object : ResponseComposer {
+            override suspend fun compose(
+                userId: String,
+                team: ModelTeam,
+                execution: TeamExecution
+            ): Result<String> = Result.success("recovered sequential result")
+        }
+        val governance = TestGovernanceEngine { member ->
+            AIModel(
+                id = member.modelId,
+                providerId = "fixture",
+                apiId = member.modelId,
+                name = member.name,
+                isFree = true
+            )
+        }
+        val team = sampleTeam().copy(
+            collaborationStyle = CollaborationStyle.SEQUENTIAL,
+            governance = TeamGovernanceSettings(
+                freeOnly = true,
+                maxParallelRequests = 3,
+                maxRetryAttempts = 2
+            )
+        )
+        val firstOrchestrator = createOrchestrator(
+            provider,
+            repository,
+            taskPlanner = planner,
+            sharedContextStore = contextStore,
+            resultEvaluator = evaluator,
+            responseComposer = composer,
+            governanceEngine = governance
+        )
+        val updates = Channel<TeamExecution>(Channel.UNLIMITED)
+        val executionJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            firstOrchestrator.executeTask("owner-1", team, "Recover a persisted task").collect {
+                updates.send(it)
+            }
+        }
+
+        val initial = updates.receive()
+        withTimeout(5_000) { secondStepStarted.await() }
+        val interrupted = checkNotNull(repository.executions[initial.id])
+        assertEquals(ExecutionStatus.EXECUTING, interrupted.status)
+        assertEquals(StepStatus.COMPLETED, interrupted.steps.single { it.id == "step-one" }.status)
+        assertEquals(StepStatus.IN_PROGRESS, interrupted.steps.single { it.id == "step-two" }.status)
+
+        executionJob.cancelAndJoin()
+        releaseInterruptedAttempt.complete(Unit)
+
+        val recoveredOrchestrator = createOrchestrator(
+            provider,
+            repository,
+            taskPlanner = planner,
+            sharedContextStore = contextStore,
+            resultEvaluator = evaluator,
+            responseComposer = composer,
+            governanceEngine = governance
+        )
+        val recoveredEvents = withTimeout(10_000) {
+            recoveredOrchestrator.resumeExecution(initial.id, "owner-1", team).toList()
+        }
+        val completed = recoveredEvents.last()
+
+        assertEquals(ExecutionStatus.COMPLETED, completed.status)
+        assertEquals(1, firstStepCalls.get())
+        assertEquals(2, secondStepCalls.get())
+        assertEquals(0, completed.steps.single { it.id == "step-one" }.retryCount)
+        assertEquals(1, completed.steps.single { it.id == "step-two" }.retryCount)
+        assertTrue(completed.messages.any { it.content.contains("Process recovery restarted") })
+        assertEquals(completed, repository.executions[initial.id])
+        updates.close()
+    }
+
+    @Test
+    fun parallelDagWorkersPublishAllStepUpdatesAndSerializeTeamStatusWrites() = runTest {
+        val started = AtomicInteger()
+        val bothProvidersStarted = CompletableDeferred<Unit>()
+        val releaseProviders = CompletableDeferred<Unit>()
+        val provider = DeterministicAIModelRepository(
+            beforeResponse = {
+                if (started.incrementAndGet() == 2) bothProvidersStarted.complete(Unit)
+                releaseProviders.await()
+            }
+        )
+        val repository = RecordingTeamRepository()
+        val planner = object : TaskPlanner {
+            override suspend fun plan(
+                userId: String,
+                team: ModelTeam,
+                prompt: String,
+                projectContext: String
+            ): Result<List<ExecutionStep>> = Result.success(
+                listOf(
+                    ExecutionStep(
+                        id = "parallel-a",
+                        memberId = "member-a",
+                        memberName = "Architect",
+                        role = TeamRole.SOFTWARE_ARCHITECT.name,
+                        task = "parallel-a",
+                        input = "parallel-a"
+                    ),
+                    ExecutionStep(
+                        id = "parallel-b",
+                        memberId = "member-b",
+                        memberName = "Reviewer",
+                        role = TeamRole.CODE_REVIEWER.name,
+                        task = "parallel-b",
+                        input = "parallel-b"
+                    )
+                )
+            )
+        }
+        val contextStore = object : SharedContextStore {
+            override fun prepareAgentContext(
+                member: TeamMember,
+                execution: TeamExecution,
+                currentStep: ExecutionStep
+            ): String = currentStep.task
+
+            override fun updateMemory(
+                execution: TeamExecution,
+                member: TeamMember,
+                output: String,
+                type: MemoryType
+            ): SharedMemory = execution.sharedMemory
+        }
+        val evaluator = object : ResultEvaluator {
+            override suspend fun evaluate(
+                userId: String,
+                member: TeamMember,
+                task: String,
+                output: String
+            ): EvaluationResult = EvaluationResult(isAccepted = true)
+        }
+        val composer = object : ResponseComposer {
+            override suspend fun compose(
+                userId: String,
+                team: ModelTeam,
+                execution: TeamExecution
+            ): Result<String> = Result.success("parallel result")
+        }
+        val governance = TestGovernanceEngine { member ->
+            AIModel(
+                id = member.modelId,
+                providerId = "fixture",
+                apiId = member.modelId,
+                name = member.name,
+                isFree = true
+            )
+        }
+        val team = sampleTeam().copy(
+            collaborationStyle = CollaborationStyle.PARALLEL,
+            governance = TeamGovernanceSettings(
+                freeOnly = true,
+                maxParallelRequests = 2
+            )
+        )
+        val orchestrator = createOrchestrator(
+            provider,
+            repository,
+            taskPlanner = planner,
+            sharedContextStore = contextStore,
+            resultEvaluator = evaluator,
+            responseComposer = composer,
+            governanceEngine = governance
+        )
+        val updates = Channel<TeamExecution>(Channel.UNLIMITED)
+        val executionJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            orchestrator.executeTask("owner-1", team, "Run independent work").collect {
+                updates.send(it)
+            }
+        }
+
+        updates.receive()
+        withTimeout(5_000) { bothProvidersStarted.await() }
+        releaseProviders.complete(Unit)
+        val completed = withTimeout(10_000) {
+            var event: TeamExecution
+            do {
+                event = updates.receive()
+            } while (event.status != ExecutionStatus.COMPLETED)
+            event
+        }
+        executionJob.join()
+
+        assertEquals(2, completed.steps.count { it.status == StepStatus.COMPLETED })
+        assertEquals(2, provider.calls.size)
+        assertEquals(1, repository.maxConcurrentStatusWrites)
+        assertTrue(repository.snapshots.any { snapshot ->
+            snapshot.steps.count { it.status == StepStatus.COMPLETED } == 2
+        })
+        assertEquals(completed, repository.executions[completed.id])
+        updates.close()
+    }
+
+    @Test
+    fun dagWithUnresolvedDependencyCycleFailsInsteadOfReportingCompletion() = runTest {
+        val provider = DeterministicAIModelRepository()
+        val repository = RecordingTeamRepository()
+        val planner = object : TaskPlanner {
+            override suspend fun plan(
+                userId: String,
+                team: ModelTeam,
+                prompt: String,
+                projectContext: String
+            ): Result<List<ExecutionStep>> = Result.success(
+                listOf(
+                    ExecutionStep(
+                        id = "cycle-a",
+                        memberId = "member-a",
+                        memberName = "Architect",
+                        role = TeamRole.SOFTWARE_ARCHITECT.name,
+                        task = "cycle-a",
+                        dependsOnIds = listOf("cycle-b")
+                    ),
+                    ExecutionStep(
+                        id = "cycle-b",
+                        memberId = "member-b",
+                        memberName = "Reviewer",
+                        role = TeamRole.CODE_REVIEWER.name,
+                        task = "cycle-b",
+                        dependsOnIds = listOf("cycle-a")
+                    )
+                )
+            )
+        }
+        val team = sampleTeam().copy(collaborationStyle = CollaborationStyle.SEQUENTIAL)
+
+        val emitted = createOrchestrator(
+            provider,
+            repository,
+            taskPlanner = planner
+        ).executeTask("owner-1", team, "Reject a cyclic plan").toList()
+
+        assertEquals(ExecutionStatus.FAILED, emitted.last().status)
+        assertTrue(emitted.last().error?.contains("No pending step is executable") == true)
+        assertTrue(emitted.none { it.status == ExecutionStatus.COMPLETED })
+        assertTrue(provider.calls.isEmpty())
+        assertEquals(emitted.last(), repository.executions[emitted.last().id])
     }
 
     @Test

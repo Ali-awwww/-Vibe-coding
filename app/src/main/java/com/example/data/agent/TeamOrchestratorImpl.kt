@@ -67,6 +67,7 @@ class TeamOrchestratorImpl(
 
     private val executionControls = java.util.concurrent.ConcurrentHashMap<String, ExecutionControl>()
     private val activeExecutionJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+    private val executionRegistryLock = Any()
 
     private fun isTerminal(status: ExecutionStatus): Boolean =
         status == ExecutionStatus.COMPLETED ||
@@ -90,8 +91,10 @@ class TeamOrchestratorImpl(
         val control = ExecutionControl()
         var lastExecution: TeamExecution? = null
         val activeJob = currentCoroutineContext()[Job]
-        executionControls[executionId] = control
-        activeJob?.let { activeExecutionJobs[executionId] = it }
+        synchronized(executionRegistryLock) {
+            executionControls[executionId] = control
+            activeJob?.let { activeExecutionJobs[executionId] = it }
+        }
 
         try {
             val availableModels = try {
@@ -222,8 +225,9 @@ class TeamOrchestratorImpl(
     }
 
     override suspend fun pauseExecution(executionId: String) {
-        val control = executionControls[executionId]
-        val activeJob = activeExecutionJobs[executionId]
+        val (control, activeJob) = synchronized(executionRegistryLock) {
+            executionControls[executionId] to activeExecutionJobs[executionId]
+        }
         if (control == null || activeJob?.isActive != true) {
             val existing = teamRepository.getExecutionById(executionId) ?: return
             if (existing.status == ExecutionStatus.EXECUTING) {
@@ -253,7 +257,7 @@ class TeamOrchestratorImpl(
     }
 
     override suspend fun stopExecution(executionId: String) {
-        val control = executionControls[executionId]
+        val control = synchronized(executionRegistryLock) { executionControls[executionId] }
         if (control == null) {
             val existing = teamRepository.getExecutionById(executionId) ?: return
             if (!isTerminal(existing.status)) {
@@ -292,47 +296,217 @@ class TeamOrchestratorImpl(
         executionId: String,
         userId: String,
         team: ModelTeam
-    ): Flow<TeamExecution> = flow {
-        val control = executionControls[executionId]
-        val activeJob = activeExecutionJobs[executionId]
-        if (control == null || activeJob?.isActive != true) {
-            val existing = teamRepository.getExecutionById(executionId) ?: return@flow
-            check(existing.userId == userId && existing.teamId == team.id) {
-                "Execution is not owned by the authenticated user and selected team."
-            }
-            if (existing.status == ExecutionStatus.PAUSED || existing.status == ExecutionStatus.EXECUTING) {
-                throw IllegalStateException(
-                    "The execution has no active worker. Process-recovery resume is not available yet."
-                )
-            }
-            emit(existing)
-            return@flow
+    ): Flow<TeamExecution> = channelFlow {
+        val existing = teamRepository.getExecutionById(executionId) ?: return@channelFlow
+        check(existing.userId == userId && existing.teamId == team.id && team.ownerId == userId) {
+            "Execution is not owned by the authenticated user and selected team."
         }
 
-        val resumed = control.mutex.withLock {
-            check(activeExecutionJobs[executionId]?.isActive == true) {
-                "The execution has no active worker. Process-recovery resume is not available yet."
-            }
-            val latest = control.latestExecution ?: teamRepository.getExecutionById(executionId)
-                ?: return@withLock null
-            check(latest.userId == userId && latest.teamId == team.id) {
-                "Execution is not owned by the authenticated user and selected team."
-            }
-            if (isTerminal(latest.status)) {
-                latest
-            } else {
-                when (control.state.value) {
-                    ControlState.PAUSED -> latest.copy(status = ExecutionStatus.EXECUTING).also { updated ->
-                        teamRepository.logExecution(updated).getOrThrow()
-                        control.latestExecution = updated
-                        control.state.value = ControlState.RUNNING
+        suspend fun resumeActiveWorker(control: ExecutionControl) {
+            val resumed = control.mutex.withLock {
+                check(activeExecutionJobs[executionId]?.isActive == true) {
+                    "The execution has no active worker."
+                }
+                val latest = control.latestExecution ?: teamRepository.getExecutionById(executionId)
+                    ?: return@withLock null
+                check(latest.userId == userId && latest.teamId == team.id) {
+                    "Execution is not owned by the authenticated user and selected team."
+                }
+                if (isTerminal(latest.status)) {
+                    latest
+                } else {
+                    when (control.state.value) {
+                        ControlState.PAUSED -> latest.copy(status = ExecutionStatus.EXECUTING).also { updated ->
+                            teamRepository.logExecution(updated).getOrThrow()
+                            control.latestExecution = updated
+                            control.state.value = ControlState.RUNNING
+                        }
+                        ControlState.RUNNING -> latest
+                        ControlState.STOPPED -> throw IllegalStateException(
+                            "A stopped execution cannot be resumed."
+                        )
                     }
-                    ControlState.RUNNING -> latest
-                    ControlState.STOPPED -> throw IllegalStateException("A stopped execution cannot be resumed.")
+                }
+            }
+            resumed?.let { send(it) }
+        }
+
+        if (isTerminal(existing.status)) {
+            send(existing)
+            return@channelFlow
+        }
+
+        val active = synchronized(executionRegistryLock) {
+            executionControls[executionId] to activeExecutionJobs[executionId]
+        }
+        if (active.first != null && active.second?.isActive == true) {
+            resumeActiveWorker(active.first!!)
+            return@channelFlow
+        }
+
+        if (existing.status != ExecutionStatus.PAUSED && existing.status != ExecutionStatus.EXECUTING) {
+            send(existing)
+            return@channelFlow
+        }
+
+        check(
+            team.collaborationStyle == CollaborationStyle.SEQUENTIAL ||
+                team.collaborationStyle == CollaborationStyle.PARALLEL ||
+                team.collaborationStyle == CollaborationStyle.ORCHESTRATED
+        ) {
+            "Process recovery is currently supported only for sequential, parallel and DAG orchestrations."
+        }
+
+        val workerJob = currentCoroutineContext()[Job]
+            ?: throw IllegalStateException("A recovery worker could not be registered.")
+        val control = ExecutionControl().apply { latestExecution = existing }
+        val claimed = synchronized(executionRegistryLock) {
+            val currentJob = activeExecutionJobs[executionId]
+            if (currentJob?.isActive == true) {
+                false
+            } else {
+                executionControls[executionId] = control
+                activeExecutionJobs[executionId] = workerJob
+                true
+            }
+        }
+        if (!claimed) {
+            val latestActive = synchronized(executionRegistryLock) {
+                executionControls[executionId] to activeExecutionJobs[executionId]
+            }
+            if (latestActive.first != null && latestActive.second?.isActive == true) {
+                resumeActiveWorker(latestActive.first!!)
+                return@channelFlow
+            }
+            throw IllegalStateException("Another worker is already recovering this execution.")
+        }
+
+        var currentExecution = existing
+        var lastExecution: TeamExecution? = existing
+        try {
+            val interruptedCount = existing.steps.count { it.status == StepStatus.IN_PROGRESS }
+            val recoveryMessage = if (interruptedCount > 0) {
+                "Process recovery restarted " + interruptedCount +
+                    " interrupted step(s). Completed steps were preserved; an interrupted provider call may be repeated if its response was not persisted."
+            } else {
+                "Process recovery resumed from the last persisted execution checkpoint."
+            }
+            currentExecution = existing.copy(
+                status = ExecutionStatus.EXECUTING,
+                error = null,
+                completedAt = null,
+                messages = existing.messages + AgentMessage(
+                    id = UUID.randomUUID().toString(),
+                    fromMemberId = "SYSTEM",
+                    toMemberId = "TEAM",
+                    content = recoveryMessage,
+                    type = MessageType.SYSTEM,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+            teamRepository.logExecution(currentExecution).getOrThrow()
+            control.latestExecution = currentExecution
+            lastExecution = currentExecution
+            send(currentExecution)
+
+            suspend fun publish(updatedExecution: TeamExecution) {
+                val published = control.mutex.withLock {
+                    val snapshot = when (control.state.value) {
+                        ControlState.STOPPED -> updatedExecution.copy(
+                            status = ExecutionStatus.CANCELLED,
+                            completedAt = System.currentTimeMillis()
+                        )
+                        ControlState.PAUSED -> if (isTerminal(updatedExecution.status)) {
+                            updatedExecution
+                        } else {
+                            updatedExecution.copy(status = ExecutionStatus.PAUSED)
+                        }
+                        ControlState.RUNNING -> updatedExecution
+                    }
+                    teamRepository.logExecution(snapshot).getOrThrow()
+                    control.latestExecution = snapshot
+                    currentExecution = snapshot
+                    lastExecution = snapshot
+                    send(snapshot)
+                    snapshot
+                }
+
+                when (control.state.value) {
+                    ControlState.STOPPED -> throw ExecutionStoppedException()
+                    ControlState.PAUSED -> if (!isTerminal(published.status)) {
+                        val nextState = control.state.first { it != ControlState.PAUSED }
+                        if (nextState == ControlState.STOPPED) throw ExecutionStoppedException()
+                    }
+                    ControlState.RUNNING -> Unit
+                }
+            }
+
+            try {
+                getOrchestratorForStyle(team.collaborationStyle).execute(
+                    userId,
+                    team,
+                    currentExecution
+                ) { updated ->
+                    publish(updated)
+                }
+            } catch (stopped: ExecutionStoppedException) {
+                throw stopped
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                currentExecution = currentExecution.copy(
+                    status = ExecutionStatus.FAILED,
+                    error = error.message,
+                    completedAt = System.currentTimeMillis()
+                )
+                publish(currentExecution)
+            }
+        } catch (stopped: ExecutionStoppedException) {
+            val cancelledExecution = control.mutex.withLock {
+                val latest = control.latestExecution ?: lastExecution
+                if (latest == null) {
+                    null
+                } else if (latest.status == ExecutionStatus.CANCELLED) {
+                    latest
+                } else {
+                    latest.copy(
+                        status = ExecutionStatus.CANCELLED,
+                        completedAt = System.currentTimeMillis()
+                    ).also { cancelled ->
+                        teamRepository.logExecution(cancelled).getOrThrow()
+                        control.latestExecution = cancelled
+                        lastExecution = cancelled
+                    }
+                }
+            }
+            cancelledExecution?.let { send(it) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            val failedExecution = control.mutex.withLock {
+                val latest = control.latestExecution ?: currentExecution
+                latest.copy(
+                    status = ExecutionStatus.FAILED,
+                    error = error.message,
+                    completedAt = System.currentTimeMillis()
+                ).also { failed ->
+                    teamRepository.logExecution(failed).getOrThrow()
+                    control.latestExecution = failed
+                    currentExecution = failed
+                    lastExecution = failed
+                }
+            }
+            send(failedExecution)
+        } finally {
+            synchronized(executionRegistryLock) {
+                if (executionControls[executionId] === control) {
+                    executionControls.remove(executionId)
+                }
+                if (activeExecutionJobs[executionId] === workerJob) {
+                    activeExecutionJobs.remove(executionId)
                 }
             }
         }
-        resumed?.let { emit(it) }
     }
 
     override suspend fun retryFailedSteps(
@@ -348,8 +522,10 @@ class TeamOrchestratorImpl(
         val control = ExecutionControl()
         var lastExecution: TeamExecution? = null
         val activeJob = currentCoroutineContext()[Job]
-        executionControls[executionId] = control
-        activeJob?.let { activeExecutionJobs[executionId] = it }
+        synchronized(executionRegistryLock) {
+            executionControls[executionId] = control
+            activeJob?.let { activeExecutionJobs[executionId] = it }
+        }
 
         try {
             val resetSteps = existingExec.steps.map { step ->
