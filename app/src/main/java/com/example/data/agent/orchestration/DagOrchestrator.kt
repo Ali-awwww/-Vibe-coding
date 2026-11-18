@@ -279,7 +279,7 @@ class DagOrchestrator(
                                 errorMessage = null
                             )
 
-                            updateExecution { current ->
+                            val applyUsage: (TeamExecution) -> TeamExecution = { current ->
                                 val previous = current.memberUsages.find { it.memberId == member.id }
                                 val updatedSummary = if (previous != null) {
                                     previous.copy(
@@ -332,13 +332,14 @@ class DagOrchestrator(
                             )
                             if (evaluation.isAccepted) {
                                 updateExecution { current ->
+                                    val withUsage = applyUsage(current)
                                     val newMemory = sharedContextStore.updateMemory(
-                                        current,
+                                        withUsage,
                                         member,
                                         output
                                     )
-                                    current.copy(
-                                        steps = current.steps.map { currentStep ->
+                                    withUsage.copy(
+                                        steps = withUsage.steps.map { currentStep ->
                                             if (currentStep.id == step.id) {
                                                 currentStep.copy(
                                                     status = StepStatus.COMPLETED,
@@ -361,7 +362,7 @@ class DagOrchestrator(
                                 )
                             } else if (step.retryCount < team.governance.maxRetryAttempts) {
                                 updateExecution { current ->
-                                    current.copy(
+                                    applyUsage(current).copy(
                                         steps = current.steps.map { currentStep ->
                                             if (currentStep.id == step.id) {
                                                 currentStep.copy(
@@ -379,7 +380,7 @@ class DagOrchestrator(
                                 }
                             } else {
                                 updateExecution { current ->
-                                    current.copy(
+                                    applyUsage(current).copy(
                                         steps = current.steps.map { currentStep ->
                                             if (currentStep.id == step.id) {
                                                 currentStep.copy(

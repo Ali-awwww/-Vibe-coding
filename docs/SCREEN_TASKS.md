@@ -2416,7 +2416,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Verification boundary
 - Baseline before this batch: main HEAD 93e9e07af131908fadc27df5d24a675dc21305e9; Android CI, APK packaging and Code Quality workflows all reached terminal SUCCESS. The JUnit artifact contained 309 tests, 0 failures, 0 errors and 4 skipped; TeamOrchestratorExecutionFixtureTest had 8 passing tests and TeamValidationEngineImplTest had 12 passing tests.
 - Baseline artifacts: Debug APK, signed Release APK and JUnit reports were uploaded by the workflows. These are evidence for the baseline commit only, not this new batch.
-- This batch's CI/build/test/lint runs are pending until the workflows triggered by its commit reach terminal status.
+- First CI attempt for commit 2e609960a08aa52b5f7d63c797d4bd14e6e7c249 completed with one regression failure: sequentialExecutionPausesAndResumesFromAChildCoroutineCheckpoint observed PAUSED while the step was still IN_PROGRESS. The usage-summary update emitted a pause checkpoint before the result/evaluation had been committed. The other 186 unit tests passed and one test was skipped. The APK workflow failed on the same test. Code Quality was still running at the time of this correction.
+- Correction: usage totals, the evaluated result and the terminal step state are now committed in one execution snapshot. A pause therefore waits for the in-flight provider result to reach a persisted checkpoint before exposing PAUSED. Verification of this correction is pending the next CI runs.
 - No local Gradle execution, Android emulator/device screenshot, RTL/LTR visual review, live provider request, Supabase write or production-data mutation is claimed.
 
 ### Criterion status
@@ -2430,5 +2431,5 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### Persistent continuity
 - Last area worked: DAG execution integrity, pause/resume, process recovery, parallel state serialization and truthful retry accounting.
-- Next exact step: inspect Android CI, APK and Code Quality workflows for the new main HEAD to terminal status; fix any failures. Then continue with the next independent TeamValidation acceptance item that can be verified without production writes, starting with the usage-accounting contract and its measured-versus-estimated semantics.
+- Next exact step: inspect the rerun Android CI, APK and Code Quality workflows for the correction commit to terminal status; fix any remaining failures. Then continue with the next independent TeamValidation acceptance item that can be verified without production writes, starting with the usage-accounting contract and its measured-versus-estimated semantics.
 - Repository AGENTS.md / agents.md files: none found in the recursive main tree inspected for this batch.
