@@ -445,7 +445,7 @@ class AIModelRepositoryImpl internal constructor(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
-                    lastException = e
+                    lastException = e.toAIProviderOperationException()
                     // If it's a 401/403 (Auth), we might want to stop, but for 429/5xx (Quota/Server), we failover
                     if (e.message?.contains("401") == true || e.message?.contains("403") == true || e.message?.contains("Invalid API Key", ignoreCase = true) == true) {
                         // Only retry if we have other models to try

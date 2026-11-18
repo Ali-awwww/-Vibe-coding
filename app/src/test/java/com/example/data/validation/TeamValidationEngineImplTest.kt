@@ -115,6 +115,29 @@ class TeamValidationEngineImplTest {
     }
 
     @Test
+    fun rateLimitRetryPolicyParsesHttpDateAndDefaultsInvalidHeaders() {
+        val policy = RateLimitRetryPolicy()
+        val nowMillis = 1_000_000L
+
+        assertEquals(
+            5_000L,
+            policy.delayBeforeRetry(
+                retryAttempt = 1,
+                retryAfterHeader = "Thu, 01 Jan 1970 00:16:45 GMT",
+                nowMillis = nowMillis
+            )
+        )
+        assertEquals(
+            1_000L,
+            policy.delayBeforeRetry(
+                retryAttempt = 1,
+                retryAfterHeader = "not-a-date",
+                nowMillis = nowMillis
+            )
+        )
+    }
+
+    @Test
     fun freeOnlyGuardRejectsPaidModelsBeforeAnyProviderRequest() = runTest {
         val providers = FakeAIModelRepository()
         val result = engine(providers, FakeAIModelTeamRepository())

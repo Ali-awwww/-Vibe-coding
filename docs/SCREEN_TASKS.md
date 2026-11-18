@@ -2367,3 +2367,31 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The Android CI test job failed only on that stale aggregate expectation; the APK job uploaded its unit-test report artifact before failing at the same assertion. The Code Quality workflow had not yet reached a terminal state when this correction was made.
 - The combined fix is committed with this test change. CI verification for the new main head is pending.
 - Next exact step: inspect the new main-head Android CI, APK and Code Quality jobs to terminal state; download the JUnit artifact and confirm all new retry/governance tests pass, then inspect build/artifact results.
+
+
+## 2026-11-19 — TeamValidation retry verification and typed provider failures
+
+### Verified on `4f476cd40dbf347c49b7aa993bf9d3a0c8d93f84`
+- Android CI/CD completed successfully: 305 tests, 0 failures, 4 skipped. The skipped cases are the existing Firestore rules tests requiring an unavailable external emulator.
+- The JUnit artifact includes the full `TeamValidationEngineImplTest` (11 tests) and `AIModelRepositoryFirebaseAiTest` (6 tests); both suites passed, including the controlled 429 retry, bounded retry, Free Only guard and failover probes.
+- Android Code Quality completed successfully. The lint report contains 193 existing warnings and no errors; no findings were attributed to the changed TeamValidation/AIModelRepository files.
+- The APK workflow completed its unit tests, Debug APK build/upload and signed Release APK build/upload successfully. Artifacts: `CrashIntelligence-Debug-APK` (32,621,510 bytes) and `CrashIntelligence-Release-APK-signed` (22,893,989 bytes). The workflow was still executing its post-build cleanup steps at the time of this entry.
+- No emulator/device screenshot or RTL/LTR interaction run was available; the visual/device gate remains BLOCKED.
+
+### Additional hardening in this batch
+- Preserve typed `AIProviderOperationException(RATE_LIMITED)` when OpenRouter exhausts its bounded retry, instead of returning an unclassified raw `HttpException`.
+- Add direct coverage for RFC-1123 HTTP-date parsing and invalid-header fallback.
+- Remove stale “not implemented” explanations for validation checks #15–17, which now execute.
+
+### Criterion status
+| TeamValidation criterion | State | Evidence / scope |
+|---|---|---|
+| #15 Model failure and free failover | PASS | Controlled HTTP 429 fixture exercises the production free-fallback selector and verifies the recorded replacement event; no live provider request |
+| #16 Rate-limit retry/cooldown | PASS | OpenRouter repository integration test verifies Retry-After delay, one bounded retry, and typed RATE_LIMITED failure; fake HTTP API, no external call |
+| #17 Free Only pre-inference protection | PASS | Production TeamGovernanceEngineImpl rejects paid model and allows zero-priced free model before inference; no provider request |
+| #7–14, #18–19 | BLOCKED | Still require a real orchestrator job/input-version harness, pause/resume recovery, usage persistence and process-recreation evidence |
+| TeamValidation visual/device gate | BLOCKED | No current Emulator/device evidence |
+
+### Persistent continuity
+- Last area worked: TeamValidation governance and provider rate-limit safety.
+- Next exact step: verify the new HTTP-date/error-classification tests and final APK workflow to terminal state. Then implement the first independently testable orchestrator job lifecycle criterion (#14 pause/resume) using the existing TeamOrchestrator fixture harness, without issuing paid/live provider requests. Keep TeamValidation open until remaining job/persistence and RTL/LTR/device gates are resolved.

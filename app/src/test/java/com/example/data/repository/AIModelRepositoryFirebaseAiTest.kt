@@ -15,6 +15,8 @@ import com.example.domain.model.AIProvider
 import com.example.domain.model.AIModel
 import com.example.domain.model.AIUserSettings
 import com.example.domain.model.AIProviderStatus
+import com.example.domain.model.AIProviderFailureKind
+import com.example.domain.model.AIProviderOperationException
 import com.example.domain.model.AIProviderType
 import com.example.domain.model.AITaskType
 import okhttp3.MediaType.Companion.toMediaType
@@ -209,6 +211,9 @@ class AIModelRepositoryFirebaseAiTest {
         )
 
         assertTrue(result.isFailure)
+        val failure = result.exceptionOrNull()
+        assertTrue(failure is AIProviderOperationException)
+        assertEquals(AIProviderFailureKind.RATE_LIMITED, (failure as AIProviderOperationException).kind)
         assertEquals(2, requestCount)
         assertEquals(listOf(3_000L), observedDelays)
         val usage = repo.getRecentUsageLogs(userId).first()
