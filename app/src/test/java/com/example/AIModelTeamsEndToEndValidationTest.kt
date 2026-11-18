@@ -153,13 +153,13 @@ class AIModelTeamsEndToEndValidationTest {
 
         assertFalse("Progress should complete", lastProgress.isRunning)
         assertEquals(20, lastProgress.items.size)
-        assertEquals(6, lastProgress.items.count { it.status == ValidationStatus.PASSED })
-        assertEquals(14, lastProgress.items.count { it.status == ValidationStatus.SKIPPED })
+        assertEquals(9, lastProgress.items.count { it.status == ValidationStatus.PASSED })
+        assertEquals(11, lastProgress.items.count { it.status == ValidationStatus.SKIPPED })
         assertEquals(0, lastProgress.items.count { it.status == ValidationStatus.FAILED })
         assertNotNull(lastProgress.summaryReport)
-        assertEquals(6, lastProgress.summaryReport?.passedCount)
-        assertEquals(14, lastProgress.summaryReport?.skippedCount)
-        assertFalse(lastProgress.summaryReport?.isFreeOnlyProtected ?: true)
+        assertEquals(9, lastProgress.summaryReport?.passedCount)
+        assertEquals(11, lastProgress.summaryReport?.skippedCount)
+        assertTrue(lastProgress.summaryReport?.isFreeOnlyProtected == true)
         assertFalse(lastProgress.summaryReport?.backendUserIsolationVerified ?: true)
     }
 

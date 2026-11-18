@@ -2358,3 +2358,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The #17 end-to-end test still expected `SKIPPED` after the production guard was implemented; commit `3fd96e43162c5c800eaa99653efa6fa530de1296` updates it to assert `PASSED` and the actual `PaidModelBlocked` evidence.
 - The bounded-retry integration test now specifies the Retrofit error response type explicitly. Latest full CI for the combined fixes is pending; no build or test pass is claimed.
 - Next exact step: monitor the newest main-head workflows, inspect complete job logs and JUnit results, and correct any remaining compile, test or lint issues.
+
+
+## 2026-11-19 — TeamValidation aggregate regression correction
+
+- The latest Android CI and APK test jobs on `5f7f72a9b6ac981f6eb7226dec4eb7da94f02766` compiled the new retry implementation and executed 48 tests. One existing aggregate assertion in `AIModelTeamsEndToEndValidationTest` still expected the old 6-passed / 14-skipped matrix and expected Free Only to be unverified. It failed at line 151; the individual #15, #16 and #17 probes did not appear among the failing tests.
+- Updated the aggregate regression test to expect 9 passed / 11 skipped and a verified Free Only guard, matching the now-executed checks. The test count was not reduced and no acceptance criterion was removed.
+- The Android CI test job failed only on that stale aggregate expectation; the APK job uploaded its unit-test report artifact before failing at the same assertion. The Code Quality workflow had not yet reached a terminal state when this correction was made.
+- The combined fix is committed with this test change. CI verification for the new main head is pending.
+- Next exact step: inspect the new main-head Android CI, APK and Code Quality jobs to terminal state; download the JUnit artifact and confirm all new retry/governance tests pass, then inspect build/artifact results.
