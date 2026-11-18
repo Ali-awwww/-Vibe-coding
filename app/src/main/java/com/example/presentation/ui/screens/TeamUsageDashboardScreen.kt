@@ -320,7 +320,7 @@ internal fun TeamMetricsOverview(uiState: TeamUsageUiState) {
             color = MaterialTheme.colorScheme.primary
         )
         MetricTile(
-            title = "الرموز المسجلة",
+            title = "الرموز التقديرية",
             value = String.format("%,d", uiState.totalTokens),
             icon = Icons.Default.DataUsage,
             modifier = Modifier.weight(1f),
@@ -334,6 +334,12 @@ internal fun TeamMetricsOverview(uiState: TeamUsageUiState) {
             color = MaterialTheme.colorScheme.tertiary
         )
     }
+
+    Text(
+        "أعداد الرموز تقديرية من طول النص، وليست قياساً مباشراً من مزوّد النموذج.",
+        color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted,
+        style = MaterialTheme.typography.bodySmall
+    )
 
     if (uiState.unconfirmedCostUsd > 0.0) {
         Text(
@@ -351,7 +357,7 @@ internal fun TeamMetricsOverview(uiState: TeamUsageUiState) {
     }
     uiState.lastMeasuredAt?.let { timestamp ->
         Text(
-            "المصدر: سجلات قياس الفريق • آخر سجل: " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp)),
+            "المصدر: سجلات استخدام الفريق • آخر سجل: " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp)),
             color = com.example.ui.theme.VibeDesignTokens.Color.TextMuted,
             style = MaterialTheme.typography.labelSmall
         )

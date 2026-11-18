@@ -27,7 +27,7 @@ data class TeamUsageRecord(
     val totalTokens: Int = 0,
     val costUsd: Double = 0.0,
     val isFree: Boolean = true,
-    val isCostConfirmed: Boolean = true,
+    val isCostConfirmed: Boolean = false,
     val status: String = "SUCCESS", // "SUCCESS", "RATE_LIMITED", "BLOCKED_PAID", "FAILED"
     val errorMessage: String? = null,
     val quotaRemaining: String? = null,

@@ -2416,8 +2416,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Verification boundary
 - Baseline before this batch: main HEAD 93e9e07af131908fadc27df5d24a675dc21305e9; Android CI, APK packaging and Code Quality workflows all reached terminal SUCCESS. The JUnit artifact contained 309 tests, 0 failures, 0 errors and 4 skipped; TeamOrchestratorExecutionFixtureTest had 8 passing tests and TeamValidationEngineImplTest had 12 passing tests.
 - Baseline artifacts: Debug APK, signed Release APK and JUnit reports were uploaded by the workflows. These are evidence for the baseline commit only, not this new batch.
-- First CI attempt for commit 2e609960a08aa52b5f7d63c797d4bd14e6e7c249 completed with one regression failure: sequentialExecutionPausesAndResumesFromAChildCoroutineCheckpoint observed PAUSED while the step was still IN_PROGRESS. The usage-summary update emitted a pause checkpoint before the result/evaluation had been committed. The other 186 unit tests passed and one test was skipped. The APK workflow failed on the same test. Code Quality was still running at the time of this correction.
-- Correction: usage totals, the evaluated result and the terminal step state are now committed in one execution snapshot. A pause therefore waits for the in-flight provider result to reach a persisted checkpoint before exposing PAUSED. Verification of this correction is pending the next CI runs.
+- First CI attempt for commit 2e609960a08aa52b5f7d63c797d4bd14e6e7c249 failed one regression test: sequentialExecutionPausesAndResumesFromAChildCoroutineCheckpoint observed PAUSED while the step was still IN_PROGRESS. Android CI reported 187 tests with 1 failure and 1 skipped; the APK workflow reported 186 tests with 1 failure and 1 skipped. The cause was a usage-summary update emitting a pause checkpoint before the step result had been committed.
+- Correction commit a3e534c4a366c3d4aba5d7427d13f1070319c0f2 commits usage totals, evaluation and the terminal step state in one execution snapshot. The rerun passed: 312 tests, 0 failures, 0 errors and 4 skipped (308 passed); TeamOrchestratorExecutionFixtureTest passed all 11 tests. Android CI/CD run 44416472780, APK run 44416472803 and Code Quality run 44416472812 all reached terminal SUCCESS. Debug APK artifact 14479802449 and signed Release APK artifact 14479892331 were uploaded; JUnit artifact 14479103772 was inspected. The Code Quality lint artifact 14479663309 reports 193 warnings and no workflow failure.
 - No local Gradle execution, Android emulator/device screenshot, RTL/LTR visual review, live provider request, Supabase write or production-data mutation is claimed.
 
 ### Criterion status
@@ -2433,3 +2433,29 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last area worked: DAG execution integrity, pause/resume, process recovery, parallel state serialization and truthful retry accounting.
 - Next exact step: inspect the rerun Android CI, APK and Code Quality workflows for the correction commit to terminal status; fix any remaining failures. Then continue with the next independent TeamValidation acceptance item that can be verified without production writes, starting with the usage-accounting contract and its measured-versus-estimated semantics.
 - Repository AGENTS.md / agents.md files: none found in the recursive main tree inspected for this batch.
+
+
+## 2026-11-19 — Usage ledger persistence and estimate semantics
+
+### Implementation
+- TeamGovernanceEngineImpl.recordUsage now propagates a failed local usage-ledger write instead of returning a successful record when persistence failed.
+- TeamUsageRecord defaults isCostConfirmed to false. The current orchestration path estimates token counts from text length, so its recorded costs are not presented as provider-measured billing.
+- Team Usage now labels token totals as estimates, identifies the source as usage records rather than measured telemetry, and explains that token counts are derived from text length.
+
+### Regression coverage
+- Added tests proving newly created usage records are unconfirmed by default, recordUsage persists an unconfirmed record, and a failed ledger write is surfaced to the caller.
+- TeamUsageViewModel already has coverage separating confirmed cost from unconfirmed cost and excluding blocked paid attempts from successful usage.
+
+### Verification boundary
+- This batch's Android CI, APK build and Code Quality runs are pending.
+- No remote usage table, Supabase schema, RLS policy or production data was changed. The existing TeamUsage ledger remains local Room storage; cross-device/server durability is still unverified.
+- The UI's token totals are estimates, not provider-reported token usage. The UI now labels them accordingly.
+
+### Criterion status
+| TeamValidation criterion | State | Evidence / blocker |
+|---|---|---|
+| #18 Persisted member usage ledger | IN_PROGRESS | Local Room write failures now propagate and estimates are labelled unconfirmed; remote usage-ledger contract and cross-device durability remain BLOCKED |
+
+### Persistent continuity
+- Last area worked: local usage-ledger integrity and truthful measured-versus-estimated reporting.
+- Next exact step: inspect CI for this usage-ledger commit to terminal status. Then inspect the VibeLivePreviewPanel WebView security boundary; JavaScript is enabled for generated workspace HTML, so verify CSP, navigation restrictions and network access before changing the preview sandbox.

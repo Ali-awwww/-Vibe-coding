@@ -255,14 +255,14 @@ class TeamGovernanceEngineImpl(
             totalTokens = inputTokens + outputTokens,
             costUsd = if (model.isFree || team.governance.freeOnly) 0.0 else cost,
             isFree = model.isFree || team.governance.freeOnly,
-            isCostConfirmed = true,
+            isCostConfirmed = false,
             status = if (isSuccess) "SUCCESS" else if (errorMessage?.contains("429") == true) "RATE_LIMITED" else "FAILED",
             errorMessage = errorMessage?.let { maskSecrets(it) },
             quotaRemaining = quotaRemaining,
             timestamp = System.currentTimeMillis()
         )
 
-        teamRepository.logTeamUsage(record)
+        teamRepository.logTeamUsage(record).getOrThrow()
         return record
     }
 }
