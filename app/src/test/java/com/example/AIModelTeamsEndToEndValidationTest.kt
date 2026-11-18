@@ -121,8 +121,9 @@ class AIModelTeamsEndToEndValidationTest {
     @Test
     fun `test free only protection enforcement requirement 17`() = runTest(testDispatcher) {
         val result = validationEngine.runSingleTest("user_cost_shield", 17).first { it.status != ValidationStatus.RUNNING }
-        assertEquals(ValidationStatus.SKIPPED, result.status)
-        assertNotNull(result.errorMessage)
+        assertEquals(ValidationStatus.PASSED, result.status)
+        assertTrue(result.evidence?.contains("PaidModelBlocked") == true)
+        assertTrue(result.evidence?.contains("no provider request") == true)
     }
 
     @Test

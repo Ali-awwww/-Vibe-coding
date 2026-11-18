@@ -2341,3 +2341,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: TeamValidation controlled quota failover, Retry-After cooldown and Free Only pre-inference safety.
 - Next exact step: verify CI for the bounded-retry implementation to terminal state and inspect the JUnit report for all three new validation probes plus both repository retry tests. Then continue with the next independently testable TeamValidation criterion; keep the screen open until its remaining real orchestration/persistence and rendered RTL/LTR/device criteria are verified.
+
+
+## 2026-11-19 — TeamValidation CI regression alignment
+
+- GitHub Actions for commit `17e17e65e5fb13bdb56974349851c0b0e4922a66` reached test execution but failed one assertion in `AIModelTeamsEndToEndValidationTest`: requirement #17 still expected `SKIPPED`, while the newly implemented production Free Only guard correctly returned `PASSED` with a `PaidModelBlocked` result. The same run completed 45 tests with 1 failure and 1 skipped.
+- Updated the stale end-to-end assertion to require the new guard evidence and no provider request. This is a regression-test alignment, not a weakening of the acceptance condition.
+- The earlier `f8a2f1be` run also exposed missing imports in the new test file; commit `17e17e65` added them. Subsequent Retry-After changes add the shared policy import and explicit Retrofit response type.
+- The latest CI runs for the bounded Retry-After implementation and this regression-test correction are pending. No pass is claimed until the final run completes.
+- Next exact step: inspect the newest Android CI/CD, APK and Code Quality runs to terminal state; use the JUnit report to confirm the Free Only, quota failover and Retry-After tests executed. Fix any remaining compile/test/lint failure before proceeding.
