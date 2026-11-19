@@ -449,109 +449,52 @@ object WorkspaceSandboxEngine {
             if (combinedCss.isNotBlank() && !html.contains("<style>")) {
                 html = html.replace("</head>", "<style>\n$combinedCss\n</style>\n</head>")
             }
-            return injectConsoleBridge(html)
+            return PreviewHtmlSecurityPolicy.injectContentSecurityPolicy(injectConsoleBridge(html))
         }
 
-        // Generate dynamic web preview for component-based projects
-        val appCode = jsFiles.find { it.path.contains("App") }?.content
-            ?: files.find { it.extension in listOf("kt", "dart", "py") }?.content
-            ?: "// Code"
-
-        return """
+        // Do not display a fabricated application when there is no runnable HTML entry point.
+        val safeWorkspaceName = escapeHtml(workspace.name.ifBlank { "Workspace" })
+        val safeDescription = escapeHtml(
+            workspace.description.ifBlank {
+                "No index.html entry point is available. Framework previews require a verified execution backend."
+            }
+        )
+        val html = """
             <!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>${workspace.name}</title>
+                <title>Preview unavailable</title>
                 <style>
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body {
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                        background: #f8fafc;
-                        color: #0f172a;
-                        padding: 24px;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        min-height: 100vh;
-                    }
-                    .container {
-                        max-width: 600px;
-                        width: 100%;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-                        padding: 32px;
-                        text-align: center;
-                    }
-                    .badge {
-                        display: inline-block;
-                        padding: 4px 12px;
-                        background: #e0f2fe;
-                        color: #0284c7;
-                        border-radius: 9999px;
-                        font-size: 12px;
-                        font-weight: 600;
-                        margin-bottom: 16px;
-                    }
-                    h1 { font-size: 24px; margin-bottom: 8px; }
-                    p { color: #64748b; font-size: 14px; margin-bottom: 24px; }
-                    .btn {
-                        background: #3b82f6;
-                        color: white;
-                        border: none;
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: background 0.2s;
-                    }
-                    .btn:hover { background: #2563eb; }
-                    .stats {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 16px;
-                        margin-top: 24px;
-                        padding-top: 24px;
-                        border-top: 1px solid #e2e8f0;
-                    }
-                    .stat-item { text-align: center; }
-                    .stat-val { font-size: 20px; font-weight: bold; color: #1e293b; }
-                    .stat-lbl { font-size: 12px; color: #94a3b8; }
-                    $combinedCss
+                    * { box-sizing: border-box; }
+                    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #0f172a; color: #e2e8f0; font-family: system-ui, sans-serif; }
+                    main { width: min(100%, 560px); padding: 28px; border: 1px solid #334155; border-radius: 18px; background: #172033; }
+                    h1 { margin: 0 0 12px; font-size: 22px; }
+                    p { line-height: 1.6; color: #cbd5e1; }
+                    .label { color: #67e8f9; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
                 </style>
             </head>
             <body>
-                <div class="container">
-                    <span class="badge">${workspace.type} • ${workspace.techStack}</span>
-                    <h1>${workspace.name}</h1>
-                    <p>${workspace.description.ifBlank { "Live interactive sandbox render" }}</p>
-                    <button class="btn" onclick="handleClick()">Interactive Action</button>
-                    <div class="stats">
-                        <div class="stat-item">
-                            <div class="stat-val" id="counter">0</div>
-                            <div class="stat-lbl">Clicks</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-val">${files.size}</div>
-                            <div class="stat-lbl">Workspace Files</div>
-                        </div>
-                    </div>
-                </div>
-                <script>
-                    let count = 0;
-                    function handleClick() {
-                        count++;
-                        document.getElementById('counter').innerText = count;
-                        console.log('Action triggered. Counter is now: ' + count);
-                    }
-                    console.info('Application loaded in Sandbox Preview successfully.');
-                </script>
+                <main>
+                    <div class="label">WORKSPACE PREVIEW</div>
+                    <h1>Preview unavailable</h1>
+                    <p>$safeDescription</p>
+                    <p>Workspace: $safeWorkspaceName</p>
+                    <p>No build, process, emulator or live server has been started.</p>
+                </main>
             </body>
             </html>
         """.trimIndent()
+        return PreviewHtmlSecurityPolicy.injectContentSecurityPolicy(html)
     }
+
+    private fun escapeHtml(value: String): String = value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;")
 
     private fun injectConsoleBridge(html: String): String {
         val bridgeScript = """

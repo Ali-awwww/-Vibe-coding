@@ -1,9 +1,17 @@
 package com.example.presentation.ui.screens.vibe
 
+import android.os.Build
+import android.os.Message
+import android.webkit.CookieManager
+import android.webkit.PermissionRequest
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import java.io.ByteArrayInputStream
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -27,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.domain.model.*
+import com.example.util.PreviewHtmlSecurityPolicy
 import com.example.util.WorkspaceSandboxEngine
 
 @Composable
@@ -52,6 +61,7 @@ fun VibeLivePreviewPanel(
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Preview, 1: Browser Console
 
     val isNative = workspace.type == WorkspaceType.ANDROID || workspace.type == WorkspaceType.IOS
+    val previewBaseUrl = remember(workspace.id) { PreviewHtmlSecurityPolicy.baseUrlForWorkspace(workspace.id) }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -80,22 +90,21 @@ fun VibeLivePreviewPanel(
                             }
                             Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
                             Text(
-                                "Live Preview: $statusText",
+                                "Workspace Preview: $statusText",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
-                            if (runtimeState?.status == ServerStatus.RUNNING) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer
-                                ) {
-                                    Text(
-                                        ":${runtimeState.port}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 10.sp,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
-                                }
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer
+                            ) {
+                                Text(
+                                    "NETWORK ISOLATED",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 9.sp,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
                             }
                         }
 
@@ -234,12 +243,9 @@ fun VibeLivePreviewPanel(
                 if (selectedTab == 0) {
                     // Distinct handling: Native Mobile App vs Web Browser App
                     if (isNative) {
-                        NativeAppSimulatorView(
+                        NativePreviewUnavailableView(
                             workspace = workspace,
-                            files = files,
-                            runtimeState = runtimeState,
-                            viewport = previewViewport,
-                            orientation = previewOrientation
+                            files = files
                         )
                     } else {
                         // Web Browser Sandbox Rendering
@@ -273,31 +279,89 @@ fun VibeLivePreviewPanel(
                                             settings.domStorageEnabled = true
                                             settings.loadWithOverviewMode = true
                                             settings.useWideViewPort = true
+                                            settings.allowFileAccess = false
+                                            settings.allowContentAccess = false
+                                            settings.allowFileAccessFromFileURLs = false
+                                            settings.allowUniversalAccessFromFileURLs = false
+                                            settings.blockNetworkLoads = true
+                                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                                            settings.javaScriptCanOpenWindowsAutomatically = false
+                                            settings.setSupportMultipleWindows(false)
+                                            settings.databaseEnabled = false
+                                            settings.setGeolocationEnabled(false)
+                                            settings.setMediaPlaybackRequiresUserGesture(true)
+                                            settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                                settings.safeBrowsingEnabled = true
+                                            }
+                                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
 
                                             webChromeClient = object : WebChromeClient() {
                                                 override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                                                    consoleMessage?.let {
-                                                        val level = when (it.messageLevel()) {
+                                                    consoleMessage?.let { message ->
+                                                        val level = when (message.messageLevel()) {
                                                             ConsoleMessage.MessageLevel.ERROR -> ConsoleLogLevel.ERROR
                                                             ConsoleMessage.MessageLevel.WARNING -> ConsoleLogLevel.WARN
                                                             ConsoleMessage.MessageLevel.LOG -> ConsoleLogLevel.LOG
                                                             else -> ConsoleLogLevel.INFO
                                                         }
-                                                        onAddConsoleLog(level, it.message(), "${it.sourceId()}:${it.lineNumber()}")
+                                                        val source = message.sourceId().substringBefore('?').take(160)
+                                                            .takeIf { it.isNotBlank() }
+                                                        onAddConsoleLog(
+                                                            level,
+                                                            WorkspaceSandboxEngine.sanitizeOutput(message.message()).take(2000),
+                                                            source
+                                                        )
                                                     }
                                                     return true
                                                 }
+
+                                                override fun onPermissionRequest(request: PermissionRequest) {
+                                                    request.deny()
+                                                }
+
+                                                override fun onCreateWindow(
+                                                    view: WebView?,
+                                                    isDialog: Boolean,
+                                                    isUserGesture: Boolean,
+                                                    resultMsg: Message?
+                                                ): Boolean = false
                                             }
 
-                                            webViewClient = object : WebViewClient() {}
+                                            webViewClient = object : WebViewClient() {
+                                                override fun shouldOverrideUrlLoading(
+                                                    view: WebView?,
+                                                    request: WebResourceRequest
+                                                ): Boolean = PreviewHtmlSecurityPolicy.shouldBlockNavigation(request.url.toString())
+
+                                                override fun shouldOverrideUrlLoading(view: WebView?, url: String): Boolean =
+                                                    PreviewHtmlSecurityPolicy.shouldBlockNavigation(url)
+
+                                                override fun shouldInterceptRequest(
+                                                    view: WebView?,
+                                                    request: WebResourceRequest
+                                                ): WebResourceResponse? {
+                                                    if (!PreviewHtmlSecurityPolicy.shouldBlockResourceRequest(request.url.toString())) {
+                                                        return null
+                                                    }
+                                                    return WebResourceResponse(
+                                                        "text/plain",
+                                                        "UTF-8",
+                                                        403,
+                                                        "Blocked by workspace preview sandbox",
+                                                        emptyMap(),
+                                                        ByteArrayInputStream(ByteArray(0))
+                                                    )
+                                                }
+                                            }
 
                                             val html = WorkspaceSandboxEngine.generatePreviewHtml(workspace, files)
-                                            loadDataWithBaseURL("http://localhost:3000", html, "text/html", "UTF-8", null)
+                                            loadDataWithBaseURL(previewBaseUrl, html, "text/html", "UTF-8", null)
                                         }
                                     },
                                     update = { webView ->
                                         val html = WorkspaceSandboxEngine.generatePreviewHtml(workspace, files)
-                                        webView.loadDataWithBaseURL("http://localhost:3000", html, "text/html", "UTF-8", null)
+                                        webView.loadDataWithBaseURL(previewBaseUrl, html, "text/html", "UTF-8", null)
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 )
@@ -317,102 +381,45 @@ fun VibeLivePreviewPanel(
 }
 
 @Composable
-fun NativeAppSimulatorView(
+private fun NativePreviewUnavailableView(
     workspace: Workspace,
-    files: List<WorkspaceFile>,
-    runtimeState: SandboxRuntimeState?,
-    viewport: PreviewViewport,
-    orientation: PreviewOrientation
+    files: List<WorkspaceFile>
 ) {
-    // Complies strictly with: "أما التطبيقات الأصلية Android وiOS، فاستخدم Android Emulator أو بيئة Apple Simulator. لا تعرض معاينة ويب على أنها محاكاة فعلية لنظام تشغيل أصلي."
     Box(
-        modifier = Modifier
-            .width(if (viewport == PreviewViewport.TABLET) 500.dp else 320.dp)
-            .fillMaxHeight()
-            .padding(16.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .border(3.dp, Color(0xFF475569), RoundedCornerShape(24.dp))
-            .background(Color(0xFF1E293B)),
+        modifier = Modifier.fillMaxSize().padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(20.dp)
         ) {
-            // Phone Speaker Notch
-            Box(
-                modifier = Modifier
-                    .width(80.dp)
-                    .height(6.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF475569))
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Android, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Android Emulator API 36", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                }
+                Icon(
+                    Icons.Default.PhoneAndroid,
+                    contentDescription = "Native preview unavailable",
+                    modifier = Modifier.size(44.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("Native preview unavailable", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Android and iOS projects are not simulated inside a WebView. Connect a real Android Emulator or Apple Simulator through a verified execution agent.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("Workspace: " + workspace.name, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    "Files: " + files.size + " • not compiled or installed",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Emulator screen representation
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.PhoneAndroid, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(8.dp))
-                    Text(workspace.name, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
-                    Text("Native Android Build Artifact", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                    Spacer(Modifier.height(12.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0x304CAF50),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            "Streaming Emulator Ready • Gradle Debug APK Installed",
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                            color = Color(0xFF81C784),
-                            fontSize = 9.sp
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Text(
-                        "${files.size} source files compiled • Dalvik Executable loaded",
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        color = Color(0xFF94A3B8),
-                        fontSize = 10.sp
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            // Navigation bar bar pill
-            Box(
-                modifier = Modifier
-                    .width(100.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(Color.Gray)
-            )
         }
     }
 }
