@@ -857,14 +857,21 @@ class VibeStudioViewModel(
     fun connectLocalAgent(endpoint: String, token: String) {
         val workspace = _uiState.value.activeWorkspace ?: return
         viewModelScope.launch {
-            repository.connectLocalAgent(workspace.id, endpoint, token).onSuccess {
-                _uiState.update {
-                    it.copy(
-                        localAgentConfig = it.localAgentConfig.copy(isEnabled = true, endpoint = endpoint, authToken = token),
-                        isLocalAgentModalOpen = false
-                    )
+            repository.connectLocalAgent(workspace.id, endpoint, token)
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            localAgentConfig = it.localAgentConfig.copy(isEnabled = true, endpoint = endpoint, authToken = token),
+                            isLocalAgentModalOpen = false,
+                            error = null
+                        )
+                    }
                 }
-            }
+                .onFailure { failure ->
+                    _uiState.update {
+                        it.copy(error = failure.message ?: "تعذر التحقق من اتصال الوكيل المحلي.")
+                    }
+                }
         }
     }
 
@@ -877,7 +884,12 @@ class VibeStudioViewModel(
     }
 
     fun toggleLocalAgentModal(show: Boolean) {
-        _uiState.update { it.copy(isLocalAgentModalOpen = show) }
+        _uiState.update {
+            it.copy(
+                isLocalAgentModalOpen = show,
+                error = if (show) null else it.error
+            )
+        }
     }
 
     fun toggleResourceModal(show: Boolean) {

@@ -505,7 +505,8 @@ fun VibeStudioScreen(
             config = uiState.localAgentConfig,
             onConnect = { endpoint, token -> viewModel.connectLocalAgent(endpoint, token) },
             onDisconnect = { viewModel.disconnectLocalAgent() },
-            onDismiss = { viewModel.toggleLocalAgentModal(false) }
+            onDismiss = { viewModel.toggleLocalAgentModal(false) },
+            errorMessage = uiState.error
         )
     }
 

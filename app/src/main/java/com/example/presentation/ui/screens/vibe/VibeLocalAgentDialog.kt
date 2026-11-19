@@ -24,10 +24,11 @@ fun VibeLocalAgentDialog(
     config: LocalAgentConfig,
     onConnect: (endpoint: String, token: String) -> Unit,
     onDisconnect: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    errorMessage: String? = null
 ) {
     var endpoint by remember { mutableStateOf(config.endpoint.ifBlank { "http://localhost:8974" }) }
-    var token by remember { mutableStateOf(config.authToken.ifBlank { "vibe_bridge_sec_8974" }) }
+    var token by remember { mutableStateOf(config.authToken) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -75,7 +76,7 @@ fun VibeLocalAgentDialog(
                         Column {
                             Text("حالة الاتصال بالوكيل المحلي:", style = MaterialTheme.typography.labelSmall)
                             Text(
-                                if (config.isEnabled) "متصل بنجاح (Connected to Workstation)" else "غير متصل (Using Cloud Sandbox)",
+                                if (config.isEnabled) "متصل (Connected)" else "غير متصل — لا توجد بيئة تشغيل موثقة",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = if (config.isEnabled) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -118,11 +119,27 @@ fun VibeLocalAgentDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        "أمان محكم: صلاحيات الوكيل المحلي مقيدة حصراً بمجلد المشروع المختار، ولا يملك أية صلاحيات خارج مسار العمل.",
+                        "لا يُعلن الاتصال أو عزل مجلد المشروع قبل تنفيذ بروتوكول مصادقة ونقل موثّق واختباره.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(8.dp)
                     )
+                }
+
+                if (!errorMessage.isNullOrBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            errorMessage,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -144,7 +161,6 @@ fun VibeLocalAgentDialog(
                         onClick = {
                             if (endpoint.isNotBlank() && token.isNotBlank()) {
                                 onConnect(endpoint, token)
-                                onDismiss()
                             }
                         },
                         enabled = endpoint.isNotBlank() && token.isNotBlank(),

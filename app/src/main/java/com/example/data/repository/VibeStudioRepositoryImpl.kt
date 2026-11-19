@@ -1061,62 +1061,23 @@ class VibeStudioRepositoryImpl(
         return runtimeStates.map { it[workspaceId] }
     }
 
-    override suspend fun startDevServer(workspaceId: String): Result<SandboxRuntimeState> = runCatching {
-        val workspace = vibeStudioDao.getWorkspaceById(workspaceId) ?: throw Exception("المشروع غير موجود")
+    override suspend fun startDevServer(workspaceId: String): Result<SandboxRuntimeState> {
+        val workspace = vibeStudioDao.getWorkspaceById(workspaceId)
+            ?: return Result.failure(IllegalArgumentException("المشروع غير موجود"))
         val files = vibeStudioDao.getAllFilesSync(workspaceId)
         val detectedRuntime = com.example.util.WorkspaceSandboxEngine.detectTechRuntime(workspace, files)
-        val allocatedPort = com.example.util.WorkspaceSandboxEngine.allocatePort(workspaceId, detectedRuntime.defaultPort)
+        val message = "لم يتم تشغيل خادم التطوير (" + detectedRuntime.name +
+            "): لا يوجد مشغل عمليات معزول أو وكيل تنفيذ موثق متصل. لم يتم إنشاء عملية أو فتح منفذ."
 
-        addBuildLog(BuildLog(
-            id = UUID.randomUUID().toString(),
-            workspaceId = workspaceId,
-            message = "بدء تشغيل خادم التطوير: ${detectedRuntime.command} على المنفذ $allocatedPort...",
-            type = LogType.INFO
-        ))
-
-        val processId = "pid-${UUID.randomUUID().toString().take(6)}"
-        val state = SandboxRuntimeState(
-            workspaceId = workspaceId,
-            status = ServerStatus.RUNNING,
-            port = allocatedPort,
-            localUrl = "http://localhost:$allocatedPort",
-            detectedRuntime = detectedRuntime,
-            activeProcessId = processId,
-            cpuUsagePercent = 12.4f,
-            memoryUsageMb = 148,
-            memoryLimitMb = 512,
-            storageUsageMb = (files.sumOf { it.content.length } / 1024f / 1024f).coerceAtLeast(1.2f),
-            storageLimitMb = 100f,
-            activeProcessesCount = 1,
-            startedAt = System.currentTimeMillis(),
-            lastOutput = "Dev server running at http://localhost:$allocatedPort"
+        addBuildLog(
+            BuildLog(
+                id = UUID.randomUUID().toString(),
+                workspaceId = workspaceId,
+                message = message,
+                type = LogType.WARNING
+            )
         )
-
-        runtimeStates.update { it + (workspaceId to state) }
-
-        // Record build operation
-        val operation = BuildOperation(
-            id = UUID.randomUUID().toString(),
-            workspaceId = workspaceId,
-            operationType = BuildOpType.DEV_SERVER,
-            command = detectedRuntime.command,
-            status = BuildOpStatus.RUNNING,
-            startTime = System.currentTimeMillis(),
-            stdout = "Server listening on http://localhost:$allocatedPort"
-        )
-        buildOperationsFlow.update { current ->
-            val list = current[workspaceId] ?: emptyList()
-            current + (workspaceId to (list + operation))
-        }
-
-        addBuildLog(BuildLog(
-            id = UUID.randomUUID().toString(),
-            workspaceId = workspaceId,
-            message = "الخادم يعمل بنجاح على المنفذ $allocatedPort [PID: $processId].",
-            type = LogType.SUCCESS
-        ))
-
-        state
+        return Result.failure(UnsupportedOperationException(message))
     }
 
     override suspend fun stopDevServer(workspaceId: String): Result<Unit> = runCatching {
@@ -1135,7 +1096,7 @@ class VibeStudioRepositoryImpl(
         addBuildLog(BuildLog(
             id = UUID.randomUUID().toString(),
             workspaceId = workspaceId,
-            message = "تم إيقاف خادم التطوير وتحرير المنفذ.",
+            message = "تم مسح حالة التشغيل وتحرير أي منفذ محجوز؛ لا يوجد تأكيد على وجود عملية فعلية.",
             type = LogType.INFO
         ))
     }
@@ -1253,30 +1214,21 @@ class VibeStudioRepositoryImpl(
         workspaceId: String,
         endpoint: String,
         token: String
-    ): Result<LocalAgentStatus> = runCatching {
-        addBuildLog(BuildLog(
-            id = UUID.randomUUID().toString(),
-            workspaceId = workspaceId,
-            message = "جاري الاتصال بوكيل التشغيل المحلي على $endpoint...",
-            type = LogType.INFO
-        ))
-
-        runtimeStates.update { current ->
-            val existing = current[workspaceId] ?: SandboxRuntimeState(workspaceId = workspaceId)
-            current + (workspaceId to existing.copy(
-                isLocalAgentMode = true,
-                localAgentStatus = LocalAgentStatus.CONNECTED
-            ))
+    ): Result<LocalAgentStatus> {
+        if (endpoint.isBlank() || token.isBlank()) {
+            return Result.failure(IllegalArgumentException("أدخل عنوان الوكيل ورمز المصادقة."))
         }
 
-        addBuildLog(BuildLog(
-            id = UUID.randomUUID().toString(),
-            workspaceId = workspaceId,
-            message = "تم تأسيس الجسر المحلي بنجاح (Local Agent Bridge Connected).",
-            type = LogType.SUCCESS
-        ))
-
-        LocalAgentStatus.CONNECTED
+        val message = "لم يتم الاتصال بالوكيل المحلي: بروتوكول النقل والتحقق من الرمز غير منفذين. لم يتم حفظ بيانات الاتصال أو إعلان حالة CONNECTED."
+        addBuildLog(
+            BuildLog(
+                id = UUID.randomUUID().toString(),
+                workspaceId = workspaceId,
+                message = message,
+                type = LogType.WARNING
+            )
+        )
+        return Result.failure(UnsupportedOperationException(message))
     }
 
     override suspend fun disconnectLocalAgent(workspaceId: String): Result<Unit> = runCatching {
@@ -1293,7 +1245,7 @@ class VibeStudioRepositoryImpl(
         addBuildLog(BuildLog(
             id = UUID.randomUUID().toString(),
             workspaceId = workspaceId,
-            message = "تم فصل وكيل التشغيل المحلي والعودة إلى Sandbox السحابية.",
+            message = "تم مسح حالة الوكيل المحلي؛ لم يتم استخدام اتصال فعلي أو تأكيد بيئة سحابية.",
             type = LogType.INFO
         ))
     }
@@ -1436,30 +1388,32 @@ class VibeStudioRepositoryImpl(
         onProgress?.invoke(AppBuildProgress(
             stage = AppBuildStage.CONFIGURING_CRASH_INTELLIGENCE,
             progressPercent = 0.85f,
-            currentTask = "تفعيل حزمة Crash Intelligence SDK لرصد وتتبع الأعطال الفورية..."
+            currentTask = "تسجيل متطلبات تكامل Crash Intelligence؛ لم يتم تفعيل SDK تلقائياً أو التحقق من وصول أحداث فعلية..."
         ))
 
         addBuildLog(BuildLog(
             id = UUID.randomUUID().toString(),
             workspaceId = workspaceId,
-            message = "تكامل Crash Intelligence SDK مفعل ومرتبط مع مراقبة الأعطال الحية.",
-            type = LogType.INFO
+            message = "لم يتم تفعيل Crash Intelligence SDK تلقائياً؛ يلزم إعداد التكامل والتحقق من وصول أحداث فعلية.",
+            type = LogType.WARNING
         ))
 
         // Stage 5: Starting Sandbox Preview
         onProgress?.invoke(AppBuildProgress(
             stage = AppBuildStage.STARTING_PREVIEW,
             progressPercent = 0.95f,
-            currentTask = "تشغيل خادم التطوير السحابي في بيئة Sandbox وتجهيز المعاينة..."
+            currentTask = "التحقق من توفر مشغل عمليات معزول قبل إعلان تشغيل المعاينة..."
         ))
 
-        startDevServer(workspaceId)
+        val previewStartResult = startDevServer(workspaceId)
+        val previewBlocker = previewStartResult.exceptionOrNull()?.message
 
-        // Stage 6: Completed
+        // Stage 6: Project scaffold generation completed; runtime/build remains separate.
         onProgress?.invoke(AppBuildProgress(
             stage = AppBuildStage.COMPLETED,
             progressPercent = 1.0f,
-            currentTask = "اكتمل البناء بنجاح! جاري فتح مساحة العمل والمعاينة الحية..."
+            currentTask = "تم حفظ ملفات المشروع الأولية. لم يتم تنفيذ Build أو تشغيل خادم معاينة." +
+                (previewBlocker?.let { " السبب: $it" } ?: "")
         ))
 
         workspace

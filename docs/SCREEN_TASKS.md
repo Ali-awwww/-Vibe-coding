@@ -2460,3 +2460,35 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: local usage-ledger integrity and truthful measured-versus-estimated reporting.
 - Next exact step: inspect CI for the usage-ledger test correction to terminal status. Then inspect the VibeLivePreviewPanel WebView security boundary; JavaScript is enabled for generated workspace HTML, so verify CSP, navigation restrictions and network access before changing the preview sandbox.
+
+
+## 2026-11-20 — VibeStudio preview isolation and truthful runtime states
+
+### Confirmed defects
+- VibeLivePreviewPanel rendered workspace-controlled HTML with JavaScript enabled under the shared http://localhost:3000 origin. It had no CSP, allowed unrestricted navigation and network requests, and retained WebView file/content access defaults.
+- Native Android/iOS workspaces were represented by a Compose mock labelled as Android Emulator API 36, with claims that an APK was installed and Dalvik was loaded; no emulator or installation was involved.
+- When no index.html existed, WorkspaceSandboxEngine displayed a generic interactive demo instead of the workspace application.
+- startDevServer fabricated a PID, open port, CPU/memory figures and RUNNING status without spawning a process. connectLocalAgent returned CONNECTED without a transport or token verification.
+- The generated-project flow logged Crash Intelligence as enabled although it did not install or verify an SDK.
+
+### Implementation
+- Added a per-workspace opaque preview origin and restrictive CSP. The WebView now blocks network requests, top-level navigation, file/content access, mixed content, popups and permission requests. DOM storage remains enabled only on the isolated per-workspace origin.
+- Console output is secret-redacted and length-limited before entering app state.
+- Replaced the fabricated native emulator and generic application demo with explicit unavailable states. Missing runtime or build capability is not represented as a successful preview.
+- Dev-server start and Local Agent connection now fail closed until a real isolated process runner and authenticated transport exist. They do not create fake RUNNING/CONNECTED states or persist unverified tokens.
+- Project generation now describes the result as saved scaffold files; it no longer claims that Crash Intelligence was activated or that a live build/server started.
+
+### Regression coverage
+- Added preview-origin, CSP ordering, navigation/resource blocking and generated-HTML tests.
+- Added repository tests proving server start and Local Agent connection remain unavailable without real execution/transport backends.
+- Corrected the TeamGovernanceEngineImplTest dynamic-proxy fixture to match Kotlin's mangled suspend method name; CI verification is pending.
+
+### Verification boundary
+- GitHub Code Quality and unit-test/APK workflows for this batch are pending. No local Gradle result, Emulator/device screenshot, native build, or actual Local Agent connection is claimed.
+- The preview security boundary is implemented in source but remains IN_PROGRESS until CI passes and rendered RTL/LTR/device evidence is available.
+- Real native execution, dev-server lifecycle, and authenticated Local Agent transport remain BLOCKED because the repository currently has no process runner or transport implementation. No fake success status is emitted.
+
+### Persistent continuity
+- Last area worked: VibeStudio preview sandbox, runtime truthfulness and Local Agent status.
+- Next exact step: inspect the current main-head CI jobs and JUnit results to terminal status; fix any failures. Then continue with the highest-priority independent AIModels provider-connection criterion, while leaving real VibeStudio execution blocked until a verifiable sandbox/agent transport is implemented.
+- Repository AGENTS.md / agents.md files: none found in the recursive tree inspected at main HEAD 45d5448a7fce2874f95fc29294dc7452ee989319.

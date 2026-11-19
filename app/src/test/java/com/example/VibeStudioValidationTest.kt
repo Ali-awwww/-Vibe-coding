@@ -176,5 +176,38 @@ class VibeStudioValidationTest {
         val restoredFile = vibeStudioRepository.getFileById("f1")
         assertEquals("v1", restoredFile?.content)
     }
+
+    @Test
+    fun devServerDoesNotReportRunningWithoutAnExecutionBackend() = runTest(testDispatcher) {
+        val workspaceId = "ws-runtime-unavailable"
+        vibeStudioRepository.createWorkspace(
+            Workspace(id = workspaceId, ownerId = "user-1", name = "Runtime test")
+        )
+
+        val result = vibeStudioRepository.startDevServer(workspaceId)
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("مشغل عمليات معزول") == true)
+        assertNull(vibeStudioRepository.getSandboxRuntimeState(workspaceId).first())
+    }
+
+    @Test
+    fun localAgentDoesNotReportConnectedWithoutAnAuthenticatedTransport() = runTest(testDispatcher) {
+        val workspaceId = "ws-agent-unavailable"
+        vibeStudioRepository.createWorkspace(
+            Workspace(id = workspaceId, ownerId = "user-1", name = "Agent test")
+        )
+
+        val result = vibeStudioRepository.connectLocalAgent(
+            workspaceId = workspaceId,
+            endpoint = "http://localhost:8974",
+            token = "test-token"
+        )
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("بروتوكول النقل") == true)
+        assertNull(vibeStudioRepository.getSandboxRuntimeState(workspaceId).first())
+    }
+
 }
 
