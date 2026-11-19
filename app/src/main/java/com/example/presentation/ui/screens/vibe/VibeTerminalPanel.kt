@@ -75,7 +75,7 @@ fun VibeTerminalPanel(
                             color = Color(0xFF2E7D32).copy(alpha = 0.3f)
                         ) {
                             Text(
-                                "Sandbox Active",
+                                "FILE OPS ONLY",
                                 color = Color(0xFF81C784),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 9.sp,
@@ -104,7 +104,7 @@ fun VibeTerminalPanel(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                val quickCommands = listOf("npm run dev", "npm test", "npm run build", "ls", "ps", "ports", "help")
+                val quickCommands = listOf("ls", "cat package.json", "touch src/Main.kt", "grep TODO", "pwd", "help")
                 quickCommands.forEach { cmd ->
                     Surface(
                         shape = RoundedCornerShape(4.dp),
@@ -190,7 +190,7 @@ fun VibeTerminalPanel(
                     TextField(
                         value = commandInput,
                         onValueChange = { commandInput = it },
-                        placeholder = { Text("Enter sandbox command (e.g. npm test, ls, ports)...", color = Color.Gray, fontSize = 11.sp) },
+                        placeholder = { Text("Enter workspace command (e.g. ls, cat package.json, touch src/Main.kt, help)...", color = Color.Gray, fontSize = 11.sp) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, color = Color.White, fontSize = 12.sp),

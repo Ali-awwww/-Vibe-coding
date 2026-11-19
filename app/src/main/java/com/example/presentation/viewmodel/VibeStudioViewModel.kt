@@ -821,7 +821,11 @@ class VibeStudioViewModel(
     fun killStuckProcesses() {
         val workspace = _uiState.value.activeWorkspace ?: return
         viewModelScope.launch {
-            repository.killStuckProcesses(workspace.id)
+            repository.killStuckProcesses(workspace.id).onFailure { failure ->
+                _uiState.update {
+                    it.copy(error = failure.message ?: "لا يتوفر مشغل عمليات لإنهاء العمليات.")
+                }
+            }
         }
     }
 

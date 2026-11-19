@@ -410,7 +410,7 @@ class AICodingAgentTest {
     }
 
     @Test
-    fun `executeTerminalCommand in repository executes command and updates files and logs`() = runTest {
+    fun `workspace file commands work while package execution fails closed`() = runTest {
         val workspaceId = UUID.randomUUID().toString()
         dao.insertWorkspace(Workspace(id = workspaceId, name = "Term Project"))
         dao.insertFile(WorkspaceFile(
@@ -427,12 +427,16 @@ class AICodingAgentTest {
         val createdFile = dao.getFileByPath(workspaceId, "src/components/Header.tsx")
         assertNotNull("File created via touch must exist in DB", createdFile)
 
-        // 2. Install package
+        // 2. Package installation requires a real process runner and must not mutate the manifest.
+        val packageBefore = dao.getFileByPath(workspaceId, "package.json")!!.content
         val installResult = repository.executeTerminalCommand(workspaceId, "npm install axios")
         assertTrue(installResult.isSuccess)
+        val commandResult = installResult.getOrThrow()
+        assertEquals(126, commandResult.exitCode)
+        assertTrue(commandResult.stderr.contains("PROCESS_EXECUTION_UNAVAILABLE"))
         val updatedPkg = dao.getFileByPath(workspaceId, "package.json")
         assertNotNull(updatedPkg)
-        assertTrue("package.json must contain axios", updatedPkg!!.content.contains("axios"))
+        assertEquals(packageBefore, updatedPkg!!.content)
 
         // 3. Verify terminal history
         val history = repository.getTerminalHistory(workspaceId).first()
@@ -440,7 +444,7 @@ class AICodingAgentTest {
     }
 
     @Test
-    fun `dev server lifecycle correctly allocates port, handles start, restart, and stop`() = runTest {
+    fun \`dev server operations fail closed without a real process runner\`() = runTest {
         val workspaceId = UUID.randomUUID().toString()
         dao.insertWorkspace(Workspace(id = workspaceId, name = "Dev Lifecycle Project"))
         dao.insertFile(WorkspaceFile(
@@ -451,39 +455,33 @@ class AICodingAgentTest {
             content = "{\"dependencies\": {\"vite\": \"5.0.0\"}}"
         ))
 
-        // Start Dev Server
         val startRes = repository.startDevServer(workspaceId)
-        assertTrue(startRes.isSuccess)
-        val startState = startRes.getOrThrow()
-        assertEquals(ServerStatus.RUNNING, startState.status)
-        assertEquals(5173, startState.port)
-        assertNotNull(startState.activeProcessId)
+        assertTrue(startRes.isFailure)
+        assertTrue(startRes.exceptionOrNull()?.message?.contains("مشغل عمليات معزول") == true)
+        assertNull(repository.getSandboxRuntimeState(workspaceId).first())
 
-        // Restart Dev Server
         val restartRes = repository.restartDevServer(workspaceId)
-        assertTrue(restartRes.isSuccess)
-        val restartState = restartRes.getOrThrow()
-        assertEquals(ServerStatus.RUNNING, restartState.status)
+        assertTrue(restartRes.isFailure)
+        assertNull(repository.getSandboxRuntimeState(workspaceId).first())
 
-        // Stop Dev Server
         val stopRes = repository.stopDevServer(workspaceId)
         assertTrue(stopRes.isSuccess)
-        val stopState = repository.getSandboxRuntimeState(workspaceId).first()
-        assertNotNull(stopState)
-        assertEquals(ServerStatus.STOPPED, stopState!!.status)
+        assertNull(repository.getSandboxRuntimeState(workspaceId).first())
+
+        val killRes = repository.killStuckProcesses(workspaceId)
+        assertTrue(killRes.isFailure)
     }
 
     @Test
-    fun `connectLocalAgent and disconnectLocalAgent establish workstation bridge`() = runTest {
+    fun `Local Agent remains disconnected until an authenticated transport exists`() = runTest {
         val workspaceId = UUID.randomUUID().toString()
         dao.insertWorkspace(Workspace(id = workspaceId, name = "Bridge Project"))
 
-        // Connect Local Agent
-        val connectRes = repository.connectLocalAgent(workspaceId, "http://localhost:8974", "secret_token_123")
-        assertTrue(connectRes.isSuccess)
-        assertEquals(LocalAgentStatus.CONNECTED, connectRes.getOrThrow())
+        val connectRes = repository.connectLocalAgent(workspaceId, "http://localhost:8974", "test-token")
+        assertTrue(connectRes.isFailure)
+        assertTrue(connectRes.exceptionOrNull()?.message?.contains("بروتوكول النقل") == true)
+        assertNull(repository.getSandboxRuntimeState(workspaceId).first())
 
-        // Disconnect
         val disconnectRes = repository.disconnectLocalAgent(workspaceId)
         assertTrue(disconnectRes.isSuccess)
     }
