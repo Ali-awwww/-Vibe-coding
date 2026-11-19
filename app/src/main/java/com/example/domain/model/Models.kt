@@ -243,7 +243,12 @@ data class AIUsageLog(
     val isSuccess: Boolean = true,
     val errorMessage: String? = null,
     val timestamp: Long = System.currentTimeMillis()
-)
+) {
+    companion object {
+        /** Cost is unknown when the provider cannot supply enough metadata to price a request. */
+        const val UNKNOWN_COST: Double = -1.0
+    }
+}
 
 @Entity(tableName = "ai_user_settings")
 data class AIUserSettings(

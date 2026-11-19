@@ -2,6 +2,7 @@ package com.example.domain.repository
 
 import com.example.domain.model.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 interface AIModelRepository {
     fun getProviders(userId: String): Flow<List<AIProvider>>
@@ -19,6 +20,10 @@ interface AIModelRepository {
     
     fun getRecentUsageLogs(userId: String): Flow<List<AIUsageLog>>
     fun getTotalCost(userId: String, since: Long): Flow<Double?>
+    fun hasUnpricedUsageSince(userId: String, since: Long): Flow<Boolean> =
+        getRecentUsageLogs(userId).map { logs ->
+            logs.any { it.timestamp > since && it.estimatedCost < 0.0 }
+        }
     suspend fun logUsage(log: AIUsageLog)
 
     // Selection & User Settings management

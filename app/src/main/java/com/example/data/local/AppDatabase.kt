@@ -350,8 +350,20 @@ interface AIProviderDao {
     @Query("SELECT * FROM ai_usage_logs WHERE userId = :userId ORDER BY timestamp DESC LIMIT 100")
     fun getRecentUsageLogs(userId: String): Flow<List<AIUsageLog>>
 
-    @Query("SELECT SUM(estimatedCost) FROM ai_usage_logs WHERE userId = :userId AND timestamp > :since")
+    @Query("""
+        SELECT COALESCE(SUM(CASE WHEN estimatedCost >= 0 THEN estimatedCost ELSE 0 END), 0)
+        FROM ai_usage_logs
+        WHERE userId = :userId AND timestamp > :since
+    """)
     fun getTotalCost(userId: String, since: Long): Flow<Double?>
+
+    @Query("""
+        SELECT EXISTS(
+            SELECT 1 FROM ai_usage_logs
+            WHERE userId = :userId AND timestamp > :since AND estimatedCost < 0
+        )
+    """)
+    fun hasUnpricedUsageSince(userId: String, since: Long): Flow<Boolean>
 
     // User Settings
     @Query("SELECT * FROM ai_user_settings WHERE userId = :userId")

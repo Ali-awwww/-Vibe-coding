@@ -25,7 +25,8 @@ data class AIModelsUiState(
     val totalCost: Double = 0.0,
     val successCount: Int = 0,
     val failedCount: Int = 0,
-    val lastSuccessAt: Long? = null
+    val lastSuccessAt: Long? = null,
+    val hasUnpricedUsage: Boolean = false
 )
 
 class AIModelsViewModel(
@@ -51,15 +52,14 @@ class AIModelsViewModel(
                     } else {
                         refreshTrigger.flatMapLatest {
                             val userId = user.id
+                            val usageWindowStart = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000L
                             val source = combine(
                                 aiModelRepository.getProviders(userId),
                                 aiModelRepository.getUserSettings(userId),
                                 aiModelRepository.getRecentUsageLogs(userId),
-                                aiModelRepository.getTotalCost(
-                                    userId,
-                                    System.currentTimeMillis() - 30 * 24 * 60 * 60 * 1000L
-                                )
-                            ) { providers, settings, logs, cost ->
+                                aiModelRepository.getTotalCost(userId, usageWindowStart),
+                                aiModelRepository.hasUnpricedUsageSince(userId, usageWindowStart)
+                            ) { providers, settings, logs, cost, hasUnpricedUsage ->
                                 val freeOnly = settings?.freeOnly ?: true
                                 val models = aiModelRepository.getAllAvailableModels(userId, freeOnly).first()
                                 val defaultModelId = settings?.defaultModelId
@@ -76,7 +76,8 @@ class AIModelsViewModel(
                                     autoSelectFree = settings?.autoSelectFree ?: true,
                                     successCount = logs.count { it.isSuccess },
                                     failedCount = logs.count { !it.isSuccess },
-                                    lastSuccessAt = logs.firstOrNull { it.isSuccess }?.timestamp
+                                    lastSuccessAt = logs.firstOrNull { it.isSuccess }?.timestamp,
+                                    hasUnpricedUsage = hasUnpricedUsage
                                 )
                             }
                                 .onStart { emit(AIModelsUiState(isAuthenticated = true, isLoading = true)) }

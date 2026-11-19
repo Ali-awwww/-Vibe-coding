@@ -266,6 +266,34 @@ internal fun AISettingsDashboard(uiState: AIModelsUiState) {
                     )
                 }
             }
+            if (uiState.hasUnpricedUsage) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("ai_models_unpriced_usage_warning"),
+                    color = CautionAmber.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact),
+                    border = BorderStroke(1.dp, CautionAmber.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = CautionAmber,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "توجد طلبات لا تتوفر لها بيانات تكلفة مؤكدة. الإجمالي يستثنيها، وأوقف التطبيق الطلبات المدفوعة حتى تتوفر بيانات استخدام وتسعير موثوقة.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VibeDesignTokens.Color.TextPrimary.copy(alpha = 0.9f)
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -378,7 +406,7 @@ internal fun AICostSettingsCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "نماذج Firebase AI المدمجة مجانية عبر المنصة، بينما قد تُحاسب مفاتيح Google AI Studio الشخصية (BYOK) لذلك تُستبعد من وضع المجاني المضمون.",
+                        text = "قد تُحاسب Firebase AI Logic وفق مزود Gemini وخطة فوترة المشروع. لا يستطيع التطبيق قراءة خطة الفوترة، لذلك لا يصنف نماذجها مجانية مضمونة ويستخدم أسعار الفئة المدفوعة كتقدير محافظ.",
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeDesignTokens.Color.TextPrimary.copy(alpha = 0.9f)
                     )

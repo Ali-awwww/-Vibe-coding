@@ -34,8 +34,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 internal data class FirebaseAiGenerationOutput(
     val text: String,
-    val inputTokens: Int = 0,
-    val outputTokens: Int = 0
+    val inputTokens: Int? = null,
+    val outputTokens: Int? = null
 )
 
 class AIModelRepositoryImpl internal constructor(
@@ -303,8 +303,8 @@ class AIModelRepositoryImpl internal constructor(
                     ?: throw AIProviderOperationException(AIProviderFailureKind.EMPTY_RESPONSE)
                 FirebaseAiGenerationOutput(
                     text = text,
-                    inputTokens = response.usageMetadata?.promptTokenCount ?: 0,
-                    outputTokens = response.usageMetadata?.candidatesTokenCount ?: 0
+                    inputTokens = response.usageMetadata?.promptTokenCount,
+                    outputTokens = response.usageMetadata?.candidatesTokenCount
                 )
             }
         } catch (timeout: TimeoutCancellationException) {
@@ -397,6 +397,9 @@ class AIModelRepositoryImpl internal constructor(
 
     override fun getTotalCost(userId: String, since: Long): Flow<Double?> = aiProviderDao.getTotalCost(userId, since)
 
+    override fun hasUnpricedUsageSince(userId: String, since: Long): Flow<Boolean> =
+        aiProviderDao.hasUnpricedUsageSince(userId, since)
+
     override suspend fun logUsage(log: AIUsageLog) {
         aiProviderDao.insertUsageLog(log)
     }
@@ -444,8 +447,9 @@ class AIModelRepositoryImpl internal constructor(
             val isFreeOnly = settings.freeOnly
             val isAutoSelect = settings.autoSelectFree
 
-            // Check soft monthly limit
-            val currentMonthCost = aiProviderDao.getTotalCost(userId, System.currentTimeMillis() - 30 * 24 * 60 * 60 * 1000L).first() ?: 0.0
+            // Check the 30-day soft monthly limit against priced usage only.
+            val usageWindowStart = nowMillis() - 30L * 24 * 60 * 60 * 1000L
+            val currentMonthCost = aiProviderDao.getTotalCost(userId, usageWindowStart).first() ?: 0.0
             if (currentMonthCost >= settings.usageLimitMonthly && !isFreeOnly) {
                  throw Exception("لقد تجاوزت حد الاستخدام الشهري المخصص (${settings.usageLimitMonthly}$/شهر). يرجى مراجعة إعدادات الأمان أو استخدام النماذج المجانية فقط.")
             }
@@ -478,6 +482,15 @@ class AIModelRepositoryImpl internal constructor(
                 throw Exception("No connected AI models are available. Test a provider connection and sync its model catalog first.")
             }
 
+            if (
+                modelsToTry.any { !it.isFree } &&
+                aiProviderDao.hasUnpricedUsageSince(userId, usageWindowStart).first()
+            ) {
+                throw IllegalStateException(
+                    "توجد طلبات سابقة بتكلفة غير مؤكدة خلال آخر 30 يوماً. أوقفنا النماذج المدفوعة حتى تتوفر بيانات الاستخدام والتسعير؛ يمكنك تفعيل وضع النماذج المجانية المضمونة."
+                )
+            }
+
             var lastException: Exception? = null
             for (model in modelsToTry) {
                 try {
@@ -489,10 +502,20 @@ class AIModelRepositoryImpl internal constructor(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
-                    lastException = e.toAIProviderOperationException()
-                    // If it's a 401/403 (Auth), we might want to stop, but for 429/5xx (Quota/Server), we failover
-                    if (e.message?.contains("401") == true || e.message?.contains("403") == true || e.message?.contains("Invalid API Key", ignoreCase = true) == true) {
-                        // Only retry if we have other models to try
+                    val operationFailure = e.toAIProviderOperationException()
+                    lastException = operationFailure
+                    val costMayBeUnknown = operationFailure.kind in setOf(
+                        AIProviderFailureKind.TIMEOUT,
+                        AIProviderFailureKind.NETWORK,
+                        AIProviderFailureKind.SERVICE_UNAVAILABLE,
+                        AIProviderFailureKind.EMPTY_RESPONSE,
+                        AIProviderFailureKind.UNKNOWN
+                    )
+                    if (!model.isFree && costMayBeUnknown) break
+                    if (
+                        operationFailure.kind == AIProviderFailureKind.INVALID_CREDENTIALS ||
+                        operationFailure.kind == AIProviderFailureKind.ACCESS_DENIED
+                    ) {
                         continue
                     }
                 }
@@ -544,14 +567,21 @@ class AIModelRepositoryImpl internal constructor(
             when (provider.type) {
                 AIProviderType.FIREBASE_AI_LOGIC -> {
                     val result = invokeFirebaseAi(model.apiId, prompt, systemInstruction)
+                    val inputTokens = result.inputTokens
+                    val outputTokens = result.outputTokens
+                    val estimatedCost = if (inputTokens != null && outputTokens != null) {
+                        AIModelPricing.estimateCost(model, inputTokens, outputTokens)
+                    } else {
+                        AIUsageLog.UNKNOWN_COST
+                    }
                     logUsage(AIUsageLog(
                         id = UUID.randomUUID().toString(),
                         userId = userId,
                         modelId = model.id,
                         taskId = taskId ?: "",
-                        tokensInput = result.inputTokens,
-                        tokensOutput = result.outputTokens,
-                        estimatedCost = 0.0,
+                        tokensInput = inputTokens ?: 0,
+                        tokensOutput = outputTokens ?: 0,
+                        estimatedCost = estimatedCost,
                         taskType = taskType,
                         isSuccess = true
                     ))
@@ -559,7 +589,7 @@ class AIModelRepositoryImpl internal constructor(
                 }
                 AIProviderType.GOOGLE_GEMINI -> {
                     val apiKey = provider.apiKey?.let(decryptSecret)
-                        ?: throw Exception("API Key missing for provider ${provider.name}")
+                        ?: throw IllegalArgumentException("API Key missing for provider ${provider.name}")
                     val generativeModel = GenerativeModel(
                         modelName = model.apiId,
                         apiKey = apiKey,
@@ -568,19 +598,24 @@ class AIModelRepositoryImpl internal constructor(
                     val response = generativeModel.generateContent(prompt)
                     val text = response.text?.takeIf { it.isNotBlank() }
                         ?: throw Exception("Gemini returned an empty response")
-                    
+                    val inputTokens = response.usageMetadata?.promptTokenCount
+                    val outputTokens = response.usageMetadata?.candidatesTokenCount
+                    val estimatedCost = if (inputTokens != null && outputTokens != null) {
+                        AIModelPricing.estimateCost(model, inputTokens, outputTokens)
+                    } else if (model.isFree) {
+                        0.0
+                    } else {
+                        AIUsageLog.UNKNOWN_COST
+                    }
+
                     logUsage(AIUsageLog(
                         id = UUID.randomUUID().toString(),
                         userId = userId,
                         modelId = model.id,
                         taskId = taskId ?: "",
-                        tokensInput = response.usageMetadata?.promptTokenCount ?: 0,
-                        tokensOutput = response.usageMetadata?.candidatesTokenCount ?: 0,
-                        estimatedCost = AIModelPricing.estimateCost(
-                            model,
-                            response.usageMetadata?.promptTokenCount ?: 0,
-                            response.usageMetadata?.candidatesTokenCount ?: 0
-                        ),
+                        tokensInput = inputTokens ?: 0,
+                        tokensOutput = outputTokens ?: 0,
+                        estimatedCost = estimatedCost,
                         taskType = taskType,
                         isSuccess = true
                     ))
@@ -602,19 +637,24 @@ class AIModelRepositoryImpl internal constructor(
                     val text = response.choices.firstOrNull()?.message?.content
                         ?.takeIf { it.isNotBlank() }
                         ?: throw Exception("OpenRouter returned an empty response")
-                    
+                    val inputTokens = response.usage?.prompt_tokens
+                    val outputTokens = response.usage?.completion_tokens
+                    val estimatedCost = if (inputTokens != null && outputTokens != null) {
+                        AIModelPricing.estimateCost(model, inputTokens, outputTokens)
+                    } else if (model.isFree) {
+                        0.0
+                    } else {
+                        AIUsageLog.UNKNOWN_COST
+                    }
+
                     logUsage(AIUsageLog(
                         id = UUID.randomUUID().toString(),
                         userId = userId,
                         modelId = model.id,
                         taskId = taskId ?: "",
-                        tokensInput = response.usage?.prompt_tokens ?: 0,
-                        tokensOutput = response.usage?.completion_tokens ?: 0,
-                        estimatedCost = AIModelPricing.estimateCost(
-                            model,
-                            response.usage?.prompt_tokens ?: 0,
-                            response.usage?.completion_tokens ?: 0
-                        ),
+                        tokensInput = inputTokens ?: 0,
+                        tokensOutput = outputTokens ?: 0,
+                        estimatedCost = estimatedCost,
                         taskType = taskType,
                         isSuccess = true
                     ))
@@ -628,6 +668,7 @@ class AIModelRepositoryImpl internal constructor(
                 userId = userId,
                 modelId = model.id,
                 taskId = taskId ?: "",
+                estimatedCost = AIUsageLog.UNKNOWN_COST,
                 taskType = taskType,
                 isSuccess = false,
                 errorMessage = timeout.message ?: "Request timed out"
@@ -636,11 +677,22 @@ class AIModelRepositoryImpl internal constructor(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (e: Exception) {
+            val failureKind = e.toAIProviderOperationException().kind
+            val estimatedCost = when (failureKind) {
+                AIProviderFailureKind.MISCONFIGURED,
+                AIProviderFailureKind.INVALID_CREDENTIALS,
+                AIProviderFailureKind.ACCESS_DENIED,
+                AIProviderFailureKind.QUOTA_EXCEEDED,
+                AIProviderFailureKind.RATE_LIMITED,
+                AIProviderFailureKind.UNSUPPORTED -> 0.0
+                else -> AIUsageLog.UNKNOWN_COST
+            }
             logUsage(AIUsageLog(
                 id = UUID.randomUUID().toString(),
                 userId = userId,
                 modelId = model.id,
                 taskId = taskId ?: "",
+                estimatedCost = estimatedCost,
                 taskType = taskType,
                 isSuccess = false,
                 errorMessage = e.message

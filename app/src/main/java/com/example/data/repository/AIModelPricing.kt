@@ -87,44 +87,18 @@ internal object FirebaseAiModelCatalog {
         lastSyncAt = null
     )
 
-    fun models(providerId: String): List<AIModel> = listOf(
-        AIModel(
-            id = "$providerId:$DEFAULT_MODEL_ID",
-            providerId = providerId,
-            apiId = DEFAULT_MODEL_ID,
-            name = "Gemini 3.8 Flash (Firebase AI)",
-            isFree = true,
-            contextWindow = 1_048_576,
-            inputPricePer1M = 0.0,
-            outputPricePer1M = 0.0,
-            capabilities = listOf(
-                AICapability.CODING,
-                AICapability.REASONING,
-                AICapability.LONG_CONTEXT,
-                AICapability.VISION,
-                AICapability.FUNCTION_CALLING,
-                AICapability.AGENTIC
-            ),
-            category = AIModelCategory.FREE
-        ),
-        AIModel(
-            id = "$providerId:$LITE_MODEL_ID",
-            providerId = providerId,
-            apiId = LITE_MODEL_ID,
-            name = "Gemini 3.5 Flash-Lite (Firebase AI)",
-            isFree = true,
-            contextWindow = 1_048_576,
-            inputPricePer1M = 0.0,
-            outputPricePer1M = 0.0,
-            capabilities = listOf(
-                AICapability.CODING,
-                AICapability.REASONING,
-                AICapability.LONG_CONTEXT,
-                AICapability.VISION,
-                AICapability.FUNCTION_CALLING,
-                AICapability.AGENTIC
-            ),
-            category = AIModelCategory.FREE
-        )
-    )
+    /**
+     * Firebase AI Logic can use the Gemini Developer API or Agent Platform backend.
+     * The no-cost tier depends on the project billing plan and selected backend; the
+     * app cannot inspect that plan, so these models are not guaranteed-free.
+     * Paid-tier prices are used as a conservative estimate when usage metadata exists.
+     * https://firebase.google.com/docs/ai-logic/pricing
+     */
+    fun models(providerId: String): List<AIModel> =
+        GeminiModelCatalog.models(providerId).map { model ->
+            model.copy(
+                name = "${model.name} (Firebase AI)",
+                category = AIModelCategory.GENERAL_PURPOSE
+            )
+        }
 }
