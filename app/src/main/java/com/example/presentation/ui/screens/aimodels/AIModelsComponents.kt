@@ -430,6 +430,7 @@ internal fun AIModelSelectionSection(
     autoSelect: Boolean,
     freeOnly: Boolean,
     hasProviders: Boolean,
+    hasConnectedProviders: Boolean,
     isLoading: Boolean,
     enabled: Boolean
 ) {
@@ -484,10 +485,11 @@ internal fun AIModelSelectionSection(
                 border = BorderStroke(1.dp, VibeDesignTokens.Color.Grid)
             ) {
                 Text(
-                    text = if (freeOnly && hasProviders) {
-                        "لا توجد نماذج مجانية مضمونة لدى المزودين الحاليين. عطّل Free AI Only لعرض نماذج Gemini التي قد تُحاسب حسب خطة حسابك."
-                    } else {
-                        "لا توجد نماذج متاحة حالياً. أضف مزوداً ثم اختبر الاتصال وحدّث النماذج."
+                    text = when {
+                        !hasProviders -> "لا توجد مزودات بعد. أضف مزوداً ثم اختبر الاتصال وحدّث النماذج."
+                        !hasConnectedProviders -> "لا توجد نماذج قابلة للاختيار لأن جميع المزودين غير متصلين. اختبر اتصال مزود واحد على الأقل ثم حدّث النماذج."
+                        freeOnly -> "لا توجد نماذج مجانية مضمونة لدى المزودين المتصلين. عطّل Free AI Only لعرض النماذج الأخرى مع مراجعة أسعارها."
+                        else -> "لم تُحمّل نماذج للمزودين المتصلين بعد. حدّث قائمة النماذج."
                     },
                     modifier = Modifier.padding(14.dp),
                     style = MaterialTheme.typography.bodySmall,

@@ -2539,3 +2539,23 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: AIModels provider connection-state truthfulness.
 - Next exact step: inspect CI/JUnit results to terminal status, then audit the remaining AIModels provider catalog, model selection and usage/cost paths for false availability or success states.
+
+
+## 2026-11-20 — AIModels selectable models require connected providers
+
+### Confirmed defect
+- The model catalog and inference routing treated every stored model as available even when its provider was DISCONNECTED or ERROR. The default-model selector could return a model whose provider had never passed a live check, and inference could attempt it before provider verification.
+
+### Implementation
+- Repository getAllAvailableModels now combines the model catalog with provider status and returns only models belonging to CONNECTED providers.
+- Default-model lookup and assignment use that verified-availability list. Inference failover candidates are also restricted to connected providers; an unavailable model cannot be selected or used as an automatic fallback.
+- AIModels view state therefore exposes only selectable models. The empty state now distinguishes no providers, disconnected providers requiring a live test, and connected providers whose catalog still needs syncing.
+
+### Regression coverage
+- Added tests for disconnected model filtering, default-model rejection, failed live probes, successful connection before model availability, and the UI prompt shown when all providers are disconnected.
+- Existing inference tests now explicitly seed a provider with a successful connection state before expecting inference.
+
+### Verification boundary and continuity
+- CI for this change is pending. Repository tests use deterministic fake API runners; they do not establish a live external provider connection.
+- Last area worked: AIModels provider verification, selectable model catalog and inference routing.
+- Next exact step: inspect CI/JUnit results to terminal status, then audit provider usage/cost accounting and model failover for success or cost claims that are not backed by returned provider usage data.

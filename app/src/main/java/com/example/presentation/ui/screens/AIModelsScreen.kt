@@ -23,6 +23,7 @@ import androidx.navigation.NavController
 import com.example.di.DependencyProvider
 import com.example.domain.model.AIProvider
 import com.example.domain.model.AIProviderType
+import com.example.domain.model.AIProviderStatus
 import com.example.presentation.ui.screens.aimodels.*
 import com.example.presentation.viewmodel.AIModelsUiState
 import com.example.presentation.viewmodel.AIModelsViewModel
@@ -183,6 +184,7 @@ internal fun AIModelsScreenContent(
                                 autoSelect = uiState.autoSelectFree && uiState.freeOnly,
                                 freeOnly = uiState.freeOnly,
                                 hasProviders = uiState.providers.isNotEmpty(),
+                                hasConnectedProviders = uiState.providers.any { it.status == AIProviderStatus.CONNECTED },
                                 isLoading = uiState.isLoading,
                                 enabled = uiState.isAuthenticated && !uiState.isLoading
                             )

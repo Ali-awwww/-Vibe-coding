@@ -179,4 +179,44 @@ class AIModelsScreenTest {
         assertTrue(submittedType == AIProviderType.OPEN_ROUTER)
         assertEquals("sk-or-test-key", submittedKey)
     }
+
+    @Test
+    fun disconnectedProviderShowsLiveVerificationRequirementInsteadOfSelectableModels() {
+        val disconnectedProvider = AIProvider(
+            id = "provider-offline",
+            userId = "user-1",
+            name = "Offline provider",
+            type = AIProviderType.OPEN_ROUTER,
+            status = AIProviderStatus.DISCONNECTED
+        )
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                AIModelsScreenContent(
+                    uiState = AIModelsUiState(
+                        isAuthenticated = true,
+                        providers = listOf(disconnectedProvider),
+                        models = emptyList(),
+                        freeOnly = true
+                    ),
+                    onNavigateBack = {},
+                    onAddProvider = { _, _, _, _ -> },
+                    onDeleteProvider = {},
+                    onSyncProvider = {},
+                    onTestProvider = {},
+                    onSelectDefaultModel = {},
+                    onToggleFreeOnly = {},
+                    onToggleAutoSelect = {},
+                    onRefresh = {},
+                    onClearFeedback = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("ai_models_lazy_column")
+            .performScrollToNode(hasTestTag("ai_models_empty_state"))
+        composeRule.onNodeWithTag("ai_models_empty_state")
+            .assertTextContains("اختبر اتصال مزود واحد على الأقل")
+    }
+
 }
