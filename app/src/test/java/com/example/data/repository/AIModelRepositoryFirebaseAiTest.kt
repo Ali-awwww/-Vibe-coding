@@ -6,6 +6,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AIProviderDao
 import com.example.data.local.AppDatabase
 import com.example.data.remote.HuggingFaceApi
+import com.example.data.remote.OpenRouterModelData
+import com.example.data.remote.OpenRouterModelsResponse
+import com.example.data.remote.OpenRouterPricing
 import com.example.data.remote.OpenRouterApi
 import com.example.data.remote.ChatChoice
 import com.example.data.remote.ChatMessage
