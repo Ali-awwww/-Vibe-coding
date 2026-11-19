@@ -547,7 +547,7 @@ class AICodingAgentTest {
     }
 
     @Test
-    fun `buildApplicationFromBlueprint creates complete workspace with code files, persistence, checkpoint, and dev server`() = runTest {
+    fun `buildApplicationFromBlueprint persists scaffold and reports preview unavailable without a runner`() = runTest {
         val prompt = "أنشئ متجرًا إلكترونيًا لعرض المنتجات وإدارة الطلبات وحساب المستخدمين"
         val bp = repository.analyzeAppRequirements("user_1", prompt).getOrThrow()
 
@@ -556,16 +556,14 @@ class AICodingAgentTest {
             progressStages.add(progress.stage)
         }
 
-        assertTrue("Build application should succeed", result.isSuccess)
+        assertTrue("Scaffold generation should succeed independently of preview availability", result.isSuccess)
         val workspace = result.getOrThrow()
         assertNotNull(workspace.id)
 
-        // 1. Verify workspace stored in database
         val savedWorkspace = dao.getWorkspaceById(workspace.id)
         assertNotNull(savedWorkspace)
         assertEquals(bp.name, savedWorkspace!!.name)
 
-        // 2. Verify scaffolded files exist in database
         val files = dao.getAllFilesSync(workspace.id)
         assertTrue("Should generate at least 5 files", files.size >= 5)
 
@@ -583,20 +581,27 @@ class AICodingAgentTest {
         assertNotNull("Crash reporter must be generated", crashReporter)
         assertTrue("Crash reporter must hook into Crash Intelligence", crashReporter!!.content.contains("CrashIntelligence"))
 
-        // 3. Verify checkpoints
         val checkpoints = dao.getCheckpoints(workspace.id).first()
         assertTrue("Initial checkpoint must be created", checkpoints.isNotEmpty())
 
-        // 4. Verify progress stages reached
         assertTrue(progressStages.contains(AppBuildStage.SCAFFOLDING_FILES))
         assertTrue(progressStages.contains(AppBuildStage.CREATING_UI_COMPONENTS))
         assertTrue(progressStages.contains(AppBuildStage.WIRING_DATA_SERVICES))
+        assertTrue(progressStages.contains(AppBuildStage.STARTING_PREVIEW))
         assertTrue(progressStages.contains(AppBuildStage.COMPLETED))
 
-        // 5. Verify sandbox server started
         val runtime = repository.getSandboxRuntimeState(workspace.id).first()
-        assertNotNull(runtime)
-        assertEquals(ServerStatus.RUNNING, runtime!!.status)
+        assertTrue("A server must not be reported as running without a process runner", runtime == null)
+
+        val buildLogs = repository.getBuildLogs(workspace.id).first()
+        assertTrue(
+            "The preview blocker must be visible in workspace logs",
+            buildLogs.any { it.message.contains("لا يوجد مشغل عمليات معزول") }
+        )
+        assertTrue(
+            "The log must not claim that a development server started",
+            buildLogs.none { it.message.contains("تم تشغيل خادم") || it.message.contains("Server started") }
+        )
     }
 
     // ========================================================================
