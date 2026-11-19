@@ -2,13 +2,14 @@ package com.example.data.governance
 
 import com.example.domain.model.AIModel
 import com.example.domain.model.ModelTeam
+import com.example.domain.model.MemberStatus
+import com.example.domain.model.TeamExecution
 import com.example.domain.model.TeamGovernanceSettings
 import com.example.domain.model.TeamMember
 import com.example.domain.model.TeamRole
 import com.example.domain.model.TeamUsageRecord
 import com.example.domain.repository.AIModelTeamRepository
 import java.io.IOException
-import java.lang.reflect.Proxy
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -80,22 +81,41 @@ class TeamGovernanceEngineImplTest {
     private fun usageRepository(
         result: Result<Unit>,
         captured: AtomicReference<TeamUsageRecord?>
-    ): AIModelTeamRepository {
-        return Proxy.newProxyInstance(
-            AIModelTeamRepository::class.java.classLoader,
-            arrayOf(AIModelTeamRepository::class.java)
-        ) { proxy, method, args ->
-            when {
-                method.name.startsWith("logTeamUsage") -> {
-                    captured.set(args?.getOrNull(0) as? TeamUsageRecord)
-                    result
-                }
-                method.name == "toString" -> "UsageRepositoryFixture"
-                method.name == "hashCode" -> System.identityHashCode(proxy)
-                method.name == "equals" -> proxy === args?.getOrNull(0)
-                else -> null
-            }
-        } as AIModelTeamRepository
+    ): AIModelTeamRepository = UsageRepositoryFixture(result, captured)
+
+    private class UsageRepositoryFixture(
+        private val result: Result<Unit>,
+        private val captured: AtomicReference<TeamUsageRecord?>
+    ) : AIModelTeamRepository {
+        override fun getTeams(userId: String) = kotlinx.coroutines.flow.flowOf(emptyList<ModelTeam>())
+        override suspend fun getTeamById(teamId: String): ModelTeam? = null
+        override suspend fun createTeam(team: ModelTeam): Result<String> = Result.success(team.id)
+        override suspend fun updateTeam(team: ModelTeam): Result<Unit> = Result.success(Unit)
+        override suspend fun deleteTeam(teamId: String): Result<Unit> = Result.success(Unit)
+
+        override fun getTeamExecutions(teamId: String) = kotlinx.coroutines.flow.flowOf(emptyList<TeamExecution>())
+        override suspend fun getExecutionById(executionId: String): TeamExecution? = null
+        override suspend fun logExecution(execution: TeamExecution): Result<Unit> = Result.success(Unit)
+
+        override suspend fun addTeamMember(teamId: String, member: TeamMember): Result<Unit> = Result.success(Unit)
+        override suspend fun removeTeamMember(teamId: String, memberId: String): Result<Unit> = Result.success(Unit)
+        override suspend fun updateMemberStatus(
+            teamId: String,
+            memberId: String,
+            status: MemberStatus,
+            currentTask: String?,
+            lastResult: String?
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun getTeamUsageRecords(teamId: String) =
+            kotlinx.coroutines.flow.flowOf(emptyList<TeamUsageRecord>())
+        override fun getAllTeamUsageRecords(userId: String) =
+            kotlinx.coroutines.flow.flowOf(emptyList<TeamUsageRecord>())
+
+        override suspend fun logTeamUsage(record: TeamUsageRecord): Result<Unit> {
+            captured.set(record)
+            return result
+        }
     }
 
     private fun sampleTeam() = ModelTeam(
