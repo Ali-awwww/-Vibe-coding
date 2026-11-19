@@ -499,6 +499,7 @@ class AIModelRepositoryImpl internal constructor(
                     )
                 } catch (timeout: TimeoutCancellationException) {
                     lastException = timeout
+                    if (!model.isFree) break
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (e: Exception) {
@@ -569,11 +570,7 @@ class AIModelRepositoryImpl internal constructor(
                     val result = invokeFirebaseAi(model.apiId, prompt, systemInstruction)
                     val inputTokens = result.inputTokens
                     val outputTokens = result.outputTokens
-                    val estimatedCost = if (inputTokens != null && outputTokens != null) {
-                        AIModelPricing.estimateCost(model, inputTokens, outputTokens)
-                    } else {
-                        AIUsageLog.UNKNOWN_COST
-                    }
+                    val estimatedCost = estimateCostOrUnknown(model, inputTokens, outputTokens)
                     logUsage(AIUsageLog(
                         id = UUID.randomUUID().toString(),
                         userId = userId,
@@ -600,13 +597,7 @@ class AIModelRepositoryImpl internal constructor(
                         ?: throw Exception("Gemini returned an empty response")
                     val inputTokens = response.usageMetadata?.promptTokenCount
                     val outputTokens = response.usageMetadata?.candidatesTokenCount
-                    val estimatedCost = if (inputTokens != null && outputTokens != null) {
-                        AIModelPricing.estimateCost(model, inputTokens, outputTokens)
-                    } else if (model.isFree) {
-                        0.0
-                    } else {
-                        AIUsageLog.UNKNOWN_COST
-                    }
+                    val estimatedCost = estimateCostOrUnknown(model, inputTokens, outputTokens)
 
                     logUsage(AIUsageLog(
                         id = UUID.randomUUID().toString(),
@@ -639,13 +630,7 @@ class AIModelRepositoryImpl internal constructor(
                         ?: throw Exception("OpenRouter returned an empty response")
                     val inputTokens = response.usage?.prompt_tokens
                     val outputTokens = response.usage?.completion_tokens
-                    val estimatedCost = if (inputTokens != null && outputTokens != null) {
-                        AIModelPricing.estimateCost(model, inputTokens, outputTokens)
-                    } else if (model.isFree) {
-                        0.0
-                    } else {
-                        AIUsageLog.UNKNOWN_COST
-                    }
+                    val estimatedCost = estimateCostOrUnknown(model, inputTokens, outputTokens)
 
                     logUsage(AIUsageLog(
                         id = UUID.randomUUID().toString(),
@@ -668,7 +653,7 @@ class AIModelRepositoryImpl internal constructor(
                 userId = userId,
                 modelId = model.id,
                 taskId = taskId ?: "",
-                estimatedCost = AIUsageLog.UNKNOWN_COST,
+                estimatedCost = if (model.isFree) 0.0 else AIUsageLog.UNKNOWN_COST,
                 taskType = taskType,
                 isSuccess = false,
                 errorMessage = timeout.message ?: "Request timed out"
@@ -678,14 +663,18 @@ class AIModelRepositoryImpl internal constructor(
             throw cancelled
         } catch (e: Exception) {
             val failureKind = e.toAIProviderOperationException().kind
-            val estimatedCost = when (failureKind) {
-                AIProviderFailureKind.MISCONFIGURED,
-                AIProviderFailureKind.INVALID_CREDENTIALS,
-                AIProviderFailureKind.ACCESS_DENIED,
-                AIProviderFailureKind.QUOTA_EXCEEDED,
-                AIProviderFailureKind.RATE_LIMITED,
-                AIProviderFailureKind.UNSUPPORTED -> 0.0
-                else -> AIUsageLog.UNKNOWN_COST
+            val estimatedCost = if (model.isFree) {
+                0.0
+            } else {
+                when (failureKind) {
+                    AIProviderFailureKind.MISCONFIGURED,
+                    AIProviderFailureKind.INVALID_CREDENTIALS,
+                    AIProviderFailureKind.ACCESS_DENIED,
+                    AIProviderFailureKind.QUOTA_EXCEEDED,
+                    AIProviderFailureKind.RATE_LIMITED,
+                    AIProviderFailureKind.UNSUPPORTED -> 0.0
+                    else -> AIUsageLog.UNKNOWN_COST
+                }
             }
             logUsage(AIUsageLog(
                 id = UUID.randomUUID().toString(),
@@ -699,6 +688,23 @@ class AIModelRepositoryImpl internal constructor(
             ))
             throw e
         }
+    }
+
+    private fun estimateCostOrUnknown(
+        model: AIModel,
+        inputTokens: Int?,
+        outputTokens: Int?
+    ): Double {
+        if (model.isFree) return 0.0
+        if (
+            inputTokens == null ||
+            outputTokens == null ||
+            (inputTokens <= 0 && outputTokens <= 0) ||
+            (model.inputPricePer1M <= 0.0 && model.outputPricePer1M <= 0.0)
+        ) {
+            return AIUsageLog.UNKNOWN_COST
+        }
+        return AIModelPricing.estimateCost(model, inputTokens, outputTokens)
     }
 
     private fun prioritizeModelsForTask(models: List<AIModel>, taskType: AITaskType): List<AIModel> {
@@ -731,9 +737,8 @@ class AIModelRepositoryImpl internal constructor(
                 score += 15
             }
 
-            // Prefer OpenRouter free router or built-in Firebase AI Gemini as robust starting points
+            // Prefer the provider's explicitly free router when auto-selecting free models.
             if (model.apiId == "openrouter/free") score += 25
-            if (model.providerId.startsWith("firebase_ai_platform:")) score += 20
             if (model.apiId.contains("free", ignoreCase = true)) score += 5
             
             score

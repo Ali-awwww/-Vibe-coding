@@ -2608,3 +2608,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 ### Next step
 - Inspect the new CI run to terminal status, fix any failing regression or unrelated test, then continue the AIModels provider/usage audit without repeating earlier compile checks.
+
+
+## 2026-11-20 — AIModels follow-up: legacy usage and timeout failover
+
+- CI on `87bb803a78425b7b683ec59104d4a01ff3e09c3a` reached Kotlin test compilation but failed because the new repository test omitted the `AIUsageLog` import. The application source compiled to the unit-test compilation stage; the import is corrected in this commit. No test or APK success is claimed from that run.
+- The unpriced-usage query now also treats historical successful zero-cost entries for Firebase AI Logic and any non-free/missing model catalog entry as unpriced. This prevents usage written by older app versions from bypassing the new 30-day paid-inference guard.
+- Paid timeouts now stop the current failover chain; free-model failures remain zero-cost and do not unnecessarily block paid use. A shared estimator treats absent token counts, zero-token paid responses, and missing paid model prices as unknown instead of zero.
+- Added regression coverage for legacy Firebase zero-cost logs and paid timeout failover, and fixed the missing test import.
+- Next: inspect the fresh CI run to terminal status. If green, continue the AIModels usage audit; if not, use the actual compiler/test report rather than repeating the same source checks.

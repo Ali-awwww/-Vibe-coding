@@ -359,8 +359,23 @@ interface AIProviderDao {
 
     @Query("""
         SELECT EXISTS(
-            SELECT 1 FROM ai_usage_logs
-            WHERE userId = :userId AND timestamp > :since AND estimatedCost < 0
+            SELECT 1
+            FROM ai_usage_logs AS usage_log
+            LEFT JOIN ai_models AS model ON model.id = usage_log.modelId
+            WHERE usage_log.userId = :userId
+              AND usage_log.timestamp > :since
+              AND (
+                  usage_log.estimatedCost < 0
+                  OR (
+                      usage_log.isSuccess = 1
+                      AND usage_log.estimatedCost = 0
+                      AND (
+                          usage_log.modelId LIKE 'firebase_ai_platform:%'
+                          OR model.isFree = 0
+                          OR model.id IS NULL
+                      )
+                  )
+              )
         )
     """)
     fun hasUnpricedUsageSince(userId: String, since: Long): Flow<Boolean>

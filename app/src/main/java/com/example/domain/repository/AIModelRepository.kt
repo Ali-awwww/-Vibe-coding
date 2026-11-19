@@ -22,7 +22,12 @@ interface AIModelRepository {
     fun getTotalCost(userId: String, since: Long): Flow<Double?>
     fun hasUnpricedUsageSince(userId: String, since: Long): Flow<Boolean> =
         getRecentUsageLogs(userId).map { logs ->
-            logs.any { it.timestamp > since && it.estimatedCost < 0.0 }
+            logs.any {
+                it.timestamp > since && (
+                    it.estimatedCost < 0.0 ||
+                        (it.isSuccess && it.estimatedCost == 0.0 && it.modelId.startsWith("firebase_ai_platform:"))
+                )
+            }
         }
     suspend fun logUsage(log: AIUsageLog)
 

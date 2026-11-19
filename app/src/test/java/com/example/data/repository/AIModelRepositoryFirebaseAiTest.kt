@@ -16,6 +16,7 @@ import com.example.data.remote.OpenRouterChatResponse
 import com.example.data.remote.TokenUsage
 import com.example.domain.model.AIProvider
 import com.example.domain.model.AIModel
+import com.example.domain.model.AIUsageLog
 import com.example.domain.model.AIUserSettings
 import com.example.domain.model.AIProviderStatus
 import com.example.domain.model.AIProviderFailureKind
@@ -621,6 +622,89 @@ class AIModelRepositoryFirebaseAiTest {
         assertTrue(second.isFailure)
         assertTrue(second.exceptionOrNull()?.message.orEmpty().contains("تكلفة غير مؤكدة"))
         assertEquals("Unpriced usage must stop another paid request before it reaches the provider", 1, generationCount)
+    }
+
+    @Test
+    fun legacyZeroCostFirebaseUsageIsTreatedAsUnpriced() = runBlocking {
+        val userId = "legacy-firebase-user"
+        val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
+        val legacyModel = AIModel(
+            id = "$providerId:${FirebaseAiModelCatalog.DEFAULT_MODEL_ID}",
+            providerId = providerId,
+            apiId = FirebaseAiModelCatalog.DEFAULT_MODEL_ID,
+            name = "Legacy Firebase model",
+            isFree = true,
+            inputPricePer1M = 0.0,
+            outputPricePer1M = 0.0
+        )
+        aiProviderDao.insertModels(listOf(legacyModel))
+        aiProviderDao.insertUsageLog(
+            AIUsageLog(
+                id = "legacy-firebase-zero-cost",
+                userId = userId,
+                modelId = legacyModel.id,
+                estimatedCost = 0.0,
+                isSuccess = true,
+                timestamp = 1L
+            )
+        )
+
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            enablePlatformFirebaseAi = true
+        )
+        assertTrue(repo.hasUnpricedUsageSince(userId, 0L).first())
+    }
+
+    @Test
+    fun paidTimeoutDoesNotFailOverToAnotherPaidFirebaseModel() = runBlocking {
+        var generationCount = 0
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            enablePlatformFirebaseAi = true,
+            firebaseAiRunner = { _, prompt, _ ->
+                if (prompt == "ping") {
+                    FirebaseAiGenerationOutput("pong")
+                } else {
+                    generationCount += 1
+                    kotlinx.coroutines.withTimeout(1L) {
+                        kotlinx.coroutines.delay(50L)
+                        FirebaseAiGenerationOutput("should not complete")
+                    }
+                }
+            }
+        )
+        val userId = "paid-timeout-user"
+        val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
+        val models = FirebaseAiModelCatalog.models(providerId)
+        assertTrue(repo.syncModels(userId, providerId).isSuccess)
+        aiProviderDao.insertUserSettings(
+            AIUserSettings(
+                userId = userId,
+                defaultModelId = models[1].id,
+                freeOnly = false,
+                autoSelectFree = false,
+                usageLimitMonthly = 100.0
+            )
+        )
+
+        val result = repo.generateResponse(
+            userId = userId,
+            modelId = models[0].id,
+            prompt = "time out the first paid model",
+            systemInstruction = null,
+            taskId = "paid-timeout",
+            taskType = AITaskType.GENERAL_CHAT
+        )
+        assertTrue(result.isFailure)
+        assertEquals(1, generationCount)
+        val logs = repo.getRecentUsageLogs(userId).first()
+        assertEquals(1, logs.size)
+        assertEquals(AIUsageLog.UNKNOWN_COST, logs.single().estimatedCost, 0.0)
     }
 
     @Test
