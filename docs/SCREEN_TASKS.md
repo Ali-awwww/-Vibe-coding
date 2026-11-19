@@ -2492,3 +2492,24 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last area worked: VibeStudio preview sandbox, runtime truthfulness and Local Agent status.
 - Next exact step: inspect the current main-head CI jobs and JUnit results to terminal status; fix any failures. Then continue with the highest-priority independent AIModels provider-connection criterion, while leaving real VibeStudio execution blocked until a verifiable sandbox/agent transport is implemented.
 - Repository AGENTS.md / agents.md files: none found in the recursive tree inspected at main HEAD 45d5448a7fce2874f95fc29294dc7452ee989319.
+
+
+## 2026-11-20 — VibeStudio terminal execution fails closed
+
+### Confirmed defect
+- The workspace terminal returned fabricated successful output for npm install/run/test/build, pip, Python, ports, ps, kill, env and unknown commands. No OS process or isolated runtime was invoked. This could make build/test controls report success without executing anything.
+
+### Implementation
+- Kept workspace-only read and file operations (help, pwd, ls/dir, cat, grep, touch, clear).
+- Process execution commands now return exit code 126 with an explicit missing-runner error. Process inspection and kill commands also fail closed; unknown commands return exit code 127.
+- Removed fabricated port, PID, package-install, test, build, Python and environment output.
+- Updated the audit event wording so it records a terminal request rather than claiming execution before the result exists.
+- Process termination now reports unavailable instead of fabricating memory/CPU cleanup.
+
+### Regression coverage
+- Added tests for blocked process commands, unknown commands, workspace-only touch, dangerous command rejection and absence of fabricated process/port state.
+
+### Verification and continuity
+- CI for the terminal fail-closed change is pending; local Gradle and emulator/device checks are not available in this run.
+- Last area worked: VibeStudio preview security and truthful terminal/runtime states.
+- Next exact step: inspect CI/JUnit results for current main. If green, continue the highest-priority AIModels provider connection criterion; keep real command execution BLOCKED until a verified process runner and authenticated Local Agent transport exist.

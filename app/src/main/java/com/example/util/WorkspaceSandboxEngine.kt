@@ -178,8 +178,8 @@ object WorkspaceSandboxEngine {
     }
 
     /**
-     * Executes standard development commands within project boundaries.
-     * Enforces strict sandbox isolation and secret redaction.
+     * Handles workspace-only inspection and file operations.
+     * Process execution fails closed until a verified isolated process runner is connected.
      */
     fun executeSandboxCommand(
         workspace: Workspace,
@@ -220,20 +220,17 @@ object WorkspaceSandboxEngine {
         when (rootCommand) {
             "help" -> {
                 stdout = """
-                    AI Vibe Studio Sandbox Shell (v2.4 - Isolated Workspace)
-                    Available commands:
-                      ls / dir          : List files in workspace
-                      cat <file>        : Display contents of a file
-                      pwd               : Print current working directory
-                      grep <kw> <path>  : Search for pattern inside workspace files
-                      npm <cmd>         : Node.js package manager (run, test, build, install)
-                      pip <cmd>         : Python package manager (install, list)
-                      python <file>     : Execute python script
-                      ports             : List open sandbox ports
-                      ps                : List active processes
-                      kill <pid>        : Stop active process
-                      env               : List environment variables (secrets redacted)
-                      clear             : Clear terminal screen
+                    Vibe Studio workspace terminal
+                    Workspace-only commands:
+                      ls / dir          : List stored workspace files
+                      cat <file>        : Read a stored workspace file
+                      pwd               : Show the logical workspace path
+                      grep <kw>         : Search stored workspace file contents
+                      touch <file>      : Create an empty workspace file
+                      clear             : Clear terminal output
+                      help              : Show this help
+                    Process commands (npm, pip, python, gradle, flutter, node, git, adb)
+                    are blocked until a verified isolated process runner is connected.
                 """.trimIndent()
             }
 
@@ -280,94 +277,14 @@ object WorkspaceSandboxEngine {
                 }
             }
 
-            "npm" -> {
-                val subCmd = parts.getOrNull(1)?.lowercase() ?: ""
-                when (subCmd) {
-                    "install", "i" -> {
-                        val pkgName = parts.getOrNull(2)
-                        if (pkgName != null) {
-                            stdout = "+ $pkgName@latest\nadded 1 package, and audited 184 packages in 1.4s\nfound 0 vulnerabilities"
-                            // Record dependency into package.json
-                            val pkgJson = files.find { it.path == "package.json" }
-                            if (pkgJson != null) {
-                                val updated = if (pkgJson.content.contains("\"dependencies\"")) {
-                                    pkgJson.content.replace("\"dependencies\": {", "\"dependencies\": {\n    \"$pkgName\": \"latest\",")
-                                } else {
-                                    pkgJson.content.trimEnd().dropLast(1) + ",\n  \"dependencies\": {\n    \"$pkgName\": \"latest\"\n  }\n}"
-                                }
-                                modifiedFiles.add(pkgJson.copy(content = updated))
-                            }
-                        } else {
-                            stdout = "audited ${files.size * 12} packages in 0.8s\nfound 0 vulnerabilities"
-                        }
-                    }
-                    "run" -> {
-                        val scriptName = parts.getOrNull(2) ?: ""
-                        stdout = "> ${workspace.name.lowercase()}@1.0.0 $scriptName\n> vite --host\n\n  VITE v5.2.0  ready in 214 ms\n\n  ➜  Local:   http://localhost:3000/\n  ➜  Network: use --host to expose"
-                    }
-                    "test" -> {
-                        stdout = "> test\n> vitest run\n\n PASS  src/__tests__/App.test.tsx\n  ✓ renders application layout (42ms)\n  ✓ manages local state correctly (18ms)\n\nTest Files  1 passed (1)\nTests  2 passed (2)\nTime  0.34s"
-                    }
-                    "build" -> {
-                        stdout = "> build\n> tsc && vite build\nvite v5.2.0 building for production...\n✓ 42 modules transformed.\ndist/index.html                   0.82 kB │ gzip: 0.45 kB\ndist/assets/index-D7K3.js        142.12 kB │ gzip: 46.21 kB\n✓ built in 620ms"
-                    }
-                    else -> {
-                        stdout = "npm $subCmd executed successfully in sandbox."
-                    }
-                }
+            "npm", "pip", "python", "python3", "gradle", "./gradlew", "flutter", "npx", "node", "git", "adb" -> {
+                stderr = "PROCESS_EXECUTION_UNAVAILABLE: No verified isolated process runner is connected. The command was not executed."
+                exitCode = 126
             }
 
-            "pip" -> {
-                val subCmd = parts.getOrNull(1)?.lowercase() ?: ""
-                if (subCmd == "install") {
-                    val pkg = parts.getOrNull(2) ?: "requirements"
-                    stdout = "Collecting $pkg\n  Downloading $pkg-2.0.1-py3-none-any.whl (42 kB)\nInstalling collected packages: $pkg\nSuccessfully installed $pkg-2.0.1"
-                } else {
-                    stdout = "pip $subCmd executed."
-                }
-            }
-
-            "python", "python3" -> {
-                val targetScript = parts.getOrNull(1)
-                stdout = if (targetScript != null) {
-                    "Executing $targetScript in isolated Python 3.11 environment...\n[OK] Script executed with return code 0."
-                } else {
-                    "Python 3.11.4 (Sandbox runtime) - Interactive session not supported in batch."
-                }
-            }
-
-            "ports" -> {
-                val port = allocatedPorts[workspace.id] ?: 3000
-                stdout = """
-                    ACTIVE SANDBOX PORTS:
-                    PORT   STATE       SERVICE               BIND
-                    $port   LISTENING   workspace-dev-server  127.0.0.1
-                    8974   IDLE        local-agent-bridge    127.0.0.1
-                """.trimIndent()
-            }
-
-            "ps" -> {
-                stdout = """
-                    PID   TTY      TIME     CMD
-                    1024  pts/0    00:00:01 dev-server
-                    1025  pts/0    00:00:00 sandbox-monitor
-                """.trimIndent()
-            }
-
-            "kill" -> {
-                val pid = parts.getOrNull(1) ?: "1024"
-                stdout = "Process $pid terminated gracefully."
-            }
-
-            "env" -> {
-                stdout = """
-                    NODE_ENV=development
-                    PORT=3000
-                    WORKSPACE_ID=${workspace.id}
-                    WORKSPACE_TYPE=${workspace.type}
-                    API_KEY=[REDACTED_SECRET]
-                    SANDBOX_ISOLATED=true
-                """.trimIndent()
+            "ports", "ps", "kill", "env" -> {
+                stderr = "PROCESS_INSPECTION_UNAVAILABLE: No real process or environment backend is connected. No process state was changed."
+                exitCode = 126
             }
 
             "clear" -> {
@@ -399,7 +316,8 @@ object WorkspaceSandboxEngine {
             }
 
             else -> {
-                stdout = "Executed '$trimmed' inside workspace sandbox (exit 0)."
+                stderr = "COMMAND_UNSUPPORTED: Only workspace inspection and file operations are available without a verified process runner."
+                exitCode = 127
             }
         }
 
@@ -435,12 +353,12 @@ object WorkspaceSandboxEngine {
     }
 
     /**
-     * Bundles project files into a live renderable web preview with embedded console logger.
+     * Produces an isolated static HTML preview when an index.html entry point exists.
+     * Framework execution requires a separate verified process runner.
      */
     fun generatePreviewHtml(workspace: Workspace, files: List<WorkspaceFile>): String {
         val indexHtml = files.find { it.path == "index.html" || it.path.endsWith("/index.html") }
         val cssFiles = files.filter { it.extension in listOf("css", "scss") }
-        val jsFiles = files.filter { it.extension in listOf("js", "jsx", "ts", "tsx") }
 
         val combinedCss = cssFiles.joinToString("\n") { it.content }
 

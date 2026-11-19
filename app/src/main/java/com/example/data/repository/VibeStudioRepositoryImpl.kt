@@ -1124,7 +1124,7 @@ class VibeStudioRepositoryImpl(
             workspaceId = workspaceId,
             actionType = "EXECUTE_TERMINAL",
             target = command,
-            details = "Command executed in sandbox",
+            details = "Terminal command requested; the sandbox result is recorded separately.",
             permissionLevelUsed = AgentPermissionLevel.EXECUTE
         ))
 
@@ -1187,27 +1187,17 @@ class VibeStudioRepositoryImpl(
         com.example.util.WorkspaceSandboxEngine.generatePreviewHtml(workspace, files)
     }
 
-    override suspend fun killStuckProcesses(workspaceId: String): Result<Unit> = runCatching {
-        com.example.util.WorkspaceSandboxEngine.releasePort(workspaceId)
-        runtimeStates.update { current ->
-            val existing = current[workspaceId]
-            if (existing != null) {
-                current + (workspaceId to existing.copy(
-                    status = ServerStatus.STOPPED,
-                    activeProcessId = null,
-                    activeProcessesCount = 0,
-                    cpuUsagePercent = 0.5f,
-                    memoryUsageMb = 32
-                ))
-            } else current
-        }
-
-        addBuildLog(BuildLog(
-            id = UUID.randomUUID().toString(),
-            workspaceId = workspaceId,
-            message = "تم إنهاء كافة العمليات العالقة وتحرير ذاكرة النظام.",
-            type = LogType.WARNING
-        ))
+    override suspend fun killStuckProcesses(workspaceId: String): Result<Unit> {
+        val message = "لا يمكن إنهاء عمليات: لا يوجد مشغل عمليات معزول متصل، ولم يتم تشغيل عمليات فعلية من التطبيق."
+        addBuildLog(
+            BuildLog(
+                id = UUID.randomUUID().toString(),
+                workspaceId = workspaceId,
+                message = message,
+                type = LogType.WARNING
+            )
+        )
+        return Result.failure(UnsupportedOperationException(message))
     }
 
     override suspend fun connectLocalAgent(
