@@ -30,6 +30,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -134,6 +135,7 @@ class AIModelRepositoryFirebaseAiTest {
                 usageLimitMonthly = 100.0
             )
         )
+        repo.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, 1_000L)
 
         val result = repo.generateResponse(
             userId = userId,
@@ -235,7 +237,7 @@ class AIModelRepositoryFirebaseAiTest {
     }
 
     @Test
-    fun builtInFirebaseAiProviderAndFreeModelsAreAvailableByDefault() = runBlocking {
+    fun builtInFirebaseAiCatalogIsVisibleButNotSelectableUntilVerified() = runBlocking {
         val repo = AIModelRepositoryImpl(
             aiProviderDao = aiProviderDao,
             openRouterApi = openRouterApi,
@@ -249,13 +251,17 @@ class AIModelRepositoryFirebaseAiTest {
         assertNotNull(platformProvider)
         assertEquals(AIProviderStatus.DISCONNECTED, platformProvider?.status)
 
-        val freeModels = repo.getAllAvailableModels(userId, freeOnly = true).first()
-        assertTrue(freeModels.any { it.apiId == "gemini-3.8-flash" && it.isFree })
-        assertTrue(freeModels.any { it.apiId == "gemini-3.5-flash-lite" && it.isFree })
+        val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
+        val catalogModels = repo.getModelsByProvider(userId, providerId).first()
+        assertTrue(catalogModels.any { it.apiId == "gemini-3.8-flash" && it.isFree })
+        assertTrue(catalogModels.any { it.apiId == "gemini-3.5-flash-lite" && it.isFree })
+        assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().isEmpty())
+        assertNull(repo.getDefaultModel(userId))
 
-        val defaultModel = repo.getDefaultModel(userId)
-        assertEquals(FirebaseAiModelCatalog.DEFAULT_MODEL_ID, defaultModel?.apiId)
-        assertEquals(FirebaseAiModelCatalog.platformProviderId(userId), defaultModel?.providerId)
+        val defaultModelError = runCatching {
+            repo.setDefaultModel(userId, catalogModels.first().id)
+        }.exceptionOrNull()
+        assertTrue(defaultModelError is IllegalArgumentException)
     }
 
 
@@ -287,6 +293,8 @@ class AIModelRepositoryFirebaseAiTest {
         val after = repo.getProviders(userId).first().single { it.id == providerId }
         assertEquals(AIProviderStatus.CONNECTED, after.status)
         assertEquals(1234L, after.lastSyncAt)
+        assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().any { it.providerId == providerId })
+        assertEquals(FirebaseAiModelCatalog.DEFAULT_MODEL_ID, repo.getDefaultModel(userId)?.apiId)
 
         repo.updateProviderStatus(userId, providerId, AIProviderStatus.ERROR, 5678L)
         val failed = repo.getProviderById(userId, providerId)
@@ -312,6 +320,8 @@ class AIModelRepositoryFirebaseAiTest {
         val provider = repo.getProviders(userId).first().single { it.id == providerId }
         assertEquals(AIProviderStatus.DISCONNECTED, provider.status)
         assertEquals(null, provider.lastSyncAt)
+        assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().isEmpty())
+        assertNull(repo.getDefaultModel(userId))
     }
 
     @Test
@@ -363,7 +373,9 @@ class AIModelRepositoryFirebaseAiTest {
         )
 
         val userId = "firebase-user-3"
-        val modelId = FirebaseAiModelCatalog.models(FirebaseAiModelCatalog.platformProviderId(userId)).first().id
+        val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
+        val modelId = FirebaseAiModelCatalog.models(providerId).first().id
+        assertTrue(repo.syncModels(userId, providerId).isSuccess)
         val result = repo.generateResponse(
             userId = userId,
             modelId = modelId,

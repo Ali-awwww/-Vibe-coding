@@ -35,7 +35,7 @@ class AIModelsViewModelTest {
     @Test
     fun signOutClearsPreviouslyLoadedProviderAndModelData() = runTest(mainDispatcher) {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
-        val provider = AIProvider(id = "provider-a", userId = "user-a", name = "Account A")
+        val provider = AIProvider(id = "provider-a", userId = "user-a", name = "Account A", status = AIProviderStatus.CONNECTED)
         val model = AIModel(id = "model-a", providerId = "provider-a", name = "Model A", isFree = true)
         val repository = FakeAIModelRepository().apply {
             providersByUser["user-a"] = listOf(provider)
@@ -63,8 +63,8 @@ class AIModelsViewModelTest {
     @Test
     fun switchingAccountsReplacesPreviousAccountData() = runTest(mainDispatcher) {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
-        val providerA = AIProvider(id = "provider-a", userId = "user-a", name = "Account A")
-        val providerB = AIProvider(id = "provider-b", userId = "user-b", name = "Account B")
+        val providerA = AIProvider(id = "provider-a", userId = "user-a", name = "Account A", status = AIProviderStatus.CONNECTED)
+        val providerB = AIProvider(id = "provider-b", userId = "user-b", name = "Account B", status = AIProviderStatus.CONNECTED)
         val modelA = AIModel(id = "model-a", providerId = "provider-a", name = "Model A", isFree = true)
         val modelB = AIModel(id = "model-b", providerId = "provider-b", name = "Model B", isFree = true)
         val repository = FakeAIModelRepository().apply {
@@ -102,6 +102,28 @@ class AIModelsViewModelTest {
         assertFalse(viewModel.uiState.value.isLoading)
     }
 
+
+
+    @Test
+    fun disconnectedProviderModelsAreNotExposedForSelection() = runTest(mainDispatcher) {
+        val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
+        val provider = AIProvider(
+            id = "provider-a",
+            userId = "user-a",
+            name = "Disconnected",
+            status = AIProviderStatus.DISCONNECTED
+        )
+        val model = AIModel(id = "model-a", providerId = provider.id, name = "Model A", isFree = true)
+        val repository = FakeAIModelRepository().apply {
+            providersByUser["user-a"] = listOf(provider)
+            modelsByUser["user-a"] = listOf(model)
+        }
+        val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.models.isEmpty())
+        assertNull(viewModel.uiState.value.defaultModelId)
+    }
 
     @Test
     fun providerTestSuccessMarksConnectedOnlyAfterRepositorySuccess() = runTest(mainDispatcher) {
@@ -248,8 +270,16 @@ class AIModelsViewModelTest {
         }
         override fun getModelsByProvider(userId: String, providerId: String): Flow<List<AIModel>> =
             flowOf(modelsByUser[userId].orEmpty().filter { it.providerId == providerId })
-        override fun getAllAvailableModels(userId: String, freeOnly: Boolean): Flow<List<AIModel>> =
-            flowOf(modelsByUser[userId].orEmpty().filter { it.isAvailable && (!freeOnly || it.isFree) })
+        override fun getAllAvailableModels(userId: String, freeOnly: Boolean): Flow<List<AIModel>> {
+            val connectedProviderIds = providersByUser[userId].orEmpty()
+                .filter { it.status == AIProviderStatus.CONNECTED }
+                .mapTo(HashSet()) { it.id }
+            return flowOf(
+                modelsByUser[userId].orEmpty().filter {
+                    it.providerId in connectedProviderIds && it.isAvailable && (!freeOnly || it.isFree)
+                }
+            )
+        }
         override suspend fun getModelById(userId: String, id: String): AIModel? =
             modelsByUser[userId].orEmpty().firstOrNull { it.id == id }
         override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = syncResult

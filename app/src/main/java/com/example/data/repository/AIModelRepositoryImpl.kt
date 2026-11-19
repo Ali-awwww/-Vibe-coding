@@ -139,7 +139,10 @@ class AIModelRepositoryImpl internal constructor(
     }
 
     override fun getAllAvailableModels(userId: String, freeOnly: Boolean): Flow<List<AIModel>> =
-        aiProviderDao.getAllAvailableModels(userId).map { dbModels ->
+        combine(aiProviderDao.getAllAvailableModels(userId), getProviders(userId)) { dbModels, providers ->
+            val connectedProviderIds = providers
+                .filter { it.status == AIProviderStatus.CONNECTED }
+                .mapTo(HashSet()) { it.id }
             val combined = if (!isPlatformFirebaseAiEnabled(userId)) {
                 dbModels
             } else {
@@ -147,7 +150,7 @@ class AIModelRepositoryImpl internal constructor(
                 val platformIds = platformModels.mapTo(HashSet()) { it.id }
                 platformModels + dbModels.filterNot { it.id in platformIds }
             }
-            if (freeOnly) combined.filter { it.isFree } else combined
+            combined.filter { it.providerId in connectedProviderIds && (!freeOnly || it.isFree) }
         }
 
     override suspend fun getModelById(userId: String, id: String): AIModel? {
@@ -383,26 +386,25 @@ class AIModelRepositoryImpl internal constructor(
     }
 
     override suspend fun setDefaultModel(userId: String, modelId: String) {
-        requireNotNull(getModelById(userId, modelId)) {
-            "Selected model is not owned by the current user"
+        val availableModel = getAllAvailableModels(userId, freeOnly = false)
+            .first()
+            .firstOrNull { it.id == modelId }
+        requireNotNull(availableModel) {
+            "Selected model is unavailable until its provider passes a live connection check"
         }
         val current = aiProviderDao.getUserSettings(userId).first()
         val newSettings = (current ?: AIUserSettings(userId = userId)).copy(
             defaultModelId = modelId,
-            lastModified = System.currentTimeMillis()
+            lastModified = nowMillis()
         )
         aiProviderDao.insertUserSettings(newSettings)
     }
 
     override suspend fun getDefaultModel(userId: String): AIModel? {
-        val settings = aiProviderDao.getUserSettings(userId).first()
-        val modelId = settings?.defaultModelId
-        
-        return if (modelId != null) {
-            getModelById(userId, modelId)
-        } else {
-            getAllAvailableModels(userId, freeOnly = false).first().firstOrNull { it.isFree }
-        }
+        val availableModels = getAllAvailableModels(userId, freeOnly = false).first()
+        val savedModelId = aiProviderDao.getUserSettings(userId).first()?.defaultModelId
+        return savedModelId?.let { id -> availableModels.firstOrNull { it.id == id } }
+            ?: availableModels.firstOrNull { it.isFree }
     }
 
     override suspend fun generateResponse(
@@ -426,28 +428,24 @@ class AIModelRepositoryImpl internal constructor(
                  throw Exception("لقد تجاوزت حد الاستخدام الشهري المخصص (${settings.usageLimitMonthly}$/شهر). يرجى مراجعة إعدادات الأمان أو استخدام النماذج المجانية فقط.")
             }
 
-            // Build list of potential models to try (Failover Chain)
+            // Only providers with a successful live connection check may enter the inference chain.
+            val availableModels = getAllAvailableModels(userId, freeOnly = false).first()
             val modelsToTry = mutableListOf<AIModel>()
-            
+
             if (isAutoSelect) {
-                // Intelligent routing: Start with best free models for this task
-                val allModels = getAllAvailableModels(userId, freeOnly = false).first()
-                val freeModels = allModels.filter { it.isFree }
-                val prioritized = prioritizeModelsForTask(freeModels, taskType)
-                modelsToTry.addAll(prioritized)
+                val freeModels = availableModels.filter { it.isFree }
+                modelsToTry.addAll(prioritizeModelsForTask(freeModels, taskType))
             } else {
-                // Manual selection: Specific model requested (if it exists and respects Free Only)
-                val requestedModel = getModelById(userId, modelId)
+                val requestedModel = availableModels.firstOrNull { it.id == modelId }
                 if (requestedModel != null && (!isFreeOnly || requestedModel.isFree)) {
                     modelsToTry.add(requestedModel)
                 }
 
-                // Default model from settings
-                settings.defaultModelId?.let { defId ->
-                    if (defId != modelId) {
-                        getModelById(userId, defId)?.let { defModel ->
-                            if (!isFreeOnly || defModel.isFree) {
-                                modelsToTry.add(defModel)
+                settings.defaultModelId?.let { defaultId ->
+                    if (defaultId != modelId) {
+                        availableModels.firstOrNull { it.id == defaultId }?.let { defaultModel ->
+                            if (!isFreeOnly || defaultModel.isFree) {
+                                modelsToTry.add(defaultModel)
                             }
                         }
                     }
@@ -455,7 +453,7 @@ class AIModelRepositoryImpl internal constructor(
             }
 
             if (modelsToTry.isEmpty()) {
-                throw Exception("No available models found. Check your AI Provider settings and API keys.")
+                throw Exception("No connected AI models are available. Test a provider connection and sync its model catalog first.")
             }
 
             var lastException: Exception? = null
