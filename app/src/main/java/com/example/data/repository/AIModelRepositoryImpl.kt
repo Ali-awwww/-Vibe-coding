@@ -30,6 +30,7 @@ import retrofit2.HttpException
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 internal data class FirebaseAiGenerationOutput(
     val text: String,
@@ -56,6 +57,7 @@ class AIModelRepositoryImpl internal constructor(
     )
 
     private val platformProviderStates = MutableStateFlow<Map<String, PlatformProviderState>>(emptyMap())
+    private val verifiedProviderConnections = ConcurrentHashMap.newKeySet<Pair<String, String>>()
 
     constructor(
         aiProviderDao: AIProviderDao,
@@ -110,18 +112,34 @@ class AIModelRepositoryImpl internal constructor(
         }
         val encryptedKey = provider.apiKey?.let(encryptSecret)
         val newProvider = if (provider.id.isEmpty()) provider.copy(id = UUID.randomUUID().toString()) else provider
-        aiProviderDao.insertProvider(newProvider.copy(apiKey = encryptedKey))
+        verifiedProviderConnections.remove(provider.userId to newProvider.id)
+        aiProviderDao.insertProvider(
+            newProvider.copy(
+                apiKey = encryptedKey,
+                status = AIProviderStatus.DISCONNECTED,
+                lastSyncAt = null
+            )
+        )
     }
 
     override suspend fun deleteProvider(userId: String, id: String) {
         if (isPlatformFirebaseAiEnabled(userId) && id == FirebaseAiModelCatalog.platformProviderId(userId)) {
             throw UnsupportedOperationException("Built-in Firebase AI Logic provider cannot be deleted")
         }
+        verifiedProviderConnections.remove(userId to id)
         aiProviderDao.deleteModelsByProvider(userId, id)
         aiProviderDao.deleteProvider(userId, id)
     }
 
     override suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long) {
+        val connectionKey = userId to id
+        if (status == AIProviderStatus.CONNECTED && connectionKey !in verifiedProviderConnections) {
+            throw IllegalStateException("A provider can be marked CONNECTED only after a successful live connection check")
+        }
+        if (status != AIProviderStatus.CONNECTED) {
+            verifiedProviderConnections.remove(connectionKey)
+        }
+
         if (isPlatformFirebaseAiEnabled(userId) && id == FirebaseAiModelCatalog.platformProviderId(userId)) {
             platformProviderStates.update { current ->
                 current + (userId to PlatformProviderState(status, syncTime))
@@ -168,6 +186,7 @@ class AIModelRepositoryImpl internal constructor(
 
         if (provider.type == AIProviderType.FIREBASE_AI_LOGIC) {
             verifyFirebaseAiConnection()
+            verifiedProviderConnections.add(userId to providerId)
             updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, nowMillis())
             return@runProviderOperation
         }
@@ -354,6 +373,7 @@ class AIModelRepositoryImpl internal constructor(
 
         if (provider.type == AIProviderType.FIREBASE_AI_LOGIC) {
             verifyFirebaseAiConnection()
+            verifiedProviderConnections.add(userId to providerId)
             updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, nowMillis())
             return@runProviderOperation
         }
@@ -368,6 +388,7 @@ class AIModelRepositoryImpl internal constructor(
             AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM, AIProviderType.FIREBASE_AI_LOGIC ->
                 throw AIProviderOperationException(AIProviderFailureKind.UNSUPPORTED)
         }
+        verifiedProviderConnections.add(userId to providerId)
         updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, nowMillis())
     }
 

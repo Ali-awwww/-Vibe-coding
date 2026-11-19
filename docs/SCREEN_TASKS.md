@@ -2559,3 +2559,23 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - CI for this change is pending. Repository tests use deterministic fake API runners; they do not establish a live external provider connection.
 - Last area worked: AIModels provider verification, selectable model catalog and inference routing.
 - Next exact step: inspect CI/JUnit results to terminal status, then audit provider usage/cost accounting and model failover for success or cost claims that are not backed by returned provider usage data.
+
+
+## 2026-11-20 — prevent forged CONNECTED provider states
+
+### Confirmed defect
+- AIModelRepositoryImpl.addProvider accepted the caller-supplied status field, so a caller could insert a provider already marked CONNECTED without a live request.
+- updateProviderStatus also accepted CONNECTED from any caller, independently of testConnection or syncModels.
+
+### Implementation
+- New providers are always stored DISCONNECTED with lastSyncAt cleared, regardless of input values.
+- CONNECTED transitions require an in-process proof recorded only after verifyOpenRouterConnection, verifyGeminiConnection or verifyFirebaseAiConnection succeeds. Failure/disconnect status clears that proof.
+- BYOK inference fixtures now seed a previously verified database status directly; the normal repository API no longer provides a way to forge it.
+
+### Regression coverage
+- Added a test that attempts to add a pre-connected provider and then directly set CONNECTED; both paths are rejected.
+- Existing Firebase AI probe tests cover successful and failed live-verification transitions.
+
+### Continuity
+- Last area worked: AIModels live connection truthfulness and availability gating.
+- Next exact step: verify CI/JUnit after the new guard; then audit provider usage/cost accounting and failover response metadata.

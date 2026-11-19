@@ -203,6 +203,7 @@ class AIModelRepositoryFirebaseAiTest {
                 usageLimitMonthly = 100.0
             )
         )
+        aiProviderDao.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, 1_000L)
 
         val result = repo.generateResponse(
             userId = userId,
@@ -322,6 +323,41 @@ class AIModelRepositoryFirebaseAiTest {
         assertEquals(null, provider.lastSyncAt)
         assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().isEmpty())
         assertNull(repo.getDefaultModel(userId))
+    }
+
+
+    @Test
+    fun addProviderCannotForgeConnectedStatusAndDirectConnectedUpdateRequiresProbe() = runBlocking {
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            encryptSecret = { it },
+            decryptSecret = { it }
+        )
+        val userId = "forged-status-user"
+        val providerId = "forged-status-provider"
+        repo.addProvider(
+            AIProvider(
+                id = providerId,
+                userId = userId,
+                name = "Unverified",
+                type = AIProviderType.OPEN_ROUTER,
+                apiKey = "test-key",
+                status = AIProviderStatus.CONNECTED,
+                lastSyncAt = 999L
+            )
+        )
+
+        val stored = repo.getProviderById(userId, providerId)
+        assertEquals(AIProviderStatus.DISCONNECTED, stored?.status)
+        assertNull(stored?.lastSyncAt)
+
+        val error = runCatching {
+            repo.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, 1_000L)
+        }.exceptionOrNull()
+        assertTrue(error is IllegalStateException)
+        assertEquals(AIProviderStatus.DISCONNECTED, repo.getProviderById(userId, providerId)?.status)
     }
 
     @Test
