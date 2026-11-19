@@ -65,6 +65,114 @@ class AIModelRepositoryFirebaseAiTest {
         database.close()
     }
 
+
+    @Test
+    fun openRouterSyncMarksConnectedOnlyAfterLiveCompletionProbe() = runBlocking {
+        val userId = "openrouter-probe-success"
+        val providerId = "openrouter-probe-provider"
+        val modelData = OpenRouterModelData(
+            id = "probe-model",
+            name = "Probe model",
+            description = null,
+            context_length = 8192,
+            pricing = OpenRouterPricing(prompt = "0", completion = "0", request = "0", image = "0"),
+            architecture = null
+        )
+        var probeCount = 0
+        val probeApi = Proxy.newProxyInstance(
+            OpenRouterApi::class.java.classLoader,
+            arrayOf(OpenRouterApi::class.java)
+        ) { _, method, _ ->
+            when (method.name) {
+                "getModels" -> OpenRouterModelsResponse(listOf(modelData))
+                "generateCompletion" -> {
+                    probeCount += 1
+                    OpenRouterChatResponse(
+                        id = "probe-success",
+                        choices = listOf(ChatChoice(ChatMessage("assistant", "pong"))),
+                        usage = null
+                    )
+                }
+                else -> throw UnsupportedOperationException("Not used by this test.")
+            }
+        } as OpenRouterApi
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = probeApi,
+            huggingFaceApi = huggingFaceApi,
+            encryptSecret = { it },
+            decryptSecret = { it },
+            nowMillis = { 4321L }
+        )
+        repo.addProvider(
+            AIProvider(
+                id = providerId,
+                userId = userId,
+                name = "Probe provider",
+                type = AIProviderType.OPEN_ROUTER,
+                apiKey = "test-key"
+            )
+        )
+
+        assertEquals(AIProviderStatus.DISCONNECTED, repo.getProviderById(userId, providerId)?.status)
+        val result = repo.syncModels(userId, providerId)
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, probeCount)
+        val provider = repo.getProviderById(userId, providerId)
+        assertEquals(AIProviderStatus.CONNECTED, provider?.status)
+        assertEquals(4321L, provider?.lastSyncAt)
+        assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().any { it.providerId == providerId })
+    }
+
+    @Test
+    fun failedOpenRouterLiveProbeLeavesProviderDisconnected() = runBlocking {
+        val userId = "openrouter-probe-failure"
+        val providerId = "openrouter-failed-provider"
+        val modelData = OpenRouterModelData(
+            id = "probe-model",
+            name = "Probe model",
+            description = null,
+            context_length = 8192,
+            pricing = OpenRouterPricing(prompt = "0", completion = "0", request = "0", image = "0"),
+            architecture = null
+        )
+        val failingApi = Proxy.newProxyInstance(
+            OpenRouterApi::class.java.classLoader,
+            arrayOf(OpenRouterApi::class.java)
+        ) { _, method, _ ->
+            when (method.name) {
+                "getModels" -> OpenRouterModelsResponse(listOf(modelData))
+                "generateCompletion" -> throw IOException("private probe diagnostic")
+                else -> throw UnsupportedOperationException("Not used by this test.")
+            }
+        } as OpenRouterApi
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = failingApi,
+            huggingFaceApi = huggingFaceApi,
+            encryptSecret = { it },
+            decryptSecret = { it }
+        )
+        repo.addProvider(
+            AIProvider(
+                id = providerId,
+                userId = userId,
+                name = "Failing provider",
+                type = AIProviderType.OPEN_ROUTER,
+                apiKey = "test-key"
+            )
+        )
+
+        val result = repo.syncModels(userId, providerId)
+
+        assertTrue(result.isFailure)
+        val provider = repo.getProviderById(userId, providerId)
+        assertEquals(AIProviderStatus.DISCONNECTED, provider?.status)
+        assertNull(provider?.lastSyncAt)
+        assertTrue(repo.getAllAvailableModels(userId, freeOnly = false).first().isEmpty())
+    }
+
     @Test
     fun openRouterRetriesOne429AfterRetryAfterCooldownAndPersistsSuccess() = runBlocking {
         val userId = "rate-limit-user"

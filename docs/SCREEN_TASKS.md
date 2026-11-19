@@ -2579,3 +2579,9 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Continuity
 - Last area worked: AIModels live connection truthfulness and availability gating.
 - Next exact step: verify CI/JUnit after the new guard; then audit provider usage/cost accounting and failover response metadata.
+
+
+## 2026-11-20 — BYOK sync records a verified connection
+
+- Corrected the OpenRouter/Gemini sync path to record its successful live probe before using the guarded CONNECTED transition. A catalog fetch alone is insufficient; OpenRouter must also complete the verification request.
+- Added deterministic OpenRouter success/failure probe tests. A failed completion probe leaves the provider DISCONNECTED and its models unavailable.

@@ -245,7 +245,8 @@ class AIModelRepositoryImpl internal constructor(
 
         if (models.isEmpty()) throw AIProviderOperationException(AIProviderFailureKind.EMPTY_RESPONSE)
         aiProviderDao.replaceModelsForProvider(userId, providerId, models)
-        aiProviderDao.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, System.currentTimeMillis())
+        verifiedProviderConnections.add(userId to providerId)
+        updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, nowMillis())
     }
 
     private suspend fun verifyOpenRouterConnection(apiKey: String, models: List<com.example.data.remote.OpenRouterModelData>) {
