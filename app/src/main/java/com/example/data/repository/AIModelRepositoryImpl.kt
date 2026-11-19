@@ -18,9 +18,12 @@ import com.google.firebase.ai.type.content
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import retrofit2.HttpException
@@ -47,6 +50,13 @@ class AIModelRepositoryImpl internal constructor(
     private val nowMillis: () -> Long = System::currentTimeMillis
 ) : AIModelRepository {
 
+    private data class PlatformProviderState(
+        val status: AIProviderStatus,
+        val lastSyncAt: Long?
+    )
+
+    private val platformProviderStates = MutableStateFlow<Map<String, PlatformProviderState>>(emptyMap())
+
     constructor(
         aiProviderDao: AIProviderDao,
         openRouterApi: OpenRouterApi,
@@ -69,19 +79,27 @@ class AIModelRepositoryImpl internal constructor(
     private fun isPlatformFirebaseAiEnabled(userId: String): Boolean =
         enablePlatformFirebaseAi && userId.isNotBlank()
 
-    override fun getProviders(userId: String): Flow<List<AIProvider>> =
-        aiProviderDao.getProviders(userId).map { dbProviders ->
-            if (!isPlatformFirebaseAiEnabled(userId)) {
-                dbProviders
-            } else {
-                val platformProvider = FirebaseAiModelCatalog.platformProvider(userId)
-                listOf(platformProvider) + dbProviders.filterNot { it.id == platformProvider.id }
-            }
+    override fun getProviders(userId: String): Flow<List<AIProvider>> {
+        val databaseProviders = aiProviderDao.getProviders(userId)
+        if (!isPlatformFirebaseAiEnabled(userId)) return databaseProviders
+
+        return combine(databaseProviders, platformProviderStates) { dbProviders, states ->
+            val state = states[userId]
+            val platformProvider = FirebaseAiModelCatalog.platformProvider(userId).copy(
+                status = state?.status ?: AIProviderStatus.DISCONNECTED,
+                lastSyncAt = state?.lastSyncAt
+            )
+            listOf(platformProvider) + dbProviders.filterNot { it.id == platformProvider.id }
         }
+    }
 
     override suspend fun getProviderById(userId: String, id: String): AIProvider? {
         if (isPlatformFirebaseAiEnabled(userId) && id == FirebaseAiModelCatalog.platformProviderId(userId)) {
-            return FirebaseAiModelCatalog.platformProvider(userId)
+            val state = platformProviderStates.value[userId]
+            return FirebaseAiModelCatalog.platformProvider(userId).copy(
+                status = state?.status ?: AIProviderStatus.DISCONNECTED,
+                lastSyncAt = state?.lastSyncAt
+            )
         }
         return aiProviderDao.getProviderById(userId, id)
     }
@@ -105,6 +123,9 @@ class AIModelRepositoryImpl internal constructor(
 
     override suspend fun updateProviderStatus(userId: String, id: String, status: AIProviderStatus, syncTime: Long) {
         if (isPlatformFirebaseAiEnabled(userId) && id == FirebaseAiModelCatalog.platformProviderId(userId)) {
+            platformProviderStates.update { current ->
+                current + (userId to PlatformProviderState(status, syncTime))
+            }
             return
         }
         aiProviderDao.updateProviderStatus(userId, id, status, syncTime)
@@ -144,6 +165,7 @@ class AIModelRepositoryImpl internal constructor(
 
         if (provider.type == AIProviderType.FIREBASE_AI_LOGIC) {
             verifyFirebaseAiConnection()
+            updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, nowMillis())
             return@runProviderOperation
         }
 
@@ -329,6 +351,7 @@ class AIModelRepositoryImpl internal constructor(
 
         if (provider.type == AIProviderType.FIREBASE_AI_LOGIC) {
             verifyFirebaseAiConnection()
+            updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, nowMillis())
             return@runProviderOperation
         }
 
@@ -342,6 +365,7 @@ class AIModelRepositoryImpl internal constructor(
             AIProviderType.HUGGING_FACE, AIProviderType.CUSTOM, AIProviderType.FIREBASE_AI_LOGIC ->
                 throw AIProviderOperationException(AIProviderFailureKind.UNSUPPORTED)
         }
+        updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, nowMillis())
     }
 
     override fun getRecentUsageLogs(userId: String): Flow<List<AIUsageLog>> = aiProviderDao.getRecentUsageLogs(userId)

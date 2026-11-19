@@ -102,6 +102,27 @@ class AIModelsViewModelTest {
         assertFalse(viewModel.uiState.value.isLoading)
     }
 
+
+    @Test
+    fun providerTestSuccessMarksConnectedOnlyAfterRepositorySuccess() = runTest(mainDispatcher) {
+        val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
+        val provider = AIProvider(id = "provider-a", userId = "user-a", name = "Provider A")
+        val repository = FakeAIModelRepository().apply {
+            providersByUser["user-a"] = listOf(provider)
+            connectionResult = Result.success(Unit)
+        }
+        val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
+        advanceUntilIdle()
+
+        viewModel.testConnection(provider.id)
+        advanceUntilIdle()
+
+        assertEquals(AIProviderStatus.CONNECTED, repository.statusUpdates.single().status)
+        assertNull(viewModel.uiState.value.error)
+        assertTrue(viewModel.uiState.value.message.orEmpty().contains("اتصال"))
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
     @Test
     fun failedModelSyncDoesNotLeaveProviderConnected() = runTest(mainDispatcher) {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))

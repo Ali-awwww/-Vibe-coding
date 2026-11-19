@@ -37,6 +37,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.lang.reflect.Proxy
+import java.io.IOException
 
 @RunWith(RobolectricTestRunner::class)
 @Config
@@ -246,7 +247,7 @@ class AIModelRepositoryFirebaseAiTest {
         val providers = repo.getProviders(userId).first()
         val platformProvider = providers.firstOrNull { it.type == AIProviderType.FIREBASE_AI_LOGIC }
         assertNotNull(platformProvider)
-        assertEquals(AIProviderStatus.CONNECTED, platformProvider?.status)
+        assertEquals(AIProviderStatus.DISCONNECTED, platformProvider?.status)
 
         val freeModels = repo.getAllAvailableModels(userId, freeOnly = true).first()
         assertTrue(freeModels.any { it.apiId == "gemini-3.8-flash" && it.isFree })
@@ -255,6 +256,62 @@ class AIModelRepositoryFirebaseAiTest {
         val defaultModel = repo.getDefaultModel(userId)
         assertEquals(FirebaseAiModelCatalog.DEFAULT_MODEL_ID, defaultModel?.apiId)
         assertEquals(FirebaseAiModelCatalog.platformProviderId(userId), defaultModel?.providerId)
+    }
+
+
+    @Test
+    fun builtInFirebaseAiProviderBecomesConnectedOnlyAfterSuccessfulLiveProbe() = runBlocking {
+        var probeCount = 0
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            enablePlatformFirebaseAi = true,
+            firebaseAiRunner = { _, _, _ ->
+                probeCount += 1
+                FirebaseAiGenerationOutput("pong")
+            },
+            nowMillis = { 1234L }
+        )
+        val userId = "firebase-probe-success"
+        val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
+
+        val before = repo.getProviders(userId).first().single { it.id == providerId }
+        assertEquals(AIProviderStatus.DISCONNECTED, before.status)
+        assertEquals(null, before.lastSyncAt)
+
+        val result = repo.syncModels(userId, providerId)
+        assertTrue(result.isSuccess)
+        assertEquals(1, probeCount)
+
+        val after = repo.getProviders(userId).first().single { it.id == providerId }
+        assertEquals(AIProviderStatus.CONNECTED, after.status)
+        assertEquals(1234L, after.lastSyncAt)
+
+        repo.updateProviderStatus(userId, providerId, AIProviderStatus.ERROR, 5678L)
+        val failed = repo.getProviderById(userId, providerId)
+        assertEquals(AIProviderStatus.ERROR, failed?.status)
+        assertEquals(5678L, failed?.lastSyncAt)
+    }
+
+    @Test
+    fun failedBuiltInFirebaseAiProbeNeverMarksProviderConnected() = runBlocking {
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            enablePlatformFirebaseAi = true,
+            firebaseAiRunner = { _, _, _ -> throw IOException("private provider diagnostic") }
+        )
+        val userId = "firebase-probe-failure"
+        val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
+
+        val result = repo.syncModels(userId, providerId)
+
+        assertTrue(result.isFailure)
+        val provider = repo.getProviders(userId).first().single { it.id == providerId }
+        assertEquals(AIProviderStatus.DISCONNECTED, provider.status)
+        assertEquals(null, provider.lastSyncAt)
     }
 
     @Test

@@ -2513,3 +2513,29 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - CI for the terminal fail-closed change is pending; local Gradle and emulator/device checks are not available in this run.
 - Last area worked: VibeStudio preview security and truthful terminal/runtime states.
 - Next exact step: inspect CI/JUnit results for current main. If green, continue the highest-priority AIModels provider connection criterion; keep real command execution BLOCKED until a verified process runner and authenticated Local Agent transport exist.
+
+
+## 2026-11-20 — AIModels built-in provider connection status
+
+### Confirmed defect
+- The platform-managed Firebase AI Logic provider was constructed with status CONNECTED before any request was made.
+- updateProviderStatus returned early for the platform provider, so a failed connection test could not change that status. The UI could therefore continue to show CONNECTED even when the live probe failed.
+
+### Implementation
+- The built-in provider now starts DISCONNECTED with no lastSyncAt.
+- Added a per-user in-memory connection-state flow for the platform provider. Provider lists and direct lookups observe status changes without requiring a database row.
+- A successful Firebase AI Logic probe during syncModels or testConnection is the only path that marks the platform provider CONNECTED. ViewModel failure mapping can now set ERROR/RATE_LIMITED/UNSUPPORTED and the UI receives the update.
+- The transient status intentionally resets to DISCONNECTED after process restart, requiring a fresh live check.
+
+### Regression coverage
+- Updated the default-provider test to expect DISCONNECTED.
+- Added successful and failed Firebase AI probe tests, including status-flow updates and lastSyncAt.
+- Added a ViewModel success-path test; existing failure-path tests remain.
+
+### Verification boundary
+- Tests use an injected deterministic runner to verify state transitions; they do not prove a live Firebase AI network request or project configuration.
+- CI for the current main head is pending. No live provider credentials, real Firebase AI request, Gradle build or device screenshot is claimed.
+
+### Persistent continuity
+- Last area worked: AIModels provider connection-state truthfulness.
+- Next exact step: inspect CI/JUnit results to terminal status, then audit the remaining AIModels provider catalog, model selection and usage/cost paths for false availability or success states.

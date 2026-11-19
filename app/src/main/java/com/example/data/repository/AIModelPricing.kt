@@ -80,7 +80,7 @@ internal object FirebaseAiModelCatalog {
         userId = userId,
         name = "Firebase AI Logic (Gemini)",
         type = AIProviderType.FIREBASE_AI_LOGIC,
-        status = AIProviderStatus.CONNECTED,
+        status = AIProviderStatus.DISCONNECTED,
         apiKey = null,
         baseUrl = null,
         createdAt = 0L,
