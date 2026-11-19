@@ -365,8 +365,14 @@ class AIModelRepositoryFirebaseAiTest {
 
         val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
         val catalogModels = repo.getModelsByProvider(userId, providerId).first()
-        assertTrue(catalogModels.any { it.apiId == "gemini-3.8-flash" && it.isFree })
-        assertTrue(catalogModels.any { it.apiId == "gemini-3.5-flash-lite" && it.isFree })
+        assertTrue(catalogModels.any {
+            it.apiId == "gemini-3.8-flash" && !it.isFree &&
+                it.inputPricePer1M > 0.0 && it.outputPricePer1M > 0.0
+        })
+        assertTrue(catalogModels.any {
+            it.apiId == "gemini-3.5-flash-lite" && !it.isFree &&
+                it.inputPricePer1M > 0.0 && it.outputPricePer1M > 0.0
+        })
         assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().isEmpty())
         assertNull(repo.getDefaultModel(userId))
 
@@ -405,8 +411,9 @@ class AIModelRepositoryFirebaseAiTest {
         val after = repo.getProviders(userId).first().single { it.id == providerId }
         assertEquals(AIProviderStatus.CONNECTED, after.status)
         assertEquals(1234L, after.lastSyncAt)
-        assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().any { it.providerId == providerId })
-        assertEquals(FirebaseAiModelCatalog.DEFAULT_MODEL_ID, repo.getDefaultModel(userId)?.apiId)
+        assertTrue(repo.getAllAvailableModels(userId, freeOnly = false).first().any { it.providerId == providerId })
+        assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().none { it.providerId == providerId })
+        assertNull(repo.getDefaultModel(userId))
 
         repo.updateProviderStatus(userId, providerId, AIProviderStatus.ERROR, 5678L)
         val failed = repo.getProviderById(userId, providerId)
@@ -500,7 +507,7 @@ class AIModelRepositoryFirebaseAiTest {
     }
 
     @Test
-    fun generateResponseRoutesBuiltInModelThroughFirebaseAiRunnerAndLogsZeroCostUsage() = runBlocking {
+    fun generateResponseRoutesBuiltInModelAndEstimatesPaidTierUsage() = runBlocking {
         var capturedModelName: String? = null
         var capturedSystemInstruction: String? = null
         val repo = AIModelRepositoryImpl(
@@ -521,8 +528,18 @@ class AIModelRepositoryFirebaseAiTest {
 
         val userId = "firebase-user-3"
         val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
-        val modelId = FirebaseAiModelCatalog.models(providerId).first().id
+        val model = FirebaseAiModelCatalog.models(providerId).first()
+        val modelId = model.id
         assertTrue(repo.syncModels(userId, providerId).isSuccess)
+        aiProviderDao.insertUserSettings(
+            AIUserSettings(
+                userId = userId,
+                defaultModelId = modelId,
+                freeOnly = false,
+                autoSelectFree = false,
+                usageLimitMonthly = 100.0
+            )
+        )
         val result = repo.generateResponse(
             userId = userId,
             modelId = modelId,
@@ -541,8 +558,69 @@ class AIModelRepositoryFirebaseAiTest {
         assertEquals(1, logs.size)
         assertEquals(140, logs.first().tokensInput)
         assertEquals(35, logs.first().tokensOutput)
-        assertEquals(0.0, logs.first().estimatedCost, 0.0001)
+        assertEquals(AIModelPricing.estimateCost(model, 140, 35), logs.first().estimatedCost, 0.0000001)
         assertTrue(logs.first().isSuccess)
+    }
+
+    @Test
+    fun missingFirebaseUsageMetadataIsRecordedAsUnknownAndBlocksFurtherPaidInference() = runBlocking {
+        var generationCount = 0
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            enablePlatformFirebaseAi = true,
+            firebaseAiRunner = { _, prompt, _ ->
+                if (prompt == "ping") {
+                    FirebaseAiGenerationOutput("pong")
+                } else {
+                    generationCount += 1
+                    FirebaseAiGenerationOutput("response without usage metadata")
+                }
+            }
+        )
+        val userId = "firebase-unpriced-user"
+        val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
+        val model = FirebaseAiModelCatalog.models(providerId).first()
+        assertTrue(repo.syncModels(userId, providerId).isSuccess)
+        aiProviderDao.insertUserSettings(
+            AIUserSettings(
+                userId = userId,
+                defaultModelId = model.id,
+                freeOnly = false,
+                autoSelectFree = false,
+                usageLimitMonthly = 100.0
+            )
+        )
+
+        val first = repo.generateResponse(
+            userId = userId,
+            modelId = model.id,
+            prompt = "first paid request",
+            systemInstruction = null,
+            taskId = "unpriced-first",
+            taskType = AITaskType.GENERAL_CHAT
+        )
+        assertTrue(first.isSuccess)
+        assertEquals(1, generationCount)
+
+        val logs = repo.getRecentUsageLogs(userId).first()
+        assertEquals(1, logs.size)
+        assertEquals(AIUsageLog.UNKNOWN_COST, logs.single().estimatedCost, 0.0)
+        assertEquals(0.0, repo.getTotalCost(userId, 0L).first() ?: 0.0, 0.0001)
+        assertTrue(repo.hasUnpricedUsageSince(userId, 0L).first())
+
+        val second = repo.generateResponse(
+            userId = userId,
+            modelId = model.id,
+            prompt = "second paid request",
+            systemInstruction = null,
+            taskId = "unpriced-second",
+            taskType = AITaskType.GENERAL_CHAT
+        )
+        assertTrue(second.isFailure)
+        assertTrue(second.exceptionOrNull()?.message.orEmpty().contains("تكلفة غير مؤكدة"))
+        assertEquals("Unpriced usage must stop another paid request before it reaches the provider", 1, generationCount)
     }
 
     @Test

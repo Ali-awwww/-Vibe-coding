@@ -33,6 +33,25 @@ class AIModelsViewModelTest {
     @After fun tearDown() { Dispatchers.resetMain() }
 
     @Test
+    fun unpricedUsageIsExposedToTheDashboardState() = runTest(mainDispatcher) {
+        val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
+        val repository = FakeAIModelRepository().apply {
+            usageLogsByUser["user-a"] = listOf(
+                AIUsageLog(
+                    id = "unpriced-usage",
+                    userId = "user-a",
+                    estimatedCost = AIUsageLog.UNKNOWN_COST,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+        }
+        val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.hasUnpricedUsage)
+    }
+
+    @Test
     fun signOutClearsPreviouslyLoadedProviderAndModelData() = runTest(mainDispatcher) {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
         val provider = AIProvider(id = "provider-a", userId = "user-a", name = "Account A", status = AIProviderStatus.CONNECTED)
@@ -247,6 +266,7 @@ class AIModelsViewModelTest {
         val providersByUser = mutableMapOf<String, List<AIProvider>>()
         val modelsByUser = mutableMapOf<String, List<AIModel>>()
         val statusUpdates = mutableListOf<StatusUpdate>()
+        val usageLogsByUser = mutableMapOf<String, List<AIUsageLog>>()
         var connectionResult: Result<Unit> = Result.success(Unit)
         var syncResult: Result<Unit> = Result.success(Unit)
         var failProviderLoad = false
@@ -284,7 +304,8 @@ class AIModelsViewModelTest {
             modelsByUser[userId].orEmpty().firstOrNull { it.id == id }
         override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = syncResult
         override suspend fun testConnection(userId: String, providerId: String): Result<Unit> = connectionResult
-        override fun getRecentUsageLogs(userId: String): Flow<List<AIUsageLog>> = flowOf(emptyList())
+        override fun getRecentUsageLogs(userId: String): Flow<List<AIUsageLog>> =
+            flowOf(usageLogsByUser[userId].orEmpty())
         override fun getTotalCost(userId: String, since: Long): Flow<Double?> = flowOf(0.0)
         override suspend fun logUsage(log: AIUsageLog) = Unit
         override fun getUserSettings(userId: String): Flow<AIUserSettings?> = flowOf(AIUserSettings(userId = userId))

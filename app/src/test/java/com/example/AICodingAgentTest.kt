@@ -600,7 +600,10 @@ class AICodingAgentTest {
         )
         assertTrue(
             "The log must not claim that a development server started",
-            buildLogs.none { it.message.contains("تم تشغيل خادم") || it.message.contains("Server started") }
+            buildLogs.none {
+                it.type.name == "SUCCESS" &&
+                    (it.message.contains("خادم") || it.message.contains("Server"))
+            }
         )
     }
 

@@ -2585,3 +2585,26 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 - Corrected the OpenRouter/Gemini sync path to record its successful live probe before using the guarded CONNECTED transition. A catalog fetch alone is insufficient; OpenRouter must also complete the verification request.
 - Added deterministic OpenRouter success/failure probe tests. A failed completion probe leaves the provider DISCONNECTED and its models unavailable.
+
+
+## 2026-11-20 — AIModels billing-tier and usage-accounting safety
+
+### Confirmed defect
+- The built-in Firebase AI Logic catalog marked Gemini models as guaranteed-free and logged every successful request with `estimatedCost = 0.0`. Firebase documents that AI Logic itself is free, but Gemini API usage and billing depend on the selected backend and project billing tier; the app cannot read that tier from its current runtime.
+- Official references checked 2026-11-20: https://firebase.google.com/docs/ai-logic/pricing and https://firebase.google.com/pricing.
+
+### Implementation
+- Code commit: `e21f00f7671f78176c5ed83184e14f46357a8ed5`.
+- Firebase AI Logic now reuses the current Gemini paid-tier catalog and is excluded from the guaranteed-free filter until the app can verify the project's billing tier.
+- Missing provider usage metadata is recorded as `AIUsageLog.UNKNOWN_COST` (-1.0), not as zero-cost usage. Cost totals exclude unknown sentinels and the AIModels dashboard shows an explicit warning.
+- Paid inference is blocked for the user while any unpriced usage exists in the last 30 days; known free models remain available in Free AI Only mode. Timeouts and ambiguous provider failures are also recorded as unpriced, and paid failover stops after an ambiguous outcome.
+- Added repository, ViewModel and Compose regression coverage for paid-tier catalog classification, priced Firebase usage, missing usage metadata, paid-request blocking and the dashboard warning.
+- Corrected the VibeStudio app-builder regression test to assert the absence of a successful server log. The earlier assertion matched the phrase `لم يتم تشغيل خادم` inside the intended warning and therefore failed despite the runtime remaining unavailable.
+
+### Verification
+- CI for commit `79d98885fdc5a07b31c277d2c67c2e012abc34f8`: Android Code Quality passed; the unit-test job ran 21 tests with 1 failure and 1 skipped. The only failure was the VibeStudio assertion described above. APK build was skipped because the unit-test step failed.
+- The new AIModels tests and the corrected VibeStudio assertion are committed in this batch; fresh GitHub Actions results are pending. No Gradle test/build success is claimed yet.
+- AIModels and VibeStudio remain IN_PROGRESS; neither screen is closed.
+
+### Next step
+- Inspect the new CI run to terminal status, fix any failing regression or unrelated test, then continue the AIModels provider/usage audit without repeating earlier compile checks.

@@ -21,6 +21,32 @@ class AIModelsScreenTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun dashboardDisclosesUnpricedUsageInsteadOfShowingAnUnqualifiedTotal() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                AIModelsScreenContent(
+                    uiState = AIModelsUiState(isAuthenticated = true, hasUnpricedUsage = true),
+                    onNavigateBack = {},
+                    onAddProvider = { _, _, _, _ -> },
+                    onDeleteProvider = {},
+                    onSyncProvider = {},
+                    onTestProvider = {},
+                    onSelectDefaultModel = {},
+                    onToggleFreeOnly = {},
+                    onToggleAutoSelect = {},
+                    onRefresh = {},
+                    onClearFeedback = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("ai_models_unpriced_usage_warning")
+            .assertIsDisplayed()
+            .assertTextContains("تكلفة غير مؤكدة")
+    }
+
+    @Test
     fun unauthenticatedStateDisplaysAuthRequiredGateAndDisablesAddButton() {
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {
