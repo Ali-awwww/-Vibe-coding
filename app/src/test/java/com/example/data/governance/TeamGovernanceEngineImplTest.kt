@@ -85,8 +85,8 @@ class TeamGovernanceEngineImplTest {
             AIModelTeamRepository::class.java.classLoader,
             arrayOf(AIModelTeamRepository::class.java)
         ) { proxy, method, args ->
-            when (method.name) {
-                "logTeamUsage" -> {
+            when {
+                method.name.startsWith("logTeamUsage") -> {
                     captured.set(args?.getOrNull(0) as? TeamUsageRecord)
                     result
                 }
