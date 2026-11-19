@@ -2617,3 +2617,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Paid timeouts now stop the current failover chain; free-model failures remain zero-cost and do not unnecessarily block paid use. A shared estimator treats absent token counts, zero-token paid responses, and missing paid model prices as unknown instead of zero.
 - Added regression coverage for legacy Firebase zero-cost logs and paid timeout failover, and fixed the missing test import.
 - Next: inspect the fresh CI run to terminal status. If green, continue the AIModels usage audit; if not, use the actual compiler/test report rather than repeating the same source checks.
+
+
+## 2026-11-20 — CI regression follow-up
+
+- CI for `80931cf61f0183c6abff682e373538f3d9666798` completed with a single unit-test failure in `AIFreeSystemValidationTest.modelReadsDefaultsAndDeletesAreScopedToTheOwningUser`. The repository correctly excludes models belonging to providers whose status is DISCONNECTED; the test fixture had inserted both providers with the default DISCONNECTED status. The fixture now explicitly inserts both providers as CONNECTED so the test isolates ownership rather than connection gating.
+- Removed Gradle test `failFast` so a failing test no longer prevents later test classes (including the new AIModels repository regressions) from executing and reporting.
+- Extended historical zero-cost detection to include legacy GOOGLE_GEMINI BYOK logs by joining the provider table. A regression test verifies that legacy zero-cost Gemini usage is treated as unpriced while a genuinely free OpenRouter model remains unblocked.
+- CI run `44630184570` (Build Android APK) and `44630184637` (Android CI/CD) failed at the ownership fixture test; code-quality run `44630184585` was still in progress at the time of this update. The current commit will be revalidated from a clean run.
+- Next: inspect the new CI test report through completion; do not mark AIModels complete until repository tests, lint, APK build and device verification have actual passing evidence.

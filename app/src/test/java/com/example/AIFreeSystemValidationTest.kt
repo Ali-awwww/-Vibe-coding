@@ -107,10 +107,10 @@ class AIFreeSystemValidationTest {
         val otherModelId = "$otherProviderId:other-model"
 
         aiProviderDao.insertProvider(
-            AIProvider(id = ownerProviderId, userId = ownerId, name = "Owner", type = AIProviderType.OPEN_ROUTER, apiKey = "owner-key")
+            AIProvider(id = ownerProviderId, userId = ownerId, name = "Owner", type = AIProviderType.OPEN_ROUTER, status = AIProviderStatus.CONNECTED, apiKey = "owner-key")
         )
         aiProviderDao.insertProvider(
-            AIProvider(id = otherProviderId, userId = otherUserId, name = "Other", type = AIProviderType.OPEN_ROUTER, apiKey = "other-key")
+            AIProvider(id = otherProviderId, userId = otherUserId, name = "Other", type = AIProviderType.OPEN_ROUTER, status = AIProviderStatus.CONNECTED, apiKey = "other-key")
         )
         aiProviderDao.insertModels(
             listOf(

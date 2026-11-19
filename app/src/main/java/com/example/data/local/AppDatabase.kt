@@ -362,6 +362,8 @@ interface AIProviderDao {
             SELECT 1
             FROM ai_usage_logs AS usage_log
             LEFT JOIN ai_models AS model ON model.id = usage_log.modelId
+            LEFT JOIN ai_providers AS provider
+                ON provider.id = model.providerId AND provider.userId = usage_log.userId
             WHERE usage_log.userId = :userId
               AND usage_log.timestamp > :since
               AND (
@@ -372,6 +374,7 @@ interface AIProviderDao {
                       AND (
                           usage_log.modelId LIKE 'firebase_ai_platform:%'
                           OR model.isFree = 0
+                          OR provider.type = 'GOOGLE_GEMINI'
                           OR model.id IS NULL
                       )
                   )

@@ -708,6 +708,80 @@ class AIModelRepositoryFirebaseAiTest {
     }
 
     @Test
+    fun legacyZeroCostGeminiUsageIsTreatedAsUnpricedButFreeRouterUsageIsNot() = runBlocking {
+        val legacyUserId = "legacy-gemini-user"
+        val legacyProviderId = "legacy-gemini-provider"
+        aiProviderDao.insertProvider(
+            AIProvider(
+                id = legacyProviderId,
+                userId = legacyUserId,
+                name = "Legacy Gemini",
+                type = AIProviderType.GOOGLE_GEMINI,
+                status = AIProviderStatus.CONNECTED
+            )
+        )
+        val legacyGeminiModel = AIModel(
+            id = "$legacyProviderId:gemini-3.8-flash",
+            providerId = legacyProviderId,
+            apiId = "gemini-3.8-flash",
+            name = "Legacy Gemini model",
+            isFree = true,
+            inputPricePer1M = 0.0,
+            outputPricePer1M = 0.0
+        )
+        aiProviderDao.insertModels(listOf(legacyGeminiModel))
+        aiProviderDao.insertUsageLog(
+            AIUsageLog(
+                id = "legacy-gemini-zero-cost",
+                userId = legacyUserId,
+                modelId = legacyGeminiModel.id,
+                estimatedCost = 0.0,
+                isSuccess = true,
+                timestamp = 1L
+            )
+        )
+
+        val freeUserId = "free-router-user"
+        val freeProviderId = "free-router-provider"
+        aiProviderDao.insertProvider(
+            AIProvider(
+                id = freeProviderId,
+                userId = freeUserId,
+                name = "OpenRouter",
+                type = AIProviderType.OPEN_ROUTER,
+                status = AIProviderStatus.CONNECTED
+            )
+        )
+        val freeModel = AIModel(
+            id = "$freeProviderId:free-model",
+            providerId = freeProviderId,
+            apiId = "free-model",
+            name = "Free model",
+            isFree = true
+        )
+        aiProviderDao.insertModels(listOf(freeModel))
+        aiProviderDao.insertUsageLog(
+            AIUsageLog(
+                id = "free-router-zero-cost",
+                userId = freeUserId,
+                modelId = freeModel.id,
+                estimatedCost = 0.0,
+                isSuccess = true,
+                timestamp = 2L
+            )
+        )
+
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            enablePlatformFirebaseAi = true
+        )
+        assertTrue(repo.hasUnpricedUsageSince(legacyUserId, 0L).first())
+        assertTrue(!repo.hasUnpricedUsageSince(freeUserId, 0L).first())
+    }
+
+    @Test
     fun byokProvidersCoexistWithBuiltInFirebaseAi() = runBlocking {
         val repo = AIModelRepositoryImpl(
             aiProviderDao = aiProviderDao,
