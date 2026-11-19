@@ -90,9 +90,9 @@ class TeamGovernanceEngineImplTest {
                     captured.set(args?.getOrNull(0) as? TeamUsageRecord)
                     result
                 }
-                "toString" -> "UsageRepositoryFixture"
-                "hashCode" -> System.identityHashCode(proxy)
-                "equals" -> proxy === args?.getOrNull(0)
+                method.name == "toString" -> "UsageRepositoryFixture"
+                method.name == "hashCode" -> System.identityHashCode(proxy)
+                method.name == "equals" -> proxy === args?.getOrNull(0)
                 else -> null
             }
         } as AIModelTeamRepository
