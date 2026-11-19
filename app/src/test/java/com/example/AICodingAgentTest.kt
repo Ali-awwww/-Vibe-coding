@@ -444,7 +444,7 @@ class AICodingAgentTest {
     }
 
     @Test
-    fun \`dev server operations fail closed without a real process runner\`() = runTest {
+    fun devServerOperationsFailClosedWithoutARealProcessRunner() = runTest {
         val workspaceId = UUID.randomUUID().toString()
         dao.insertWorkspace(Workspace(id = workspaceId, name = "Dev Lifecycle Project"))
         dao.insertFile(WorkspaceFile(
