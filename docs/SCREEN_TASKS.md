@@ -2651,3 +2651,22 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: AIModels provider verification, default-model selection and usage-cost disclosure.
 - Next exact step: inspect the fresh Android CI and APK runs for this correction to terminal status. If the unit suite passes, continue the remaining AIModels design and runtime acceptance criteria; do not close the screen without rendered device evidence.
+
+
+## 2026-11-21 — Canonicalize legacy Gemini model cache before selection and team costing
+
+### Confirmed defect
+- Existing Room rows from older versions could still mark Gemini BYOK models as free with zero prices after the app moved to a conservative paid-tier catalog.
+- `getAllAvailableModels`, `getModelsByProvider` and `getModelById` previously trusted those cached rows until the user manually synchronized the provider.
+- This was a billing-integrity issue beyond the dashboard: `DagOrchestrator` reads the model through `getModelById` and derives its team usage cost from `activeModel.isFree` and its price fields. A legacy row could therefore produce a zero-cost team record even while the inference repository used a newer catalog.
+
+### Implementation
+- Google Gemini provider model lists now resolve from the current conservative `GeminiModelCatalog`, not stale Room pricing/free flags.
+- Available-model selection substitutes canonical Gemini models only for connected providers and excludes legacy/retired cached Gemini rows.
+- Direct model lookup also returns the canonical Gemini model or null for a retired/unknown model ID, so orchestration cannot calculate cost from an obsolete free-model row.
+- Added a regression test with a legacy zero-price/free cache row and a retired Gemini model. It verifies canonical paid prices, exclusion from Free AI Only, and consistent provider/direct lookups.
+
+### Verification and continuity
+- This is a source/test change; fresh CI is required. No test/build success is claimed until the new Actions runs finish.
+- Last area worked: AIModels provider/model availability and billing integrity.
+- Next exact step: inspect the Android CI, APK and Code Quality runs for the CI-regression correction and this cache-normalization change. If green, continue the remaining AIModels interaction/design acceptance checks; live provider credentials and rendered device review remain unverified.

@@ -783,6 +783,64 @@ class AIModelRepositoryFirebaseAiTest {
     }
 
     @Test
+    fun legacyGeminiCacheCannotMasqueradeAsFreeOrUnderpriced() = runBlocking {
+        val userId = "legacy-gemini-cache-user"
+        val providerId = "legacy-gemini-cache-provider"
+        aiProviderDao.insertProvider(
+            AIProvider(
+                id = providerId,
+                userId = userId,
+                name = "Legacy Gemini",
+                type = AIProviderType.GOOGLE_GEMINI,
+                status = AIProviderStatus.CONNECTED,
+                apiKey = "test-key"
+            )
+        )
+        val legacyCurrentModel = AIModel(
+            id = "$providerId:gemini-3.8-flash",
+            providerId = providerId,
+            apiId = "gemini-3.8-flash",
+            name = "Legacy free Gemini",
+            isFree = true,
+            inputPricePer1M = 0.0,
+            outputPricePer1M = 0.0
+        )
+        val retiredModel = AIModel(
+            id = "$providerId:gemini-1.5-flash",
+            providerId = providerId,
+            apiId = "gemini-1.5-flash",
+            name = "Retired legacy Gemini",
+            isFree = true,
+            inputPricePer1M = 0.0,
+            outputPricePer1M = 0.0
+        )
+        aiProviderDao.insertModels(listOf(legacyCurrentModel, retiredModel))
+
+        val repo = AIModelRepositoryImpl(
+            aiProviderDao = aiProviderDao,
+            openRouterApi = openRouterApi,
+            huggingFaceApi = huggingFaceApi,
+            encryptSecret = { it },
+            decryptSecret = { it }
+        )
+
+        val available = repo.getAllAvailableModels(userId, freeOnly = false).first()
+        val canonicalCurrentModel = available.single { it.apiId == "gemini-3.8-flash" }
+        assertFalse(canonicalCurrentModel.isFree)
+        assertEquals(0.75, canonicalCurrentModel.inputPricePer1M, 0.000001)
+        assertEquals(3.75, canonicalCurrentModel.outputPricePer1M, 0.000001)
+        assertTrue(available.none { it.apiId == "gemini-1.5-flash" })
+        assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().isEmpty())
+
+        assertEquals(canonicalCurrentModel, repo.getModelById(userId, legacyCurrentModel.id))
+        assertNull(repo.getModelById(userId, retiredModel.id))
+        assertEquals(
+            listOf("gemini-3.8-flash", "gemini-3.5-flash-lite"),
+            repo.getModelsByProvider(userId, providerId).first().map { it.apiId }
+        )
+    }
+
+    @Test
     fun byokProvidersCoexistWithBuiltInFirebaseAi() = runBlocking {
         val repo = AIModelRepositoryImpl(
             aiProviderDao = aiProviderDao,

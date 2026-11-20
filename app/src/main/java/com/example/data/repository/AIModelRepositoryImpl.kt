@@ -153,20 +153,39 @@ class AIModelRepositoryImpl internal constructor(
         if (isPlatformFirebaseAiEnabled(userId) && providerId == FirebaseAiModelCatalog.platformProviderId(userId)) {
             return flowOf(FirebaseAiModelCatalog.models(providerId))
         }
-        return aiProviderDao.getModelsByProvider(userId, providerId)
+        return combine(
+            aiProviderDao.getModelsByProvider(userId, providerId),
+            aiProviderDao.getProviders(userId)
+        ) { cachedModels, providers ->
+            if (providers.firstOrNull { it.id == providerId }?.type == AIProviderType.GOOGLE_GEMINI) {
+                GeminiModelCatalog.models(providerId)
+            } else {
+                cachedModels
+            }
+        }
     }
 
     override fun getAllAvailableModels(userId: String, freeOnly: Boolean): Flow<List<AIModel>> =
         combine(aiProviderDao.getAllAvailableModels(userId), getProviders(userId)) { dbModels, providers ->
-            val connectedProviderIds = providers
-                .filter { it.status == AIProviderStatus.CONNECTED }
+            val connectedProviders = providers.filter { it.status == AIProviderStatus.CONNECTED }
+            val connectedProviderIds = connectedProviders.mapTo(HashSet()) { it.id }
+            val geminiProviderIds = providers
+                .filter { it.type == AIProviderType.GOOGLE_GEMINI }
                 .mapTo(HashSet()) { it.id }
-            val combined = if (!isPlatformFirebaseAiEnabled(userId)) {
-                dbModels
+            val platformProviderId = if (isPlatformFirebaseAiEnabled(userId)) {
+                FirebaseAiModelCatalog.platformProviderId(userId)
             } else {
-                val platformModels = FirebaseAiModelCatalog.models(FirebaseAiModelCatalog.platformProviderId(userId))
-                val platformIds = platformModels.mapTo(HashSet()) { it.id }
-                platformModels + dbModels.filterNot { it.id in platformIds }
+                null
+            }
+            val managedProviderIds = HashSet(geminiProviderIds).apply {
+                platformProviderId?.let(::add)
+            }
+            val platformModels = platformProviderId?.let(FirebaseAiModelCatalog::models).orEmpty()
+            val verifiedGeminiModels = connectedProviders
+                .filter { it.type == AIProviderType.GOOGLE_GEMINI }
+                .flatMap { provider -> GeminiModelCatalog.models(provider.id) }
+            val combined = platformModels + verifiedGeminiModels + dbModels.filterNot {
+                it.providerId in managedProviderIds
             }
             combined.filter { it.providerId in connectedProviderIds && (!freeOnly || it.isFree) }
         }
@@ -177,7 +196,13 @@ class AIModelRepositoryImpl internal constructor(
                 .firstOrNull { it.id == id }
                 ?.let { return it }
         }
-        return aiProviderDao.getModelById(userId, id)
+        val cachedModel = aiProviderDao.getModelById(userId, id) ?: return null
+        val provider = aiProviderDao.getProviderById(userId, cachedModel.providerId) ?: return null
+        return if (provider.type == AIProviderType.GOOGLE_GEMINI) {
+            GeminiModelCatalog.models(provider.id).firstOrNull { it.id == id }
+        } else {
+            cachedModel
+        }
     }
 
     override suspend fun syncModels(userId: String, providerId: String): Result<Unit> = runProviderOperation {
