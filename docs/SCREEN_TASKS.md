@@ -2675,7 +2675,13 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ## 2026-11-21 — Compose test semantics follow-up
 
 - The fresh Android CI run `44823699847` completed 343 tests with 2 failures and 4 skips. All repository/provider and AI usage regressions passed; only the two new AIModels child-text assertions failed.
-- The parent warning and empty-state containers were present, but Material Compose merged their descendant semantics. The child text tags therefore require `useUnmergedTree = true` in the Compose test query.
-- Updated both assertions to inspect the unmerged semantics tree. This is a test-harness correction; the visible warning copy and empty-state content remain unchanged.
+- The JUnit XML shows both child text tags were found and their complete Arabic text was present. The failure was that Compose `assertTextContains` defaults to an exact match, while both tests intentionally asserted a phrase contained within a longer message.
+- Corrected both assertions to use `substring = true`. The earlier hypothesis about merged semantics was incorrect; no UI semantics change was required.
 - No APK build or emulator/device result is claimed from this run. The APK workflow is still running its independent test task.
 - Next exact step: verify the rerun on current main to terminal status, including the legacy Gemini cache regression introduced in the same batch.
+
+
+### Assertion matching correction
+- JUnit XML from APK run `44823699825` confirmed the child text nodes were found. Both failures were exact-versus-substring assertion mismatches, not missing semantics or missing UI text.
+- The two Compose assertions now explicitly set `substring = true`; the previous note attributing the failure to merged semantics has been corrected.
+- Next: inspect the latest main-head Android CI, APK and lint runs to terminal status.
