@@ -230,6 +230,61 @@ class AIModelsViewModelTest {
     }
 
     @Test
+    fun staleSavedDefaultModelDoesNotFallBackToAnotherFreeModel() = runTest(mainDispatcher) {
+        val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
+        val provider = AIProvider(
+            id = "provider-a",
+            userId = "user-a",
+            name = "Connected provider",
+            status = AIProviderStatus.CONNECTED
+        )
+        val availableFreeModel = AIModel(
+            id = "available-free",
+            providerId = provider.id,
+            name = "Available free model",
+            isFree = true
+        )
+        val repository = FakeAIModelRepository().apply {
+            providersByUser["user-a"] = listOf(provider)
+            modelsByUser["user-a"] = listOf(availableFreeModel)
+            settingsByUser["user-a"] = AIUserSettings(
+                userId = "user-a",
+                defaultModelId = "deleted-model"
+            )
+        }
+        val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
+        advanceUntilIdle()
+
+        assertEquals(listOf(availableFreeModel), viewModel.uiState.value.models)
+        assertNull(viewModel.uiState.value.defaultModelId)
+    }
+
+    @Test
+    fun missingSavedDefaultModelUsesFirstAvailableFreeModel() = runTest(mainDispatcher) {
+        val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
+        val provider = AIProvider(
+            id = "provider-a",
+            userId = "user-a",
+            name = "Connected provider",
+            status = AIProviderStatus.CONNECTED
+        )
+        val availableFreeModel = AIModel(
+            id = "available-free",
+            providerId = provider.id,
+            name = "Available free model",
+            isFree = true
+        )
+        val repository = FakeAIModelRepository().apply {
+            providersByUser["user-a"] = listOf(provider)
+            modelsByUser["user-a"] = listOf(availableFreeModel)
+        }
+        val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
+        advanceUntilIdle()
+
+        assertEquals(availableFreeModel.id, viewModel.uiState.value.defaultModelId)
+    }
+
+    @Test
     fun providerLoadFailureCanBeRetried() = runTest(mainDispatcher) {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
         val repository = FakeAIModelRepository().apply { failProviderLoad = true }
@@ -267,6 +322,7 @@ class AIModelsViewModelTest {
         val modelsByUser = mutableMapOf<String, List<AIModel>>()
         val statusUpdates = mutableListOf<StatusUpdate>()
         val usageLogsByUser = mutableMapOf<String, List<AIUsageLog>>()
+        val settingsByUser = mutableMapOf<String, AIUserSettings>()
         var connectionResult: Result<Unit> = Result.success(Unit)
         var syncResult: Result<Unit> = Result.success(Unit)
         var failProviderLoad = false
@@ -308,10 +364,29 @@ class AIModelsViewModelTest {
             flowOf(usageLogsByUser[userId].orEmpty())
         override fun getTotalCost(userId: String, since: Long): Flow<Double?> = flowOf(0.0)
         override suspend fun logUsage(log: AIUsageLog) = Unit
-        override fun getUserSettings(userId: String): Flow<AIUserSettings?> = flowOf(AIUserSettings(userId = userId))
-        override suspend fun updateUserSettings(settings: AIUserSettings) = Unit
-        override suspend fun setDefaultModel(userId: String, modelId: String) = Unit
-        override suspend fun getDefaultModel(userId: String): AIModel? = null
+        override fun getUserSettings(userId: String): Flow<AIUserSettings?> =
+            flowOf(settingsByUser[userId] ?: AIUserSettings(userId = userId))
+        override suspend fun updateUserSettings(settings: AIUserSettings) {
+            settingsByUser[settings.userId] = settings
+        }
+        override suspend fun setDefaultModel(userId: String, modelId: String) {
+            val current = settingsByUser[userId] ?: AIUserSettings(userId = userId)
+            settingsByUser[userId] = current.copy(defaultModelId = modelId)
+        }
+        override suspend fun getDefaultModel(userId: String): AIModel? {
+            val connectedProviderIds = providersByUser[userId].orEmpty()
+                .filter { it.status == AIProviderStatus.CONNECTED }
+                .mapTo(HashSet()) { it.id }
+            val availableModels = modelsByUser[userId].orEmpty().filter {
+                it.providerId in connectedProviderIds && it.isAvailable
+            }
+            val savedModelId = settingsByUser[userId]?.defaultModelId
+            return if (savedModelId == null) {
+                availableModels.firstOrNull { it.isFree }
+            } else {
+                availableModels.firstOrNull { it.id == savedModelId }
+            }
+        }
         override suspend fun generateResponse(
             userId: String, modelId: String, prompt: String, systemInstruction: String?, taskId: String?, taskType: AITaskType
         ): Result<String> = Result.success("test")
