@@ -833,7 +833,11 @@ class AIModelRepositoryFirebaseAiTest {
         assertTrue(available.none { it.apiId == "gemini-1.5-flash" })
         assertTrue(repo.getAllAvailableModels(userId, freeOnly = true).first().isEmpty())
 
-        assertEquals(canonicalCurrentModel, repo.getModelById(userId, legacyCurrentModel.id))
+        val directLookup = requireNotNull(repo.getModelById(userId, legacyCurrentModel.id))
+        assertEquals(canonicalCurrentModel.id, directLookup.id)
+        assertFalse(directLookup.isFree)
+        assertEquals(canonicalCurrentModel.inputPricePer1M, directLookup.inputPricePer1M, 0.000001)
+        assertEquals(canonicalCurrentModel.outputPricePer1M, directLookup.outputPricePer1M, 0.000001)
         assertNull(repo.getModelById(userId, retiredModel.id))
         assertEquals(
             listOf("gemini-3.8-flash", "gemini-3.5-flash-lite"),
