@@ -2685,3 +2685,30 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - JUnit XML from APK run `44823699825` confirmed the child text nodes were found. Both failures were exact-versus-substring assertion mismatches, not missing semantics or missing UI text.
 - The two Compose assertions now explicitly set `substring = true`; the previous note attributing the failure to merged semantics has been corrected.
 - Next: inspect the latest main-head Android CI, APK and lint runs to terminal status.
+
+## 2026-11-21 — AIModels default-selection integrity and CI regression follow-up
+
+### Confirmed defects and corrections
+- The ViewModel duplicated default-model resolution and fell back to the first free model whenever a saved model ID was stale or unavailable. This contradicted the repository contract and could make the UI imply that a different model was still the user's saved default.
+- AIModelsViewModel now delegates resolution to AIModelRepository.getDefaultModel and only exposes the returned model when it is present in the currently filtered model list. A stale saved model or a paid default hidden by Free AI Only now produces no selected model rather than silently selecting a substitute.
+- Added ViewModel regression coverage for a deleted/stale saved ID, no saved default (first-free fallback remains valid), and a saved paid model filtered out by Free AI Only.
+- CI also exposed a brittle catalog test: GeminiModelCatalog.models() creates a fresh model value on each call, so the data-class lastSyncAt timestamp differs even when model identity and pricing are identical. The test now compares stable identity and billing fields instead of a volatile timestamp.
+- Fixed the missing JUnit assertFalse import that prevented test-source compilation in the preceding run.
+
+### Commits on main
+- 9e24c247976443bb2c03ed717f556188ab1bae7a — restore the missing JUnit assertion import.
+- cb0765bba4a394b3c4ba2c0084615058cfa3ca31 — resolve the default through the repository contract.
+- 6789feabbcc736ec42771d73cd32329757794e73 — add stale/default-free ViewModel regression coverage and settings-aware fake repository.
+- 169025077badf0ab423b8dab93a03bb294b8ccd8 — assert stable Gemini catalog fields rather than volatile object equality.
+- 3621e7329e68417236de787fd9e09c8d5a3915a2 — verify a saved paid default remains unselected when Free AI Only filters it out.
+
+### Verification evidence and limitations
+- Code Quality run 44825040840 for commit 9e24c247 completed successfully.
+- Android CI run 44825040887 completed 344 tests with 1 failure and 4 skipped. Kotlin app/test compilation succeeded; the sole failure was the volatile lastSyncAt equality assertion in legacyGeminiCacheCannotMasqueradeAsFreeOrUnderpriced. APK packaging was skipped because the test task failed.
+- APK run 44825040930 failed at the same unit-test assertion. It uploaded the unit-test-reports artifact (14673392452); the report was inspected and the exact failing assertion was corrected in 169025077.
+- The CI, APK and Code Quality runs for the newer commits, including current HEAD 3621e732, were still in progress at this update. No passing test suite, APK build, or device/emulator verification is claimed for current HEAD.
+- AIModels remains IN_PROGRESS. Its provider live-request checks, localized English LTR/Arabic RTL review, compact-screen/IME/accessibility review, and rendered device evidence remain open.
+
+### Persistent continuity
+- Last area worked: AIModels model-default integrity and Gemini catalog regression coverage.
+- Next exact step: inspect CI, APK and Code Quality runs for current HEAD 3621e732 to terminal status. Fix any reported regression from the actual test output. Once those gates pass, continue the AIModels UI localization and RTL/LTR/compact-layout acceptance work; do not close the screen without rendered device evidence.
