@@ -2626,3 +2626,28 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Extended historical zero-cost detection to include legacy GOOGLE_GEMINI BYOK logs by joining the provider table. A regression test verifies that legacy zero-cost Gemini usage is treated as unpriced while a genuinely free OpenRouter model remains unblocked.
 - CI run `44630184570` (Build Android APK) and `44630184637` (Android CI/CD) failed at the ownership fixture test; code-quality run `44630184585` was still in progress at the time of this update. The current commit will be revalidated from a clean run.
 - Next: inspect the new CI test report through completion; do not mark AIModels complete until repository tests, lint, APK build and device verification have actual passing evidence.
+
+
+## 2026-11-21 — AIModels CI regression correction
+
+### Evidence reviewed
+- Main HEAD before this batch: `183a8115b4a6ac422970a85e2d3103c6f06ae077`.
+- Android CI run `44630920359` and APK run `44630920278` completed with 343 unit tests, 8 failures and 4 skipped. Kotlin app and test compilation completed; `:app:testDebugUnitTest` failed, so APK packaging was skipped.
+- Code Quality run `44630920179` completed successfully.
+- The retained JUnit XML artifact identified four independent causes: an invalid saved default model silently fell back to another model; three legacy inference fixtures used DISCONNECTED providers despite testing already-connected inference; an error-message assertion still expected the pre-gating wording; and the retry test attempted to call the guarded CONNECTED transition without a live verification proof.
+- Two Compose assertions targeted parent containers whose semantics did not merge child text. The actual warning copy also did not contain the exact phrase asserted by the test.
+
+### Corrections
+- `AIModelRepositoryImpl.getDefaultModel` now falls back to a free model only when no default is saved. A stale or unavailable saved model returns null instead of silently selecting a different model.
+- Extended the regression test to verify both stale-default rejection and first-free fallback when no default is configured.
+- Updated the inference fixtures to represent previously verified persisted providers and aligned the no-connected-model assertion with the current fail-closed message.
+- Updated the retry test to seed its already-verified persisted provider state through the DAO, rather than bypassing the repository's live-connection proof guard.
+- Made the unpriced-usage warning explicitly say “تكلفة غير مؤكدة” and added text-level test tags for the warning and disconnected-provider empty state so Compose tests assert the actual visible message rather than a non-merging parent.
+
+### Verification
+- These corrections are source/test changes only at commit creation. A fresh GitHub Actions run is required; no passing Gradle test, APK, emulator, or device result is claimed yet.
+- AIModels remains IN_PROGRESS. Its live provider requests, visual RTL/LTR review, compact-screen/IME/accessibility review, and device evidence are still open.
+
+### Persistent continuity
+- Last area worked: AIModels provider verification, default-model selection and usage-cost disclosure.
+- Next exact step: inspect the fresh Android CI and APK runs for this correction to terminal status. If the unit suite passes, continue the remaining AIModels design and runtime acceptance criteria; do not close the screen without rendered device evidence.

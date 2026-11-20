@@ -125,6 +125,8 @@ class AIFreeSystemValidationTest {
 
         aiProviderDao.insertUserSettings(AIUserSettings(userId = ownerId, defaultModelId = otherModelId))
         assertNull(repository.getDefaultModel(ownerId))
+        aiProviderDao.insertUserSettings(AIUserSettings(userId = ownerId))
+        assertEquals(ownerModelId, repository.getDefaultModel(ownerId)?.id)
         val selectionFailure = runCatching { repository.setDefaultModel(ownerId, otherModelId) }.exceptionOrNull()
         assertTrue(selectionFailure is IllegalArgumentException)
 
@@ -227,13 +229,13 @@ class AIFreeSystemValidationTest {
         val result = repository.generateResponse(userId, "any", "hi", taskType = AITaskType.GENERAL_CHAT)
         
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("No available models found") == true)
+        assertTrue(result.exceptionOrNull()?.message?.contains("No connected AI models are available") == true)
     }
 
     @Test
     fun `failover chain works when first free model fails`() = runTest {
         val userId = "user1"
-        val provider = AIProvider(id = "p1", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, apiKey = "key")
+        val provider = AIProvider(id = "p1", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, status = AIProviderStatus.CONNECTED, apiKey = "key")
         aiProviderDao.insertProvider(provider)
 
         // Add two free models
@@ -267,7 +269,7 @@ class AIFreeSystemValidationTest {
     @Test
     fun `usage logs store task type and success status`() = runTest {
         val userId = "user1"
-        val provider = AIProvider(id = "p1", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, apiKey = "key")
+        val provider = AIProvider(id = "p1", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, status = AIProviderStatus.CONNECTED, apiKey = "key")
         aiProviderDao.insertProvider(provider)
         aiProviderDao.insertModels(listOf(AIModel(id = "p1:m1", providerId = "p1", apiId = "m1", name = "M1", isFree = true)))
         
@@ -282,7 +284,7 @@ class AIFreeSystemValidationTest {
     @Test
     fun `prioritization prefers gemini-3_8-flash over generic models for diagnosis`() = runTest {
         val userId = "diag_user"
-        val provider = AIProvider(id = "p_or", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, apiKey = "key")
+        val provider = AIProvider(id = "p_or", userId = userId, name = "OR", type = AIProviderType.OPEN_ROUTER, status = AIProviderStatus.CONNECTED, apiKey = "key")
         aiProviderDao.insertProvider(provider)
         aiProviderDao.insertUserSettings(AIUserSettings(userId = userId, freeOnly = true, autoSelectFree = true))
         aiProviderDao.insertModels(

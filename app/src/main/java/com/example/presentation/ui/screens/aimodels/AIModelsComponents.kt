@@ -287,7 +287,8 @@ internal fun AISettingsDashboard(uiState: AIModelsUiState) {
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "توجد طلبات لا تتوفر لها بيانات تكلفة مؤكدة. الإجمالي يستثنيها، وأوقف التطبيق الطلبات المدفوعة حتى تتوفر بيانات استخدام وتسعير موثوقة.",
+                            text = "توجد طلبات بتكلفة غير مؤكدة؛ الإجمالي يستثنيها، وأوقف التطبيق الطلبات المدفوعة حتى تتوفر بيانات استخدام وتسعير موثوقة.",
+                            modifier = Modifier.testTag("ai_models_unpriced_usage_warning_message"),
                             style = MaterialTheme.typography.bodySmall,
                             color = VibeDesignTokens.Color.TextPrimary.copy(alpha = 0.9f)
                         )
@@ -519,7 +520,9 @@ internal fun AIModelSelectionSection(
                         freeOnly -> "لا توجد نماذج مجانية مضمونة لدى المزودين المتصلين. عطّل Free AI Only لعرض النماذج الأخرى مع مراجعة أسعارها."
                         else -> "لم تُحمّل نماذج للمزودين المتصلين بعد. حدّث قائمة النماذج."
                     },
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier
+                        .padding(14.dp)
+                        .testTag("ai_models_empty_state_message"),
                     style = MaterialTheme.typography.bodySmall,
                     color = VibeDesignTokens.Color.TextMuted
                 )

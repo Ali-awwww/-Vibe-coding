@@ -428,8 +428,11 @@ class AIModelRepositoryImpl internal constructor(
     override suspend fun getDefaultModel(userId: String): AIModel? {
         val availableModels = getAllAvailableModels(userId, freeOnly = false).first()
         val savedModelId = aiProviderDao.getUserSettings(userId).first()?.defaultModelId
-        return savedModelId?.let { id -> availableModels.firstOrNull { it.id == id } }
-            ?: availableModels.firstOrNull { it.isFree }
+        return if (savedModelId == null) {
+            availableModels.firstOrNull { it.isFree }
+        } else {
+            availableModels.firstOrNull { it.id == savedModelId }
+        }
     }
 
     override suspend fun generateResponse(

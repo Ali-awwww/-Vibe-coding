@@ -41,8 +41,8 @@ class AIModelsScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("ai_models_unpriced_usage_warning")
-            .assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_models_unpriced_usage_warning").assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_models_unpriced_usage_warning_message")
             .assertTextContains("تكلفة غير مؤكدة")
     }
 
@@ -241,7 +241,8 @@ class AIModelsScreenTest {
 
         composeRule.onNodeWithTag("ai_models_lazy_column")
             .performScrollToNode(hasTestTag("ai_models_empty_state"))
-        composeRule.onNodeWithTag("ai_models_empty_state")
+        composeRule.onNodeWithTag("ai_models_empty_state").assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_models_empty_state_message")
             .assertTextContains("اختبر اتصال مزود واحد على الأقل")
     }
 

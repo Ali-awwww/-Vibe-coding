@@ -247,7 +247,8 @@ class AIModelRepositoryFirebaseAiTest {
                 usageLimitMonthly = 100.0
             )
         )
-        repo.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, 1_000L)
+        // Seed a previously verified persisted provider state; this test isolates retry behavior.
+        aiProviderDao.updateProviderStatus(userId, providerId, AIProviderStatus.CONNECTED, 1_000L)
 
         val result = repo.generateResponse(
             userId = userId,
