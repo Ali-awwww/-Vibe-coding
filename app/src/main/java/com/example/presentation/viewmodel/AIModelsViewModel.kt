@@ -62,9 +62,9 @@ class AIModelsViewModel(
                             ) { providers, settings, logs, cost, hasUnpricedUsage ->
                                 val freeOnly = settings?.freeOnly ?: true
                                 val models = aiModelRepository.getAllAvailableModels(userId, freeOnly).first()
-                                val defaultModelId = settings?.defaultModelId
-                                    ?.takeIf { savedId -> models.any { it.id == savedId } }
-                                    ?: models.firstOrNull { it.isFree }?.id
+                                val defaultModelId = aiModelRepository.getDefaultModel(userId)
+                                    ?.id
+                                    ?.takeIf { availableId -> models.any { it.id == availableId } }
                                 AIModelsUiState(
                                     isAuthenticated = true,
                                     providers = providers,
