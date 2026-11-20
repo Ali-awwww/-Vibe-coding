@@ -260,6 +260,43 @@ class AIModelsViewModelTest {
     }
 
     @Test
+    fun savedPaidDefaultIsNotSelectedWhenFreeOnlyFiltersItOut() = runTest(mainDispatcher) {
+        val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
+        val provider = AIProvider(
+            id = "provider-a",
+            userId = "user-a",
+            name = "Connected provider",
+            status = AIProviderStatus.CONNECTED
+        )
+        val freeModel = AIModel(
+            id = "available-free",
+            providerId = provider.id,
+            name = "Available free model",
+            isFree = true
+        )
+        val paidModel = AIModel(
+            id = "available-paid",
+            providerId = provider.id,
+            name = "Available paid model",
+            isFree = false
+        )
+        val repository = FakeAIModelRepository().apply {
+            providersByUser["user-a"] = listOf(provider)
+            modelsByUser["user-a"] = listOf(freeModel, paidModel)
+            settingsByUser["user-a"] = AIUserSettings(
+                userId = "user-a",
+                defaultModelId = paidModel.id,
+                freeOnly = true
+            )
+        }
+        val viewModel = AIModelsViewModel(repository, FakeAuthRepository(users))
+        advanceUntilIdle()
+
+        assertEquals(listOf(freeModel), viewModel.uiState.value.models)
+        assertNull(viewModel.uiState.value.defaultModelId)
+    }
+
+    @Test
     fun missingSavedDefaultModelUsesFirstAvailableFreeModel() = runTest(mainDispatcher) {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
         val provider = AIProvider(
