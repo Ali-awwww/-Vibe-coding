@@ -2670,3 +2670,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - This is a source/test change; fresh CI is required. No test/build success is claimed until the new Actions runs finish.
 - Last area worked: AIModels provider/model availability and billing integrity.
 - Next exact step: inspect the Android CI, APK and Code Quality runs for the CI-regression correction and this cache-normalization change. If green, continue the remaining AIModels interaction/design acceptance checks; live provider credentials and rendered device review remain unverified.
+
+
+## 2026-11-21 — Compose test semantics follow-up
+
+- The fresh Android CI run `44823699847` completed 343 tests with 2 failures and 4 skips. All repository/provider and AI usage regressions passed; only the two new AIModels child-text assertions failed.
+- The parent warning and empty-state containers were present, but Material Compose merged their descendant semantics. The child text tags therefore require `useUnmergedTree = true` in the Compose test query.
+- Updated both assertions to inspect the unmerged semantics tree. This is a test-harness correction; the visible warning copy and empty-state content remain unchanged.
+- No APK build or emulator/device result is claimed from this run. The APK workflow is still running its independent test task.
+- Next exact step: verify the rerun on current main to terminal status, including the legacy Gemini cache regression introduced in the same batch.
