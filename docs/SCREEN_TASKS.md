@@ -2781,3 +2781,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last domain worked: AIModels — bilingual resources, localized provider feedback, switch/key accessibility and IME-safe provider setup.
 - Exact next step: inspect the new main-head Android CI, APK and Code Quality runs to terminal status. Fix only failures backed by job logs/JUnit reports. If green, mark the locale and IME source/test criteria verified, leave device/live-provider gates BLOCKED, and move to the next independent screen in the priority order rather than repeating AIModels styling without a device.
 - Screen status: IN_PROGRESS — source and CI-verified localization pass; IME hardening is awaiting fresh CI; device/live-provider acceptance remains open.
+
+
+## 2026-11-22 — AIModels IME compile correction
+
+- The first push-triggered APK run for `86796debc25d80f5bb863eff2102de9fd9b250b6` failed at `compileDebugKotlin`: `KeyboardActions` and `KeyboardOptions` were imported from `androidx.compose.ui.text.input`, but this Compose version exposes them from `androidx.compose.foundation.text`. The error was isolated to the new provider-dialog IME imports; no tests ran and no APK was built from that commit.
+- Corrected those two imports. `ImeAction` and `KeyboardType` remain in `androidx.compose.ui.text.input`.
+- The Android CI, APK and Code Quality runs for the failed commit must be recorded separately from the corrected commit; no success is inferred from the import fix.
+- Exact next step: inspect the new main-head Android CI/APK/lint runs. Confirm the IME Done regression test and switch/key accessibility assertions actually execute and pass; then verify Debug/Release artifacts and lint.
