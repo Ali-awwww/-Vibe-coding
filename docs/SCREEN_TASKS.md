@@ -2746,3 +2746,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last domain worked: AIModels — bilingual UI, localized provider feedback and accessibility labels.
 - Exact next step: inspect the new main-head Android CI, APK and Code Quality runs to terminal status; fix only failures supported by job/JUnit evidence. If green, continue AIModels compact-layout/IME and TalkBack review when an Android device is available.
 - Screen status: IN_PROGRESS — source and regression coverage added; fresh CI and device/live-provider gates remain open.
+
+
+## 2026-11-22 — AIModels locale-test compile correction
+
+- The first push-triggered Android CI run `44955402031` and APK run `44955402124` both reached `compileDebugUnitTestKotlin` and failed only because `createComposeRule()` exposes no `activity` property. The five unresolved references were in the newly added locale/resource assertions; production Kotlin and Android resource compilation had already completed.
+- Corrected the tests to obtain the application `Context` through the repository's existing `ApplicationProvider` test dependency. Locale rendering now uses `createConfigurationContext` and provides that context through Compose `LocalContext`, avoiding deprecated global `Resources.updateConfiguration`.
+- No production behavior was changed in this correction. The new main commit must rerun unit tests, APK packaging and lint; the screen remains OPEN until those results and device/live-provider gates are satisfied.
+- Exact next step: inspect the fresh run IDs for this correction; fix any further compiler/test/lint failures using their logs. Do not mark the locale tests as passed until the test task completes successfully.
