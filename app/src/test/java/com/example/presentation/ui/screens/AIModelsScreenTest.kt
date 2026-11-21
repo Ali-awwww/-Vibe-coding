@@ -1,7 +1,9 @@
 package com.example.presentation.ui.screens
 
+import android.content.res.Configuration
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import com.example.R
 import com.example.domain.model.*
 import com.example.presentation.viewmodel.AIModelsUiState
 import com.example.ui.theme.CrashIntelligenceTheme
@@ -12,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @Config
@@ -43,7 +46,10 @@ class AIModelsScreenTest {
 
         composeRule.onNodeWithTag("ai_models_unpriced_usage_warning").assertIsDisplayed()
         composeRule.onNodeWithTag("ai_models_unpriced_usage_warning_message")
-            .assertTextContains("تكلفة غير مؤكدة", substring = true)
+            .assertTextContains(
+                composeRule.activity.getString(R.string.ai_models_unpriced_usage_warning),
+                substring = true
+            )
     }
 
     @Test
@@ -138,14 +144,14 @@ class AIModelsScreenTest {
         composeRule.onNodeWithTag("ai_models_lazy_column")
             .performScrollToNode(hasTestTag("ai_provider_card_or-1"))
         composeRule.onNodeWithTag("ai_provider_card_or-1").assertIsDisplayed()
-        composeRule.onNodeWithTag("ai_provider_status_or-1").assertTextContains("متصل")
+        composeRule.onNodeWithTag("ai_provider_status_or-1").assertTextContains(composeRule.activity.getString(R.string.ai_models_status_connected))
         composeRule.onNodeWithTag("ai_provider_test_or-1").assertIsEnabled()
         composeRule.onNodeWithTag("ai_provider_sync_or-1").assertIsEnabled()
 
         composeRule.onNodeWithTag("ai_models_lazy_column")
             .performScrollToNode(hasTestTag("ai_provider_card_hf-1"))
         composeRule.onNodeWithTag("ai_provider_card_hf-1").assertIsDisplayed()
-        composeRule.onNodeWithTag("ai_provider_status_hf-1").assertTextContains("غير مدعوم")
+        composeRule.onNodeWithTag("ai_provider_status_hf-1").assertTextContains(composeRule.activity.getString(R.string.ai_models_status_unsupported))
         composeRule.onNodeWithTag("ai_provider_test_hf-1").assertIsNotEnabled()
         composeRule.onNodeWithTag("ai_provider_sync_hf-1").assertIsNotEnabled()
 
@@ -243,7 +249,58 @@ class AIModelsScreenTest {
             .performScrollToNode(hasTestTag("ai_models_empty_state"))
         composeRule.onNodeWithTag("ai_models_empty_state").assertIsDisplayed()
         composeRule.onNodeWithTag("ai_models_empty_state_message")
-            .assertTextContains("اختبر اتصال مزود واحد على الأقل", substring = true)
+            .assertTextContains(
+                composeRule.activity.getString(R.string.ai_models_empty_no_connected_providers),
+                substring = true
+            )
+    }
+
+
+    @Test
+    fun screenUsesEnglishResourcesWhenEnglishLocaleIsSelected() {
+        setLocale(Locale.ENGLISH)
+        renderUnauthenticatedScreen()
+
+        composeRule.onNodeWithText("AI provider settings").assertIsDisplayed()
+        composeRule.onNodeWithText("Sign in required").assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_models_add_provider_button").assertContentDescriptionEquals("Add provider")
+    }
+
+    @Test
+    fun screenUsesArabicResourcesWhenArabicLocaleIsSelected() {
+        setLocale(Locale("ar"))
+        renderUnauthenticatedScreen()
+
+        composeRule.onNodeWithText("إعدادات مزودي الذكاء الاصطناعي").assertIsDisplayed()
+        composeRule.onNodeWithText("تسجيل الدخول مطلوب").assertIsDisplayed()
+        composeRule.onNodeWithTag("ai_models_add_provider_button").assertContentDescriptionEquals("إضافة مزود")
+    }
+
+    private fun setLocale(locale: Locale) {
+        val resources = composeRule.activity.resources
+        val configuration = Configuration(resources.configuration).apply { setLocale(locale) }
+        @Suppress("DEPRECATION")
+        resources.updateConfiguration(configuration, resources.displayMetrics)
+    }
+
+    private fun renderUnauthenticatedScreen() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                AIModelsScreenContent(
+                    uiState = AIModelsUiState(isAuthenticated = false),
+                    onNavigateBack = {},
+                    onAddProvider = { _, _, _, _ -> },
+                    onDeleteProvider = {},
+                    onSyncProvider = {},
+                    onTestProvider = {},
+                    onSelectDefaultModel = {},
+                    onToggleFreeOnly = {},
+                    onToggleAutoSelect = {},
+                    onRefresh = {},
+                    onClearFeedback = {}
+                )
+            }
+        }
     }
 
 }

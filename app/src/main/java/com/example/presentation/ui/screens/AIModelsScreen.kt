@@ -15,11 +15,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.R
 import com.example.di.DependencyProvider
 import com.example.domain.model.AIProvider
 import com.example.domain.model.AIProviderType
@@ -73,8 +75,10 @@ internal fun AIModelsScreenContent(
     var providerPendingDeletion by remember { mutableStateOf<AIProvider?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(uiState.error, uiState.message) {
-        val feedback = uiState.error ?: uiState.message
+    val feedback = uiState.feedbackMessageResId?.let { stringResource(it) }
+        ?: (uiState.error ?: uiState.message)
+
+    LaunchedEffect(feedback) {
         if (feedback != null) {
             snackbarHostState.showSnackbar(feedback)
             onClearFeedback()
@@ -106,7 +110,7 @@ internal fun AIModelsScreenContent(
                     ),
                     title = {
                         Text(
-                            text = "إعدادات الذكاء الاصطناعي",
+                            text = stringResource(R.string.ai_models_title),
                             fontWeight = FontWeight.Bold
                         )
                     },
@@ -117,7 +121,7 @@ internal fun AIModelsScreenContent(
                                 .minimumInteractiveComponentSize()
                                 .testTag("ai_models_back_button")
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.ai_models_back))
                         }
                     },
                     actions = {
@@ -128,7 +132,7 @@ internal fun AIModelsScreenContent(
                                 .minimumInteractiveComponentSize()
                                 .testTag("ai_models_add_provider_button")
                         ) {
-                            Icon(Icons.Default.AddCircleOutline, contentDescription = "إضافة مزود")
+                            Icon(Icons.Default.AddCircleOutline, contentDescription = stringResource(R.string.ai_models_add_provider))
                         }
                     }
                 )
@@ -154,13 +158,13 @@ internal fun AIModelsScreenContent(
                         }
                     } else {
                         item {
-                            VibeSectionHeader(title = "لوحة التحكم", badge = "Firebase AI + BYOK")
+                            VibeSectionHeader(title = stringResource(R.string.ai_models_dashboard), badge = stringResource(R.string.ai_models_dashboard_badge))
                             Spacer(Modifier.height(10.dp))
                             AISettingsDashboard(uiState)
                         }
 
                         item {
-                            VibeSectionHeader(title = "إعدادات التكلفة والذكاء")
+                            VibeSectionHeader(title = stringResource(R.string.ai_models_cost_settings))
                             Spacer(Modifier.height(10.dp))
                             AICostSettingsCard(
                                 uiState = uiState,
@@ -172,7 +176,7 @@ internal fun AIModelsScreenContent(
 
                         item {
                             VibeSectionHeader(
-                                title = "اختيار النموذج",
+                                title = stringResource(R.string.ai_models_select_model),
                                 badge = "${uiState.models.size}",
                                 isLoading = uiState.isLoading
                             )
@@ -192,7 +196,7 @@ internal fun AIModelsScreenContent(
 
                         item {
                             VibeSectionHeader(
-                                title = "المزودون (المدمج + BYOK)",
+                                title = stringResource(R.string.ai_models_providers),
                                 badge = "${uiState.providers.size}"
                             )
                             Spacer(Modifier.height(10.dp))
@@ -210,7 +214,7 @@ internal fun AIModelsScreenContent(
                                         )
                                         Spacer(Modifier.width(12.dp))
                                         Text(
-                                            text = "جارٍ تحميل المزودين…",
+                                            text = stringResource(R.string.ai_models_loading_providers),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = VibeDesignTokens.Color.TextMuted
                                         )
@@ -250,11 +254,11 @@ internal fun AIModelsScreenContent(
                     containerColor = VibeDesignTokens.Color.SpacePanelRaised,
                     titleContentColor = VibeDesignTokens.Color.TextPrimary,
                     textContentColor = VibeDesignTokens.Color.TextMuted,
-                    title = { Text("تعذر تحميل الإعدادات") },
-                    text = { Text("تحقق من اتصالك ثم أعد المحاولة. لم يتم عرض بيانات قديمة من حساب آخر.") },
+                    title = { Text(stringResource(R.string.ai_models_load_error_title)) },
+                    text = { Text(stringResource(R.string.ai_models_load_error_body)) },
                     confirmButton = {
                         TextButton(onClick = onRefresh, enabled = !uiState.isLoading) {
-                            Text("إعادة المحاولة", color = VibeDesignTokens.Color.Cyan)
+                            Text(stringResource(R.string.ai_models_retry), color = VibeDesignTokens.Color.Cyan)
                         }
                     }
                 )
@@ -266,9 +270,9 @@ internal fun AIModelsScreenContent(
                     containerColor = VibeDesignTokens.Color.SpacePanelRaised,
                     titleContentColor = VibeDesignTokens.Color.TextPrimary,
                     textContentColor = VibeDesignTokens.Color.TextMuted,
-                    title = { Text("حذف المزود؟") },
+                    title = { Text(stringResource(R.string.ai_models_delete_provider_title)) },
                     text = {
-                        Text("سيتم حذف ${provider.name} وقائمة نماذجه من هذا الجهاز. لا يمكن التراجع عن هذا الإجراء.")
+                        Text(stringResource(R.string.ai_models_delete_provider_message, provider.name))
                     },
                     confirmButton = {
                         TextButton(
@@ -278,11 +282,11 @@ internal fun AIModelsScreenContent(
                             },
                             enabled = !uiState.isLoading,
                             modifier = Modifier.testTag("delete_provider_confirm_button")
-                        ) { Text("حذف", color = VibeDesignTokens.Color.Error) }
+                        ) { Text(stringResource(R.string.ai_models_delete), color = VibeDesignTokens.Color.Error) }
                     },
                     dismissButton = {
                         TextButton(onClick = { providerPendingDeletion = null }) {
-                            Text("إلغاء", color = VibeDesignTokens.Color.TextMuted)
+                            Text(stringResource(R.string.ai_models_cancel), color = VibeDesignTokens.Color.TextMuted)
                         }
                     }
                 )

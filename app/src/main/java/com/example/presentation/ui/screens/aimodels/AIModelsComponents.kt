@@ -19,12 +19,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.domain.model.*
 import com.example.presentation.viewmodel.AIModelsUiState
 import com.example.ui.theme.JetBrainsMono
@@ -140,14 +143,14 @@ internal fun AIAuthRequiredCard() {
                     tint = VibeDesignTokens.Color.Violet
                 )
                 Text(
-                    text = "تسجيل الدخول مطلوب",
+                    text = stringResource(R.string.ai_models_auth_required_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = VibeDesignTokens.Color.TextPrimary
                 )
             }
             Text(
-                text = "إعدادات مزودي الذكاء الاصطناعي ومفاتيح API معزولة لكل حساب مستخدم. سجّل الدخول لعرض مزوديك أو إضافة مفتاح جديد.",
+                text = stringResource(R.string.ai_models_auth_required_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = VibeDesignTokens.Color.TextMuted
             )
@@ -193,14 +196,14 @@ internal fun AISettingsDashboard(uiState: AIModelsUiState) {
                             .background(VibeDesignTokens.Color.Cyan)
                     )
                     Text(
-                        text = "TELEMETRY • LOCAL LOGS",
+                        text = stringResource(R.string.ai_models_telemetry_label),
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = JetBrainsMono,
                         color = VibeDesignTokens.Color.Cyan
                     )
                 }
                 Text(
-                    text = "30 يوم",
+                    text = stringResource(R.string.ai_models_last_30_days),
                     style = MaterialTheme.typography.labelSmall,
                     color = VibeDesignTokens.Color.TextMuted
                 )
@@ -211,14 +214,14 @@ internal fun AISettingsDashboard(uiState: AIModelsUiState) {
                 horizontalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Medium)
             ) {
                 TelemetryMetricTile(
-                    label = "الطلبات الناجحة",
+                    label = stringResource(R.string.ai_models_successful_requests),
                     value = uiState.successCount.toString(),
                     icon = Icons.Default.CheckCircle,
                     accent = VibeDesignTokens.Color.Success,
                     modifier = Modifier.weight(1f)
                 )
                 TelemetryMetricTile(
-                    label = "الطلبات الفاشلة",
+                    label = stringResource(R.string.ai_models_failed_requests),
                     value = uiState.failedCount.toString(),
                     icon = Icons.Default.ErrorOutline,
                     accent = VibeDesignTokens.Color.Error,
@@ -235,7 +238,7 @@ internal fun AISettingsDashboard(uiState: AIModelsUiState) {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "آخر طلب ناجح",
+                        text = stringResource(R.string.ai_models_last_successful_request),
                         style = MaterialTheme.typography.labelSmall,
                         color = VibeDesignTokens.Color.TextMuted
                     )
@@ -243,7 +246,7 @@ internal fun AISettingsDashboard(uiState: AIModelsUiState) {
                     Text(
                         text = uiState.lastSuccessAt?.let {
                             SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(Date(it))
-                        } ?: "لا يوجد",
+                        } ?: stringResource(R.string.ai_models_none),
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = JetBrainsMono,
                         fontWeight = FontWeight.Bold,
@@ -252,7 +255,7 @@ internal fun AISettingsDashboard(uiState: AIModelsUiState) {
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "التكلفة التقديرية (30 يوم)",
+                        text = stringResource(R.string.ai_models_estimated_cost_30_days),
                         style = MaterialTheme.typography.labelSmall,
                         color = VibeDesignTokens.Color.TextMuted
                     )
@@ -287,7 +290,7 @@ internal fun AISettingsDashboard(uiState: AIModelsUiState) {
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "توجد طلبات بتكلفة غير مؤكدة؛ الإجمالي يستثنيها، وأوقف التطبيق الطلبات المدفوعة حتى تتوفر بيانات استخدام وتسعير موثوقة.",
+                            text = stringResource(R.string.ai_models_unpriced_usage_warning),
                             modifier = Modifier.testTag("ai_models_unpriced_usage_warning_message"),
                             style = MaterialTheme.typography.bodySmall,
                             color = VibeDesignTokens.Color.TextPrimary.copy(alpha = 0.9f)
@@ -348,6 +351,9 @@ internal fun AICostSettingsCard(
     onAutoSelectToggle: (Boolean) -> Unit,
     enabled: Boolean = true
 ) {
+    val freeOnlyLabel = stringResource(R.string.ai_models_free_ai_only)
+    val autoSelectLabel = stringResource(R.string.ai_models_auto_select_free)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
@@ -365,13 +371,13 @@ internal fun AICostSettingsCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Free AI Only",
+                        text = stringResource(R.string.ai_models_free_ai_only),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
                         color = VibeDesignTokens.Color.TextPrimary
                     )
                     Text(
-                        text = "استبعاد النماذج التي قد تترتب عليها رسوم لضمان وضع مجاني محافظ.",
+                        text = stringResource(R.string.ai_models_free_ai_only_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeDesignTokens.Color.TextMuted
                     )
@@ -380,7 +386,9 @@ internal fun AICostSettingsCard(
                     checked = uiState.freeOnly,
                     onCheckedChange = onFreeOnlyToggle,
                     enabled = enabled,
-                    modifier = Modifier.testTag("ai_models_free_only_switch"),
+                    modifier = Modifier
+                        .testTag("ai_models_free_only_switch")
+                        .semantics { contentDescription = freeOnlyLabel },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = VibeDesignTokens.Color.OnCyan,
                         checkedTrackColor = VibeDesignTokens.Color.Cyan,
@@ -407,7 +415,7 @@ internal fun AICostSettingsCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "قد تُحاسب Firebase AI Logic وفق مزود Gemini وخطة فوترة المشروع. لا يستطيع التطبيق قراءة خطة الفوترة، لذلك لا يصنف نماذجها مجانية مضمونة ويستخدم أسعار الفئة المدفوعة كتقدير محافظ.",
+                        text = stringResource(R.string.ai_models_firebase_billing_warning),
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeDesignTokens.Color.TextPrimary.copy(alpha = 0.9f)
                     )
@@ -423,13 +431,13 @@ internal fun AICostSettingsCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Auto Select Free Model",
+                        text = stringResource(R.string.ai_models_auto_select_free),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
                         color = VibeDesignTokens.Color.TextPrimary
                     )
                     Text(
-                        text = "اختيار أفضل نموذج مجاني متاح للمهمة تلقائياً.",
+                        text = stringResource(R.string.ai_models_auto_select_free_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeDesignTokens.Color.TextMuted
                     )
@@ -438,7 +446,9 @@ internal fun AICostSettingsCard(
                     checked = uiState.autoSelectFree,
                     onCheckedChange = onAutoSelectToggle,
                     enabled = enabled,
-                    modifier = Modifier.testTag("ai_models_auto_select_switch"),
+                    modifier = Modifier
+                        .testTag("ai_models_auto_select_switch")
+                        .semantics { contentDescription = autoSelectLabel },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = VibeDesignTokens.Color.OnCyan,
                         checkedTrackColor = VibeDesignTokens.Color.Cyan,
@@ -479,7 +489,7 @@ internal fun AIModelSelectionSection(
             ) {
                 Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = VibeDesignTokens.Color.Cyan)
                 Text(
-                    text = "الوضع الذكي مفعل: سيتم اختيار النموذج المجاني الأنسب لكل تحليل تلقائياً.",
+                    text = stringResource(R.string.ai_models_smart_routing_active),
                     style = MaterialTheme.typography.bodyMedium,
                     color = VibeDesignTokens.Color.TextPrimary
                 )
@@ -499,7 +509,7 @@ internal fun AIModelSelectionSection(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "جارٍ تحميل النماذج…",
+                    text = stringResource(R.string.ai_models_loading_models),
                     style = MaterialTheme.typography.bodySmall,
                     color = VibeDesignTokens.Color.TextMuted
                 )
@@ -515,10 +525,10 @@ internal fun AIModelSelectionSection(
             ) {
                 Text(
                     text = when {
-                        !hasProviders -> "لا توجد مزودات بعد. أضف مزوداً ثم اختبر الاتصال وحدّث النماذج."
-                        !hasConnectedProviders -> "لا توجد نماذج قابلة للاختيار لأن جميع المزودين غير متصلين. اختبر اتصال مزود واحد على الأقل ثم حدّث النماذج."
-                        freeOnly -> "لا توجد نماذج مجانية مضمونة لدى المزودين المتصلين. عطّل Free AI Only لعرض النماذج الأخرى مع مراجعة أسعارها."
-                        else -> "لم تُحمّل نماذج للمزودين المتصلين بعد. حدّث قائمة النماذج."
+                        !hasProviders -> stringResource(R.string.ai_models_empty_no_providers)
+                        !hasConnectedProviders -> stringResource(R.string.ai_models_empty_no_connected_providers)
+                        freeOnly -> stringResource(R.string.ai_models_empty_no_free_models)
+                        else -> stringResource(R.string.ai_models_empty_no_synced_models)
                     },
                     modifier = Modifier
                         .padding(14.dp)
@@ -592,13 +602,13 @@ internal fun AIModelItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     ModelStatusChip(
-                        text = if (model.isFree) "مجاني" else "مدفوع",
+                        text = stringResource(if (model.isFree) R.string.ai_models_free else R.string.ai_models_paid),
                         icon = if (model.isFree) Icons.Default.Verified else Icons.Default.Payments,
                         color = accent
                     )
                 }
                 Text(
-                    text = "${model.apiId} • Context: ${model.contextWindow / 1000}k",
+                    text = stringResource(R.string.ai_models_model_context, model.apiId, model.contextWindow / 1000),
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = JetBrainsMono,
                     color = VibeDesignTokens.Color.Cyan.copy(alpha = 0.85f),
@@ -606,7 +616,11 @@ internal fun AIModelItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "إدخال: $${String.format(Locale.US, "%.2f", model.inputPricePer1M)}/1M • إخراج: $${String.format(Locale.US, "%.2f", model.outputPricePer1M)}/1M",
+                    text = stringResource(
+                        R.string.ai_models_model_pricing,
+                        String.format(Locale.US, "%.2f", model.inputPricePer1M),
+                        String.format(Locale.US, "%.2f", model.outputPricePer1M)
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = JetBrainsMono,
                     color = VibeDesignTokens.Color.TextMuted
@@ -615,7 +629,7 @@ internal fun AIModelItem(
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "النموذج الافتراضي المختار",
+                    contentDescription = stringResource(R.string.ai_models_default_model_selected),
                     tint = VibeDesignTokens.Color.Cyan
                 )
             }
@@ -636,14 +650,14 @@ internal fun AIProvidersGuide() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "كيف تبدأ؟",
+                text = stringResource(R.string.ai_models_how_to_start),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = VibeDesignTokens.Color.TextPrimary
             )
-            GuideStep("1", "قم بإنشاء حساب على OpenRouter أو Google AI Studio.")
-            GuideStep("2", "أنشئ مفتاح API جديد (API Key).")
-            GuideStep("3", "أضف المفتاح هنا باستخدام زر الإضافة في الأعلى.")
+            GuideStep("1", stringResource(R.string.ai_models_guide_create_account))
+            GuideStep("2", stringResource(R.string.ai_models_guide_create_key))
+            GuideStep("3", stringResource(R.string.ai_models_guide_add_key))
         }
     }
 }
@@ -787,9 +801,9 @@ internal fun AIProviderCard(
             ) {
                 Text(
                     text = if (isBuiltInPlatform) {
-                        "مدمج عبر المنصة • Firebase AI Logic + App Check"
+                        stringResource(R.string.ai_models_builtin_provider_label)
                     } else {
-                        "API Key: $maskedKey"
+                        stringResource(R.string.ai_models_api_key_value, maskedKey)
                     },
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodySmall,
@@ -802,7 +816,7 @@ internal fun AIProviderCard(
 
             if (!isSupported) {
                 Text(
-                    text = "هذا النوع من المزودين غير مدعوم حالياً؛ لن يتم اختباره أو مزامنته.",
+                    text = stringResource(R.string.ai_models_unsupported_provider),
                     style = MaterialTheme.typography.bodySmall,
                     color = VibeDesignTokens.Color.Error
                 )
@@ -832,7 +846,7 @@ internal fun AIProviderCard(
                 ) {
                     Icon(Icons.Default.NetworkCheck, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("اختبار")
+                    Text(stringResource(R.string.ai_models_test_connection))
                 }
 
                 OutlinedButton(
@@ -862,7 +876,7 @@ internal fun AIProviderCard(
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     }
                     Spacer(Modifier.width(6.dp))
-                    Text("تحديث")
+                    Text(stringResource(R.string.ai_models_sync_models))
                 }
 
                 if (!isBuiltInPlatform) {
@@ -877,7 +891,7 @@ internal fun AIProviderCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "حذف المزود ${provider.name}",
+                            contentDescription = stringResource(R.string.ai_models_delete_provider_content_description, provider.name),
                             tint = VibeDesignTokens.Color.Error
                         )
                     }
@@ -892,13 +906,14 @@ internal fun ProviderStatusBadge(
     status: AIProviderStatus,
     modifier: Modifier = Modifier
 ) {
-    val (color, icon, label) = when (status) {
-        AIProviderStatus.CONNECTED -> Triple(VibeDesignTokens.Color.Success, Icons.Default.CheckCircle, "متصل")
-        AIProviderStatus.DISCONNECTED -> Triple(VibeDesignTokens.Color.TextMuted, Icons.Default.LinkOff, "غير متصل")
-        AIProviderStatus.ERROR -> Triple(VibeDesignTokens.Color.Error, Icons.Default.ErrorOutline, "خطأ في الاتصال")
-        AIProviderStatus.RATE_LIMITED -> Triple(CautionAmber, Icons.Default.Speed, "تجاوز حد الطلبات")
-        AIProviderStatus.UNSUPPORTED -> Triple(VibeDesignTokens.Color.Error, Icons.Default.Block, "غير مدعوم")
+    val (color, icon, labelRes) = when (status) {
+        AIProviderStatus.CONNECTED -> Triple(VibeDesignTokens.Color.Success, Icons.Default.CheckCircle, R.string.ai_models_status_connected)
+        AIProviderStatus.DISCONNECTED -> Triple(VibeDesignTokens.Color.TextMuted, Icons.Default.LinkOff, R.string.ai_models_status_disconnected)
+        AIProviderStatus.ERROR -> Triple(VibeDesignTokens.Color.Error, Icons.Default.ErrorOutline, R.string.ai_models_status_error)
+        AIProviderStatus.RATE_LIMITED -> Triple(CautionAmber, Icons.Default.Speed, R.string.ai_models_status_rate_limited)
+        AIProviderStatus.UNSUPPORTED -> Triple(VibeDesignTokens.Color.Error, Icons.Default.Block, R.string.ai_models_status_unsupported)
     }
+    val label = stringResource(labelRes)
     Surface(
         modifier = modifier.semantics(mergeDescendants = true) {},
         color = color.copy(alpha = 0.14f),
@@ -926,6 +941,9 @@ internal fun AddAIProviderDialog(
     var type by remember { mutableStateOf(AIProviderType.OPEN_ROUTER) }
     var key by remember { mutableStateOf("") }
     var keyVisible by remember { mutableStateOf(false) }
+    val keyVisibilityDescription = stringResource(
+        if (keyVisible) R.string.ai_models_hide_key else R.string.ai_models_show_key
+    )
 
     AlertDialog(
         modifier = Modifier.testTag("add_provider_dialog"),
@@ -933,13 +951,13 @@ internal fun AddAIProviderDialog(
         containerColor = VibeDesignTokens.Color.SpacePanelRaised,
         titleContentColor = VibeDesignTokens.Color.TextPrimary,
         textContentColor = VibeDesignTokens.Color.TextPrimary,
-        title = { Text("إضافة مزود ذكاء اصطناعي", fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.ai_models_add_provider_dialog_title), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("الاسم (مثلاً: My OpenRouter)") },
+                    label = { Text(stringResource(R.string.ai_models_provider_name_label)) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -947,7 +965,7 @@ internal fun AddAIProviderDialog(
                 )
 
                 Text(
-                    text = "نوع المزود:",
+                    text = stringResource(R.string.ai_models_provider_type_label),
                     style = MaterialTheme.typography.labelMedium,
                     color = VibeDesignTokens.Color.TextMuted
                 )
@@ -969,7 +987,7 @@ internal fun AddAIProviderDialog(
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it },
-                    label = { Text("مفتاح API") },
+                    label = { Text(stringResource(R.string.ai_models_api_key_label)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("add_provider_key_input"),
@@ -982,7 +1000,7 @@ internal fun AddAIProviderDialog(
                         ) {
                             Icon(
                                 if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (keyVisible) "إخفاء المفتاح" else "إظهار المفتاح"
+                                contentDescription = keyVisibilityDescription
                             )
                         }
                     }
@@ -994,7 +1012,7 @@ internal fun AddAIProviderDialog(
                     border = BorderStroke(1.dp, VibeDesignTokens.Color.Grid)
                 ) {
                     Text(
-                        text = "سيُحفظ مفتاح API مشفّرًا بمفتاح محمي بواسطة Android Keystore، ويُرسل إلى مزود الخدمة عند تنفيذ الطلبات فقط.",
+                        text = stringResource(R.string.ai_models_key_storage_notice),
                         modifier = Modifier.padding(10.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = VibeDesignTokens.Color.TextMuted
@@ -1012,12 +1030,12 @@ internal fun AddAIProviderDialog(
                     contentColor = VibeDesignTokens.Color.OnCyan
                 )
             ) {
-                Text("حفظ", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ai_models_save), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("إلغاء", color = VibeDesignTokens.Color.TextMuted)
+                Text(stringResource(R.string.ai_models_cancel), color = VibeDesignTokens.Color.TextMuted)
             }
         }
     )

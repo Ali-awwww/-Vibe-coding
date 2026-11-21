@@ -2712,3 +2712,37 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: AIModels model-default integrity and Gemini catalog regression coverage.
 - Next exact step: inspect CI, APK and Code Quality runs for current HEAD 3621e732 to terminal status. Fix any reported regression from the actual test output. Once those gates pass, continue the AIModels UI localization and RTL/LTR/compact-layout acceptance work; do not close the screen without rendered device evidence.
+
+
+## 2026-11-22 — AIModels bilingual resources, provider feedback and accessibility
+
+### Confirmed UX defect
+- The AIModels screen and its component tree rendered Arabic literals even when the device/app locale was English. Provider status, empty states, pricing labels, security guidance, destructive confirmations and ViewModel snackbar feedback therefore ignored the selected locale.
+- The Free AI Only and automatic model-selection switches had visible adjacent labels but no explicit localized accessibility descriptions.
+
+### Implementation
+- Moved the screen shell, dashboard, cost controls, model selector, provider cards/status badges, empty states, setup guide, add-provider dialog, key-visibility descriptions and destructive confirmation text to Android string resources in both English and Arabic.
+- Added localized resource IDs to ViewModel feedback while retaining safe diagnostic strings for existing domain/view-model assertions. Typed provider failures map to localized messages for invalid credentials, access denial, quota, rate limits, timeouts, empty responses, network/service failures and unsupported providers.
+- Added explicit localized content descriptions for the two cost/model-selection switches.
+- Added Compose locale tests for English and Arabic rendering; updated UI assertions to use resource values rather than hard-coded Arabic text.
+
+### Files changed
+- `app/src/main/java/com/example/presentation/ui/screens/AIModelsScreen.kt`
+- `app/src/main/java/com/example/presentation/ui/screens/aimodels/AIModelsComponents.kt`
+- `app/src/main/java/com/example/presentation/viewmodel/AIModelsViewModel.kt`
+- `app/src/main/res/values/strings.xml`
+- `app/src/main/res/values-ar/strings.xml`
+- `app/src/test/java/com/example/presentation/ui/screens/AIModelsScreenTest.kt`
+
+### Verification
+- Previous main HEAD `a9decc585bfa65f6a731d0c408ea41fb99087639` has three terminal successful checks:
+  - Android CI run [44825739333](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44825739333): unit tests and Debug APK build succeeded; `app-debug-apk` artifact `14673513269`.
+  - APK run [44825739230](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44825739230): unit tests, Debug APK and Release APK packaging succeeded; artifacts `CrashIntelligence-Debug-APK` (`14673803198`), `unit-test-reports` (`14673786488`) and `CrashIntelligence-Release-APK-signed` (`14673663586`) were uploaded.
+  - Code Quality run [44825739309](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44825739309): `lintDebug` succeeded; lint report artifact `14673603529`.
+- These results validate the previous HEAD only. Fresh push-triggered CI, APK and lint runs are required for this batch.
+- No emulator/device screenshot, live provider credential test or live provider request is claimed. This automation environment has no Android SDK/ADB/device; provider credentials were not available in this run.
+
+### Persistent continuity
+- Last domain worked: AIModels — bilingual UI, localized provider feedback and accessibility labels.
+- Exact next step: inspect the new main-head Android CI, APK and Code Quality runs to terminal status; fix only failures supported by job/JUnit evidence. If green, continue AIModels compact-layout/IME and TalkBack review when an Android device is available.
+- Screen status: IN_PROGRESS — source and regression coverage added; fresh CI and device/live-provider gates remain open.

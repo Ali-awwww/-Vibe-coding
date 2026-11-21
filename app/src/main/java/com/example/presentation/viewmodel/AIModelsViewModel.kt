@@ -1,6 +1,7 @@
 package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
+import com.example.R
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
@@ -26,7 +27,8 @@ data class AIModelsUiState(
     val successCount: Int = 0,
     val failedCount: Int = 0,
     val lastSuccessAt: Long? = null,
-    val hasUnpricedUsage: Boolean = false
+    val hasUnpricedUsage: Boolean = false,
+    val feedbackMessageResId: Int? = null
 )
 
 class AIModelsViewModel(
@@ -81,7 +83,16 @@ class AIModelsViewModel(
                                 )
                             }
                                 .onStart { emit(AIModelsUiState(isAuthenticated = true, isLoading = true)) }
-                                .catch { emit(AIModelsUiState(isAuthenticated = true, isLoadError = true, error = LOAD_ERROR)) }
+                                .catch {
+                                    emit(
+                                        AIModelsUiState(
+                                            isAuthenticated = true,
+                                            isLoadError = true,
+                                            error = LOAD_ERROR,
+                                            feedbackMessageResId = R.string.ai_models_feedback_load_error
+                                        )
+                                    )
+                                }
 
                             combine(source, activeOperations) { state, count ->
                                 state.copy(isLoading = state.isLoading || count > 0)
@@ -96,7 +107,11 @@ class AIModelsViewModel(
                         _uiState.value = state
                     } else {
                         _uiState.update { current ->
-                            state.copy(error = current.error, message = current.message)
+                            state.copy(
+                                error = current.error,
+                                message = current.message,
+                                feedbackMessageResId = current.feedbackMessageResId
+                            )
                         }
                     }
                 }
@@ -104,7 +119,9 @@ class AIModelsViewModel(
     }
 
     fun refresh() {
-        _uiState.update { it.copy(isLoadError = false, error = null, message = null) }
+        _uiState.update {
+            it.copy(isLoadError = false, error = null, message = null, feedbackMessageResId = null)
+        }
         refreshTrigger.update { it + 1 }
     }
 
@@ -113,14 +130,22 @@ class AIModelsViewModel(
         val normalizedName = name.trim()
         val normalizedKey = apiKey.trim()
         if (normalizedName.isEmpty() || normalizedKey.isEmpty()) {
-            _uiState.update { it.copy(error = INPUT_ERROR, message = null) }
+            _uiState.update {
+                it.copy(
+                    error = INPUT_ERROR,
+                    message = null,
+                    feedbackMessageResId = R.string.ai_models_feedback_input_error
+                )
+            }
             return
         }
         viewModelScope.launch {
             runOperation(
                 userId,
                 "تم حفظ المزود ومزامنة نماذجه بنجاح.",
-                "تعذر حفظ المزود أو مزامنة نماذجه. تحقق من المفتاح والاتصال."
+                "تعذر حفظ المزود أو مزامنة نماذجه. تحقق من المفتاح والاتصال.",
+                R.string.ai_models_feedback_add_success,
+                R.string.ai_models_feedback_add_failure
             ) {
                 val provider = AIProvider(
                     id = UUID.randomUUID().toString(),
@@ -144,7 +169,13 @@ class AIModelsViewModel(
     fun deleteProvider(providerId: String) {
         val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
-            runOperation(userId, "تم حذف المزود ونماذجه.", "تعذر حذف المزود. أعد المحاولة.") {
+            runOperation(
+                userId,
+                "تم حذف المزود ونماذجه.",
+                "تعذر حذف المزود. أعد المحاولة.",
+                R.string.ai_models_feedback_delete_success,
+                R.string.ai_models_feedback_delete_failure
+            ) {
                 aiModelRepository.deleteProvider(userId, providerId)
             }
         }
@@ -153,7 +184,13 @@ class AIModelsViewModel(
     fun syncModels(providerId: String) {
         val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
-            runOperation(userId, "تم تحديث قائمة النماذج.", "تعذر تحديث النماذج. تحقق من اتصال المزود.") {
+            runOperation(
+                userId,
+                "تم تحديث قائمة النماذج.",
+                "تعذر تحديث النماذج. تحقق من اتصال المزود.",
+                R.string.ai_models_feedback_sync_success,
+                R.string.ai_models_feedback_sync_failure
+            ) {
                 val result = aiModelRepository.syncModels(userId, providerId)
                 if (result.isFailure) {
                     markProviderFailure(userId, providerId, result.exceptionOrNull())
@@ -166,7 +203,13 @@ class AIModelsViewModel(
     fun testConnection(providerId: String) {
         val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
-            runOperation(userId, "نجح اختبار الاتصال الفعلي بالمزود.", "تعذر اختبار اتصال المزود. تحقق من المفتاح والاتصال.") {
+            runOperation(
+                userId,
+                "نجح اختبار الاتصال الفعلي بالمزود.",
+                "تعذر اختبار اتصال المزود. تحقق من المفتاح والاتصال.",
+                R.string.ai_models_feedback_test_success,
+                R.string.ai_models_feedback_test_failure
+            ) {
                 val result = aiModelRepository.testConnection(userId, providerId)
                 if (result.isFailure) {
                     markProviderFailure(userId, providerId, result.exceptionOrNull())
@@ -182,7 +225,13 @@ class AIModelsViewModel(
     fun setDefaultModel(modelId: String) {
         val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
-            runOperation(userId, "تم حفظ النموذج الافتراضي.", "تعذر حفظ النموذج الافتراضي.") {
+            runOperation(
+                userId,
+                "تم حفظ النموذج الافتراضي.",
+                "تعذر حفظ النموذج الافتراضي.",
+                R.string.ai_models_feedback_default_success,
+                R.string.ai_models_feedback_default_failure
+            ) {
                 aiModelRepository.setDefaultModel(userId, modelId)
             }
         }
@@ -191,7 +240,13 @@ class AIModelsViewModel(
     fun toggleFreeOnly(freeOnly: Boolean) {
         val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
-            runOperation(userId, "تم تحديث إعداد النماذج المجانية.", "تعذر حفظ إعداد النماذج المجانية.") {
+            runOperation(
+                userId,
+                "تم تحديث إعداد النماذج المجانية.",
+                "تعذر حفظ إعداد النماذج المجانية.",
+                R.string.ai_models_feedback_free_success,
+                R.string.ai_models_feedback_free_failure
+            ) {
                 val current = aiModelRepository.getUserSettings(userId).first()
                 aiModelRepository.updateUserSettings(
                     (current ?: AIUserSettings(userId = userId)).copy(
@@ -206,7 +261,13 @@ class AIModelsViewModel(
     fun toggleAutoSelect(autoSelect: Boolean) {
         val userId = requireAuthenticatedUserId() ?: return
         viewModelScope.launch {
-            runOperation(userId, "تم تحديث إعداد الاختيار الذكي.", "تعذر حفظ إعداد الاختيار الذكي.") {
+            runOperation(
+                userId,
+                "تم تحديث إعداد الاختيار الذكي.",
+                "تعذر حفظ إعداد الاختيار الذكي.",
+                R.string.ai_models_feedback_auto_success,
+                R.string.ai_models_feedback_auto_failure
+            ) {
                 val current = aiModelRepository.getUserSettings(userId).first()
                 aiModelRepository.updateUserSettings(
                     (current ?: AIUserSettings(userId = userId)).copy(
@@ -219,7 +280,9 @@ class AIModelsViewModel(
     }
 
     fun clearFeedback() {
-        _uiState.update { it.copy(error = null, message = null) }
+        _uiState.update {
+            it.copy(error = null, message = null, feedbackMessageResId = null)
+        }
     }
 
     fun clearError() = clearFeedback()
@@ -228,7 +291,13 @@ class AIModelsViewModel(
     private fun requireAuthenticatedUserId(): String? {
         val userId = currentUserId()
         if (userId == null) {
-            _uiState.update { it.copy(error = AUTH_REQUIRED_ERROR, message = null) }
+            _uiState.update {
+                it.copy(
+                    error = AUTH_REQUIRED_ERROR,
+                    message = null,
+                    feedbackMessageResId = R.string.ai_models_feedback_auth_required
+                )
+            }
         }
         return userId
     }
@@ -253,25 +322,55 @@ class AIModelsViewModel(
         userId: String,
         successMessage: String,
         failureMessage: String,
+        successMessageResId: Int,
+        failureMessageResId: Int,
         action: suspend () -> Unit
     ) {
         activeOperations.update { it + 1 }
         try {
             action()
             if (isCurrentUser(userId)) {
-                _uiState.update { it.copy(error = null, message = successMessage) }
+                _uiState.update {
+                    it.copy(
+                        error = null,
+                        message = successMessage,
+                        feedbackMessageResId = successMessageResId
+                    )
+                }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
             if (isCurrentUser(userId)) {
                 val safeMessage = failure.toProviderFailureMessage() ?: failureMessage
-                _uiState.update { it.copy(error = safeMessage, message = null) }
+                val safeMessageResId = failure.toProviderFailureResource() ?: failureMessageResId
+                _uiState.update {
+                    it.copy(
+                        error = safeMessage,
+                        message = null,
+                        feedbackMessageResId = safeMessageResId
+                    )
+                }
             }
         } finally {
             activeOperations.update { (it - 1).coerceAtLeast(0) }
         }
     }
+
+    private fun Throwable.toProviderFailureResource(): Int? =
+        when ((this as? AIProviderOperationException)?.kind) {
+            AIProviderFailureKind.MISCONFIGURED -> R.string.ai_models_failure_misconfigured
+            AIProviderFailureKind.INVALID_CREDENTIALS -> R.string.ai_models_failure_invalid_credentials
+            AIProviderFailureKind.ACCESS_DENIED -> R.string.ai_models_failure_access_denied
+            AIProviderFailureKind.QUOTA_EXCEEDED -> R.string.ai_models_failure_quota_exceeded
+            AIProviderFailureKind.RATE_LIMITED -> R.string.ai_models_failure_rate_limited
+            AIProviderFailureKind.TIMEOUT -> R.string.ai_models_failure_timeout
+            AIProviderFailureKind.EMPTY_RESPONSE -> R.string.ai_models_failure_empty_response
+            AIProviderFailureKind.NETWORK -> R.string.ai_models_failure_network
+            AIProviderFailureKind.SERVICE_UNAVAILABLE -> R.string.ai_models_failure_service_unavailable
+            AIProviderFailureKind.UNSUPPORTED -> R.string.ai_models_failure_unsupported
+            AIProviderFailureKind.UNKNOWN, null -> null
+        }
 
     private fun Throwable.toProviderFailureMessage(): String? =
         when ((this as? AIProviderOperationException)?.kind) {
