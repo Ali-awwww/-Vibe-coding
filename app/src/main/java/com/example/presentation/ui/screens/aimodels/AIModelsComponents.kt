@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +25,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardActions
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -944,20 +950,32 @@ internal fun AddAIProviderDialog(
     val keyVisibilityDescription = stringResource(
         if (keyVisible) R.string.ai_models_hide_key else R.string.ai_models_show_key
     )
+    val submitProvider = {
+        if (name.isNotBlank() && key.isNotBlank()) {
+            onConfirm(name.trim(), type, key.trim(), null)
+        }
+    }
 
     AlertDialog(
-        modifier = Modifier.testTag("add_provider_dialog"),
+        modifier = Modifier.testTag("add_provider_dialog").imePadding(),
         onDismissRequest = onDismiss,
         containerColor = VibeDesignTokens.Color.SpacePanelRaised,
         titleContentColor = VibeDesignTokens.Color.TextPrimary,
         textContentColor = VibeDesignTokens.Color.TextPrimary,
         title = { Text(stringResource(R.string.ai_models_add_provider_dialog_title), fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+                    .testTag("add_provider_dialog_content"),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.ai_models_provider_name_label)) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -992,6 +1010,11 @@ internal fun AddAIProviderDialog(
                         .fillMaxWidth()
                         .testTag("add_provider_key_input"),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submitProvider() }),
                     visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(
@@ -1022,7 +1045,7 @@ internal fun AddAIProviderDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name.trim(), type, key.trim(), null) },
+                onClick = submitProvider,
                 enabled = name.isNotBlank() && key.isNotBlank(),
                 modifier = Modifier.testTag("add_provider_save_button"),
                 colors = ButtonDefaults.buttonColors(

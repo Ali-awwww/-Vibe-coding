@@ -339,7 +339,7 @@
     <string name="ai_models_loading_models">جارٍ تحميل النماذج…</string>
     <string name="ai_models_empty_no_providers">لا توجد مزودات بعد. أضف مزودًا ثم اختبر الاتصال وحدّث النماذج.</string>
     <string name="ai_models_empty_no_connected_providers">لا توجد نماذج قابلة للاختيار لأن جميع المزودين غير متصلين. اختبر اتصال مزود واحد على الأقل ثم حدّث النماذج.</string>
-    <string name="ai_models_empty_no_free_models">لا توجد نماذج مجانية مضمونة لدى المزودين المتصلين. عطّل Free AI Only لعرض النماذج الأخرى مع مراجعة أسعارها.</string>
+    <string name="ai_models_empty_no_free_models">لا توجد نماذج مجانية مضمونة لدى المزودين المتصلين. عطّل خيار النماذج المجانية فقط لعرض النماذج الأخرى مع مراجعة أسعارها.</string>
     <string name="ai_models_empty_no_synced_models">لم تُحمّل نماذج للمزودين المتصلين بعد. حدّث قائمة النماذج.</string>
     <string name="ai_models_free">مجاني</string>
     <string name="ai_models_paid">مدفوع</string>

@@ -2754,3 +2754,30 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Corrected the tests to obtain the application `Context` through the repository's existing `ApplicationProvider` test dependency. Locale rendering now uses `createConfigurationContext` and provides that context through Compose `LocalContext`, avoiding deprecated global `Resources.updateConfiguration`.
 - No production behavior was changed in this correction. The new main commit must rerun unit tests, APK packaging and lint; the screen remains OPEN until those results and device/live-provider gates are satisfied.
 - Exact next step: inspect the fresh run IDs for this correction; fix any further compiler/test/lint failures using their logs. Do not mark the locale tests as passed until the test task completes successfully.
+
+
+## 2026-11-22 — AIModels locale pass CI verified; provider-dialog IME hardening
+
+### Verified previous main commit
+- Commit `eaf99b8a11bccbee9f3064512666d3309215576d` completed all three push-triggered workflows successfully:
+  - Android CI run [44955715602](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44955715602): unit tests and Debug APK build succeeded. Artifact `app-debug-apk` ID `14727497727`.
+  - APK run [44955715628](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44955715628): unit tests, Debug APK and signed Release APK build succeeded. Artifacts: `CrashIntelligence-Debug-APK` ID `14727586474`, `CrashIntelligence-Release-APK-signed` ID `14727289278`, and `unit-test-reports` ID `14727114473`.
+  - Code Quality run [44955715608](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/44955715608): `lintDebug` succeeded. Lint artifact ID `14727945348`.
+- The downloaded JUnit XML report contains 57 suites, 349 tests, 0 failures, 0 errors and 4 skipped. `AIModelsScreenTest` passed all 7 tests, including English and Arabic resource rendering.
+- Lint emitted two existing ExperimentalCoroutinesApi opt-in warnings in `AIModelsViewModel.kt` lines 51 and 55; no lint task failed.
+- Android CI and APK workflows produced actual Debug and signed Release APK artifacts. No device/emulator execution or live provider credential request is claimed.
+
+### New implementation in this commit
+- Made the add-provider dialog content vertically scrollable with a bounded height and IME padding so the security note and actions remain reachable on short screens while the keyboard is visible.
+- Configured the API-key field for a password keyboard and Done IME action; both the Done action and Save button use the same validated, trimmed submit callback.
+- Added regression assertions for the Free AI Only and auto-selection switch descriptions, API-key visibility descriptions, and keyboard Done submission.
+- Corrected the Arabic free-model empty-state copy so it no longer inserts the English feature label.
+
+### Verification state
+- The previous commit is fully verified by the successful runs above. The current IME/accessibility changes require their own new Android CI, APK and lint runs; do not inherit the previous green status.
+- No emulator/device screenshot, TalkBack session or live provider request is available in this run. AIModels remains OPEN; provider setup/connectivity and rendered RTL/LTR/device gates remain outstanding.
+
+### Persistent continuity
+- Last domain worked: AIModels — bilingual resources, localized provider feedback, switch/key accessibility and IME-safe provider setup.
+- Exact next step: inspect the new main-head Android CI, APK and Code Quality runs to terminal status. Fix only failures backed by job logs/JUnit reports. If green, mark the locale and IME source/test criteria verified, leave device/live-provider gates BLOCKED, and move to the next independent screen in the priority order rather than repeating AIModels styling without a device.
+- Screen status: IN_PROGRESS — source and CI-verified localization pass; IME hardening is awaiting fresh CI; device/live-provider acceptance remains open.

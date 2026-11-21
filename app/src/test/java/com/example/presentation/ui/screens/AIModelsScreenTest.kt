@@ -143,6 +143,10 @@ class AIModelsScreenTest {
 
         composeRule.onNodeWithTag("ai_models_dashboard_card").assertIsDisplayed()
         composeRule.onNodeWithTag("ai_models_add_provider_button").assertIsEnabled()
+        composeRule.onNodeWithTag("ai_models_free_only_switch")
+            .assertContentDescriptionEquals(appContext().getString(R.string.ai_models_free_ai_only))
+        composeRule.onNodeWithTag("ai_models_auto_select_switch")
+            .assertContentDescriptionEquals(appContext().getString(R.string.ai_models_auto_select_free))
 
         // Scroll LazyColumn items into composition and assert supported vs unsupported statuses and controls
         composeRule.onNodeWithTag("ai_models_lazy_column")
@@ -202,7 +206,14 @@ class AIModelsScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("add_provider_dialog").assertIsDisplayed()
+        composeRule.onNodeWithTag("add_provider_dialog_content").assertIsDisplayed()
         composeRule.onNodeWithTag("add_provider_save_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("add_provider_key_visibility_toggle")
+            .assertContentDescriptionEquals(appContext().getString(R.string.ai_models_show_key))
+            .performClick()
+        composeRule.onNodeWithTag("add_provider_key_visibility_toggle")
+            .assertContentDescriptionEquals(appContext().getString(R.string.ai_models_hide_key))
+            .performClick()
 
         composeRule.onNodeWithTag("add_provider_name_input").performTextInput("  My OpenRouter  ")
         composeRule.onNodeWithTag("add_provider_key_input").performTextInput("  sk-or-test-key  ")
@@ -214,6 +225,39 @@ class AIModelsScreenTest {
         assertEquals("My OpenRouter", submittedName)
         assertTrue(submittedType == AIProviderType.OPEN_ROUTER)
         assertEquals("sk-or-test-key", submittedKey)
+    }
+
+    @Test
+    fun addProviderDialogSubmitsWithKeyboardDoneAction() {
+        var submittedKey = ""
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                AIModelsScreenContent(
+                    uiState = AIModelsUiState(isAuthenticated = true),
+                    onNavigateBack = {},
+                    onAddProvider = { _, _, key, _ -> submittedKey = key },
+                    onDeleteProvider = {},
+                    onSyncProvider = {},
+                    onTestProvider = {},
+                    onSelectDefaultModel = {},
+                    onToggleFreeOnly = {},
+                    onToggleAutoSelect = {},
+                    onRefresh = {},
+                    onClearFeedback = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("ai_models_add_provider_button").performClick()
+        composeRule.onNodeWithTag("add_provider_name_input").performTextInput("Keyboard provider")
+        composeRule.onNodeWithTag("add_provider_key_input").performTextInput("  sk-or-ime-key  ")
+        composeRule.onNodeWithTag("add_provider_key_input").performImeAction()
+        composeRule.waitForIdle()
+
+        assertEquals("sk-or-ime-key", submittedKey)
+        composeRule.onNodeWithTag("add_provider_dialog").assertDoesNotExist()
     }
 
     @Test
