@@ -1,6 +1,12 @@
 package com.example.presentation.ui.screens
 
 import android.content.Context
+import android.content.res.Configuration
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -22,6 +28,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @Config
@@ -124,6 +131,47 @@ class LiveTestingAvailabilityTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText(appContext().getString(R.string.live_testing_local_record_unverified))
+            .assertIsDisplayed()
+    }
+
+
+    @Test
+    fun unavailableNoticeUsesEnglishAndArabicResources() {
+        val baseContext = appContext()
+        val englishContext = baseContext.createConfigurationContext(
+            Configuration(baseContext.resources.configuration).apply { setLocale(Locale.ENGLISH) }
+        )
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                CompositionLocalProvider(
+                    LocalContext provides englishContext,
+                    LocalConfiguration provides englishContext.resources.configuration,
+                    LocalLayoutDirection provides LayoutDirection.Ltr
+                ) {
+                    AgentTransportUnavailableNotice()
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(englishContext.getString(R.string.live_testing_agent_unavailable_title))
+            .assertIsDisplayed()
+
+        val arabicContext = baseContext.createConfigurationContext(
+            Configuration(baseContext.resources.configuration).apply { setLocale(Locale("ar")) }
+        )
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                CompositionLocalProvider(
+                    LocalContext provides arabicContext,
+                    LocalConfiguration provides arabicContext.resources.configuration,
+                    LocalLayoutDirection provides LayoutDirection.Rtl
+                ) {
+                    AgentTransportUnavailableNotice()
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(arabicContext.getString(R.string.live_testing_agent_unavailable_title))
             .assertIsDisplayed()
     }
 
