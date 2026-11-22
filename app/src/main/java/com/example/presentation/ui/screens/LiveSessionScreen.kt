@@ -20,6 +20,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.navigation.NavController
 import com.example.domain.model.*
 import com.example.presentation.navigation.Screen
@@ -37,6 +39,7 @@ fun LiveSessionScreen(
     val session by viewModel.activeSession.collectAsState()
     val events by viewModel.events.collectAsState()
     val listState = rememberLazyListState()
+    val agentTransportAvailable = viewModel.isAgentTransportAvailable
 
     LaunchedEffect(sessionId) {
         viewModel.observeSession(sessionId)
@@ -55,10 +58,10 @@ fun LiveSessionScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("جلسة اختبار مباشرة", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.live_testing_session_title), style = MaterialTheme.typography.titleMedium)
                         session?.let {
                             Text(
-                                "Build: ${it.buildId} (${it.version})",
+                                stringResource(R.string.live_testing_session_build, it.buildId, it.version),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -67,12 +70,12 @@ fun LiveSessionScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.live_testing_back))
                     }
                 },
                 actions = {
                     session?.let {
-                        if (it.status != TestSessionStatus.COMPLETED && it.status != TestSessionStatus.FAILED) {
+                        if (agentTransportAvailable && it.status != TestSessionStatus.COMPLETED && it.status != TestSessionStatus.FAILED) {
                             TextButton(onClick = { viewModel.stopSession() }) {
                                 Text("إنهاء الجلسة", color = MaterialTheme.colorScheme.error)
                             }
@@ -87,52 +90,56 @@ fun LiveSessionScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Status Header
-            session?.let { currentSession ->
-                SessionStatusHeader(currentSession)
-            }
+            if (!agentTransportAvailable) {
+                AgentTransportUnavailableNotice(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                )
+            } else {
+                // Status Header
+                session?.let { currentSession ->
+                    SessionStatusHeader(currentSession)
+                }
 
-            Divider()
+                Divider()
 
-            // Events List
-            Box(modifier = Modifier.weight(1f)) {
-                if (events.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("في انتظار الأحداث من التطبيق...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Events List
+                Box(modifier = Modifier.weight(1f)) {
+                    if (events.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                stringResource(R.string.live_testing_waiting_events),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(events) { event ->
-                            EventItem(event)
-                        }
-                        
-                        if (session?.status == TestSessionStatus.CRASH_DETECTED) {
-                            item {
-                                CrashDetectedAlert(
-                                    onViewDetails = {
-                                        session?.crashId?.let { id ->
-                                            navController.navigate(Screen.CrashDetail(id))
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(events) { event ->
+                                EventItem(event)
+                            }
+
+                            if (session?.status == TestSessionStatus.CRASH_DETECTED) {
+                                item {
+                                    CrashDetectedAlert(
+                                        onViewDetails = {
+                                            session?.crashId?.let { id ->
+                                                navController.navigate(Screen.CrashDetail(id))
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Command input (Simulation)
-            if (session?.status == TestSessionStatus.APP_RUNNING) {
-                CommandInput(onSendCommand = { cmd -> viewModel.sendCommandToAgent(session!!.id, cmd) })
+                if (session?.status == TestSessionStatus.APP_RUNNING) {
+                    CommandInput(onSendCommand = { cmd -> viewModel.sendCommandToAgent(session!!.id, cmd) })
+                }
             }
         }
     }
@@ -317,7 +324,7 @@ fun CommandInput(onSendCommand: (String) -> Unit) {
                 value = command,
                 onValueChange = { command = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("أرسل أمرًا للتطبيق...") },
+                placeholder = { Text(stringResource(R.string.live_testing_command_placeholder)) },
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium
             )
@@ -331,7 +338,7 @@ fun CommandInput(onSendCommand: (String) -> Unit) {
                 },
                 enabled = command.isNotBlank()
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.Send, contentDescription = stringResource(R.string.live_testing_send_command), tint = MaterialTheme.colorScheme.primary)
             }
         }
     }
