@@ -396,4 +396,15 @@
     <string name="ai_models_failure_network">تعذر الوصول إلى المزود. تحقق من اتصال الشبكة.</string>
     <string name="ai_models_failure_service_unavailable">خدمة المزود غير متاحة حاليًا.</string>
     <string name="ai_models_failure_unsupported">نوع المزود هذا غير مدعوم حاليًا.</string>
+
+    <string name="live_testing_agent_unavailable_title">الاختبار المباشر غير متاح</string>
+    <string name="live_testing_agent_unavailable_body">لا يتضمن هذا الإصدار اتصال Android Agent موثّقًا. لا يمكن بدء جلسات مباشرة أو التحقق منها، ولن تُعرض السجلات المحلية على أنها نتائج مباشرة.</string>
+    <string name="live_testing_agent_unavailable_status">اتصال Agent غير متاح</string>
+    <string name="live_testing_local_record_unverified">سجل محلي • لم يتم التحقق من كونه مباشرًا</string>
+    <string name="live_testing_waiting_events">بانتظار أحداث التطبيق المتصل…</string>
+    <string name="live_testing_session_title">جلسة اختبار مباشرة</string>
+    <string name="live_testing_session_build">البناء: %1$s (%2$s)</string>
+    <string name="live_testing_back">رجوع</string>
+    <string name="live_testing_command_placeholder">أرسل أمرًا إلى التطبيق…</string>
+    <string name="live_testing_send_command">إرسال الأمر</string>
 </resources>
