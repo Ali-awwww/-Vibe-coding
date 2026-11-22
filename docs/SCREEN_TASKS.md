@@ -2934,3 +2934,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last area worked: GitHubConnect — token-only connection UX, least-privilege permission guidance, truthful errors and project/application mapping validation.
 - Exact next step: inspect the new Android CI, APK and Code Quality runs for this commit to terminal status. Fix only failures supported by compiler/JUnit/lint evidence; confirm all new GitHubConnect tests execute. If green, continue route #16 DebugSymbols and retain the GitHubConnect device/live-token/cloud persistence gates as OPEN/BLOCKED rather than claiming screen completion.
 - Screen status: IN_PROGRESS — source and regression tests added; fresh CI execution and device/live-provider/cloud persistence gates remain open.
+
+
+### CI correction — 2026-11-23
+- The first push of this GitHubConnect slice failed during `:app:compileDebugKotlin` before unit tests could execute. The compiler reported that `uiState.connection` could not be smart-cast because `uiState` is delegated by Compose state collection.
+- Corrected the screen by reading `uiState.connection` once into a local immutable value before branching. No test result is inferred from the failed compile.
+- Android CI run [45078946203](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45078946203) failed at compilation; Debug build was skipped. APK run [45078946263](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45078946263) also failed at compilation. Code Quality run [45078946209](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45078946209) was still in progress when this correction was prepared.
+- Exact next step: verify the corrected commit's Android CI, APK and Code Quality runs to terminal status; inspect JUnit output for the new GitHub tests, then fix any new compiler/test/lint failures from evidence.

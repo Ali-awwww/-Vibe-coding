@@ -36,6 +36,7 @@ import com.example.presentation.viewmodel.GitHubViewModel
 @Composable
 fun GitHubConnectScreen(projectId: String, navController: NavController, viewModel: GitHubViewModel) {
     val uiState by viewModel.uiState.collectAsState()
+    val connection = uiState.connection
     var showLinkDialog by remember { mutableStateOf<GitHubRepo?>(null) }
 
     LaunchedEffect(projectId) { viewModel.loadMappings(projectId) }
@@ -56,10 +57,10 @@ fun GitHubConnectScreen(projectId: String, navController: NavController, viewMod
             modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (uiState.connection == null) {
+            if (connection == null) {
                 GitHubLoginCard(uiState.isLoading, uiState.errorResId, viewModel::connectWithToken)
             } else {
-                GitHubStatusCard(uiState.connection, uiState.isLoading, viewModel::disconnect)
+                GitHubStatusCard(connection, uiState.isLoading, viewModel::disconnect)
                 uiState.errorResId?.let { errorResId ->
                     GitHubErrorNotice(errorResId) {
                         if (errorResId == R.string.github_error_load_mappings) viewModel.loadMappings(projectId)
