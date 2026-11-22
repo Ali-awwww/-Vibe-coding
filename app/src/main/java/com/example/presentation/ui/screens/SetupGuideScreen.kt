@@ -15,6 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -34,7 +37,7 @@ fun SetupGuideScreen(
     viewModel: SetupGuideViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedService by remember { mutableStateOf(IntegrationType.FIREBASE_CRASHLYTICS) }
+    var selectedService by remember { mutableStateOf(IntegrationType.SENTRY) }
 
     Scaffold(
         topBar = {
@@ -56,13 +59,13 @@ fun SetupGuideScreen(
         ) {
             if (uiState.tech == null) {
                 TechnologySelection(
-                    onTechSelected = { viewModel.selectManualTech(it) },
-                    onScanProject = { viewModel.scanProject(listOf("MainActivity.kt", "build.gradle.kts", "AndroidManifest.xml")) }
+                    onTechSelected = { viewModel.selectManualTech(it) }
                 )
             } else {
                 GuideContent(
                     uiState = uiState,
                     selectedService = selectedService,
+                    isVerificationAvailable = viewModel.isVerificationTransportAvailable,
                     onServiceSelected = { 
                         selectedService = it
                         viewModel.generateGuide(it, projectId)
@@ -77,8 +80,7 @@ fun SetupGuideScreen(
 
 @Composable
 fun TechnologySelection(
-    onTechSelected: (ProjectTechnology) -> Unit,
-    onScanProject: () -> Unit
+    onTechSelected: (ProjectTechnology) -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
         Icon(Icons.Default.Code, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
@@ -87,13 +89,11 @@ fun TechnologySelection(
         Text("اختر التقنية يدويًا أو دعنا نكتشفها لك", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         
         Spacer(Modifier.height(24.dp))
-        
-        Button(onClick = onScanProject, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Search, null)
-            Spacer(Modifier.width(8.dp))
-            Text("اكتشاف تلقائي (Auto Detect)")
-        }
-        
+        Text(
+            stringResource(R.string.setup_guide_auto_detect_unavailable),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+        )
         Spacer(Modifier.height(16.dp))
         Text("أو اختر يدويًا:")
         Spacer(Modifier.height(8.dp))
@@ -119,6 +119,7 @@ fun GuideContent(
     uiState: SetupGuideUiState,
     selectedService: IntegrationType,
     onServiceSelected: (IntegrationType) -> Unit,
+    isVerificationAvailable: Boolean,
     onVerify: () -> Unit,
     onResetTech: () -> Unit
 ) {
@@ -137,11 +138,26 @@ fun GuideContent(
             listOf(IntegrationType.FIREBASE_CRASHLYTICS, IntegrationType.SENTRY, IntegrationType.BUGSNAG).forEach { service ->
                 FilterChip(
                     selected = selectedService == service,
+                    enabled = service != IntegrationType.FIREBASE_CRASHLYTICS,
                     onClick = { onServiceSelected(service) },
-                    label = { Text(service.name.split("_").last().lowercase().capitalize()) }
+                    modifier = if (service == IntegrationType.FIREBASE_CRASHLYTICS) Modifier.testTag("setup_guide_firebase_chip") else Modifier,
+                    label = {
+                        Text(
+                            if (service == IntegrationType.FIREBASE_CRASHLYTICS) {
+                                stringResource(R.string.setup_guide_firebase_unavailable_label)
+                            } else {
+                                service.name.split("_").last().lowercase().capitalize()
+                            }
+                        )
+                    }
                 )
             }
         }
+        Text(
+            stringResource(R.string.setup_guide_firebase_unavailable_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
         Divider(modifier = Modifier.padding(vertical = 16.dp))
 
@@ -166,15 +182,16 @@ fun GuideContent(
                 }
 
                 item {
-                    AutomatedChangesSection(
-                        onApprove = { /* In a real app, this would apply the snippets via an agent or PR */ }
-                    )
+                    AutomatedChangesSection()
                 }
 
                 item {
                     VerificationSection(
                         isVerifying = uiState.isVerifying,
                         result = uiState.verificationResult,
+                        isVerificationAvailable = isVerificationAvailable,
+                        error = uiState.error,
+                        errorResId = uiState.errorResId,
                         onVerify = onVerify
                     )
                 }
@@ -237,48 +254,28 @@ fun TroubleshootingSection(issues: List<String>) {
 }
 
 @Composable
-fun AutomatedChangesSection(onApprove: () -> Unit) {
-    var approved by remember { mutableStateOf(false) }
-    
+fun AutomatedChangesSection() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AutoFixHigh, null, tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.AutoFixHigh, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(8.dp))
-                Text("تطبيق التعديلات تلقائيًا", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    stringResource(R.string.setup_guide_automated_changes_unavailable_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
             }
             Text(
-                "يمكننا محاولة تعديل ملفات مشروعك (build.gradle, AndroidManifest) تلقائيًا لإضافة الـ SDK.",
+                stringResource(R.string.setup_guide_automated_changes_unavailable_body),
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(vertical = 8.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
-            
-            if (!approved) {
-                Button(
-                    onClick = { 
-                        approved = true
-                        onApprove()
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("عرض التعديلات المقترحة والموافقة")
-                }
-            } else {
-                Surface(
-                    color = Color(0xFFE8F5E9),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Check, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("تم إرسال التعديلات المقترحة إلى Local Agent", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2E7D32))
-                    }
-                }
-            }
         }
     }
 }
@@ -287,34 +284,51 @@ fun AutomatedChangesSection(onApprove: () -> Unit) {
 fun VerificationSection(
     isVerifying: Boolean,
     result: Boolean?,
+    isVerificationAvailable: Boolean,
+    error: String?,
+    errorResId: Int?,
     onVerify: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+    val verificationError = errorResId?.let { stringResource(it) } ?: error
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("اختبار الاتصال", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("بعد إكمال الخطوات، قم بتشغيل تطبيقك وتحقق من نجاح الربط.", style = MaterialTheme.typography.bodySmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            
+            Text("لا يُعتمد الإعداد إلا بعد استلام حدث تشخيص حقيقي من التطبيق.", style = MaterialTheme.typography.bodySmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+
             Spacer(Modifier.height(16.dp))
-            
+
             if (isVerifying) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
             } else if (result == true) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32))
+                    Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
-                    Text("تم التحقق بنجاح! SDK يعمل بشكل صحيح.", color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
+                    Text("تم استلام حدث التحقق بنجاح.", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
+            } else if (verificationError != null) {
+                Text(verificationError, color = MaterialTheme.colorScheme.error)
             } else if (result == false) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.width(8.dp))
-                    Text("فشل التحقق. لم يتم استلام أي تقرير اختبار.", color = MaterialTheme.colorScheme.error)
-                }
+                Text("لم يتم تأكيد وصول حدث التحقق.", color = MaterialTheme.colorScheme.error)
+            } else if (!isVerificationAvailable) {
+                Text(
+                    stringResource(R.string.setup_guide_verification_unavailable),
+                    color = MaterialTheme.colorScheme.error
+                )
             }
-            
+
             Spacer(Modifier.height(8.dp))
-            Button(onClick = onVerify, enabled = !isVerifying) {
-                Text("بدء التحقق (Check Integration)")
+            Button(
+                onClick = onVerify,
+                enabled = !isVerifying && isVerificationAvailable,
+                modifier = Modifier.testTag("setup_guide_verify_button")
+            ) {
+                Text(
+                    if (!isVerificationAvailable) stringResource(R.string.setup_guide_verification_unavailable_button)
+                    else "بدء التحقق"
+                )
             }
         }
     }
