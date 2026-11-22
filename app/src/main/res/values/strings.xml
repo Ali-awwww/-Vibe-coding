@@ -396,4 +396,15 @@
     <string name="ai_models_failure_network">The provider could not be reached. Check the network connection.</string>
     <string name="ai_models_failure_service_unavailable">The provider service is currently unavailable.</string>
     <string name="ai_models_failure_unsupported">This provider type is not currently supported.</string>
+
+    <string name="live_testing_agent_unavailable_title">Live testing unavailable</string>
+    <string name="live_testing_agent_unavailable_body">This build has no authenticated Android Agent transport. Live sessions cannot start or be verified, and stored local records are not presented as live results.</string>
+    <string name="live_testing_agent_unavailable_status">Agent transport unavailable</string>
+    <string name="live_testing_local_record_unverified">Local record • not live-verified</string>
+    <string name="live_testing_waiting_events">Waiting for events from the connected app…</string>
+    <string name="live_testing_session_title">Live test session</string>
+    <string name="live_testing_session_build">Build: %1$s (%2$s)</string>
+    <string name="live_testing_back">Back</string>
+    <string name="live_testing_command_placeholder">Send a command to the app…</string>
+    <string name="live_testing_send_command">Send command</string>
 </resources>
