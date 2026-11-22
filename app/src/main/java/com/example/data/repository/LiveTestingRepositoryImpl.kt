@@ -4,11 +4,13 @@ import com.example.data.local.CrashDao
 import com.example.domain.model.*
 import com.example.domain.repository.LiveTestingRepository
 import kotlinx.coroutines.flow.Flow
-import java.util.UUID
 
 class LiveTestingRepositoryImpl(
     private val crashDao: CrashDao
 ) : LiveTestingRepository {
+
+    // No authenticated Android Agent transport is implemented in this build.
+    override val isAgentTransportAvailable: Boolean = false
 
     override fun getTestSessions(projectId: String): Flow<List<TestSession>> =
         crashDao.getTestSessions(projectId)
@@ -21,23 +23,29 @@ class LiveTestingRepositoryImpl(
             "الاختبار المباشر غير متاح: لم يتم تنفيذ اتصال Agent حقيقي بعد. لم يتم تشغيل محاكاة أو إنشاء نتائج اختبار وهمية."
         ))
 
-    override suspend fun endTestSession(sessionId: String, status: TestSessionStatus): Result<Unit> = runCatching {
-        crashDao.updateTestSessionStatus(sessionId, status, System.currentTimeMillis(), null)
-    }
+    override suspend fun endTestSession(sessionId: String, status: TestSessionStatus): Result<Unit> =
+        Result.failure(UnsupportedOperationException(
+            "Live sessions cannot be ended without a verified Android Agent transport."
+        ))
 
     override fun getTestEvents(sessionId: String): Flow<List<TestEvent>> =
         crashDao.getTestEvents(sessionId)
 
-    override suspend fun addTestEvent(event: TestEvent): Result<Unit> = runCatching {
-        val newEvent = if (event.id.isEmpty()) event.copy(id = UUID.randomUUID().toString()) else event
-        crashDao.insertTestEvent(newEvent)
-    }
+    override suspend fun addTestEvent(event: TestEvent): Result<Unit> =
+        Result.failure(UnsupportedOperationException(
+            "Live test events cannot be persisted without a verified Android Agent transport."
+        ))
 
     override suspend fun updateApplicationSdkStatus(applicationId: String, status: SdkSetupStatus) {
         crashDao.updateApplicationSdkStatus(applicationId, status)
     }
 
     override suspend fun updateApplicationAgentStatus(applicationId: String, status: AgentConnectionStatus) {
+        if (!isAgentTransportAvailable && status != AgentConnectionStatus.OFFLINE) {
+            throw UnsupportedOperationException(
+                "Agent status cannot be marked online or busy without a verified transport."
+            )
+        }
         crashDao.updateApplicationAgentStatus(applicationId, status)
     }
 
