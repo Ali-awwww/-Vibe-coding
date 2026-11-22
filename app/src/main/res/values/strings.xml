@@ -452,4 +452,12 @@
     <string name="live_session_crash_title">Crash detected</string>
     <string name="live_session_crash_body">The connected app reported a crash. Open the crash report to review the captured evidence.</string>
     <string name="live_session_view_crash">View crash report</string>
+
+    <string name="setup_guide_auto_detect_unavailable">Automatic source inspection is unavailable because this screen has no access to the project files. Select the technology manually.</string>
+    <string name="setup_guide_firebase_unavailable_label">Firebase Crashlytics (unavailable)</string>
+    <string name="setup_guide_firebase_unavailable_body">Crashlytics ingestion is not supported by the current backend. Choose Sentry or Bugsnag only if you have configured their real event delivery; no setup is marked complete here.</string>
+    <string name="setup_guide_automated_changes_unavailable_title">Automatic changes unavailable</string>
+    <string name="setup_guide_automated_changes_unavailable_body">No authenticated Local Agent is connected. These instructions are a preview only; no project files have been changed or sent anywhere.</string>
+    <string name="setup_guide_verification_unavailable">A verified diagnostic-event receiver is not configured. The integration cannot be marked complete until the backend receives a real event from this application.</string>
+    <string name="setup_guide_verification_unavailable_button">Verification unavailable</string>
 </resources>
