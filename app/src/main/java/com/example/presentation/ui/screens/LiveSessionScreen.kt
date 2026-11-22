@@ -58,13 +58,22 @@ fun LiveSessionScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(stringResource(R.string.live_testing_session_title), style = MaterialTheme.typography.titleMedium)
-                        session?.let {
-                            Text(
-                                stringResource(R.string.live_testing_session_build, it.buildId, it.version),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Text(
+                            text = if (agentTransportAvailable) {
+                                stringResource(R.string.live_testing_session_title)
+                            } else {
+                                stringResource(R.string.live_testing_local_record_unverified)
+                            },
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        if (agentTransportAvailable) {
+                            session?.let {
+                                Text(
+                                    stringResource(R.string.live_testing_session_build, it.buildId, it.version),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 },
