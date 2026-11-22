@@ -1,6 +1,15 @@
 package com.example.presentation.ui.screens
 
 import android.content.Context
+import android.content.res.Configuration
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -15,6 +24,8 @@ import com.example.domain.model.ProjectScanResult
 import com.example.domain.model.ProjectTechnology
 import com.example.domain.model.SdkSetupGuide
 import com.example.domain.repository.SdkIntegrationRepository
+import com.example.domain.repository.SetupGuideProgress
+import com.example.domain.repository.SetupGuideProgressStore
 import com.example.presentation.viewmodel.SetupGuideUiState
 import com.example.presentation.viewmodel.SetupGuideViewModel
 import com.example.ui.theme.CrashIntelligenceTheme
@@ -27,6 +38,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @Config
@@ -153,4 +165,88 @@ class SetupGuideAvailabilityTest {
         override suspend fun verifyIntegration(applicationId: String): Result<Boolean> =
             Result.failure(UnsupportedOperationException("No authenticated event receiver"))
     }
+
+    @Test
+    fun sentryGuideUsesAndroidWizardAndRejectsUnsupportedPlatforms() = runBlocking {
+        val repository = SdkIntegrationRepositoryImpl()
+        val androidGuide = repository.getSetupGuide(ProjectTechnology.ANDROID_KOTLIN, IntegrationType.SENTRY, "project-1")
+        assertEquals("https://docs.sentry.io/platforms/android/", androidGuide.documentationUrl)
+        assertTrue(androidGuide.steps.any {
+            it.id == "sentry_install" && it.codeSnippet == "npx @sentry/wizard@latest -i android"
+        })
+
+        val unsupported = repository.getSetupGuide(ProjectTechnology.FLUTTER, IntegrationType.SENTRY, "project-1")
+        assertTrue(unsupported.steps.isEmpty())
+        assertEquals("setup_guide_platform_unsupported", unsupported.unavailableReason)
+    }
+
+    @Test
+    fun bugsnagGuideUsesDocumentedAndroidDependencyAndLifecycle() = runBlocking {
+        val guide = SdkIntegrationRepositoryImpl().getSetupGuide(ProjectTechnology.ANDROID_JAVA, IntegrationType.BUGSNAG, "project-1")
+        assertEquals("https://docs.bugsnag.com/platforms/android/", guide.documentationUrl)
+        assertTrue(guide.steps.any {
+            it.codeSnippet == "implementation(\"com.bugsnag:bugsnag-android:6.27.1\")"
+        })
+        assertTrue(guide.steps.any {
+            it.id == "bugsnag_initialize" && it.codeSnippet?.contains("Bugsnag.start(this)") == true
+        })
+    }
+
+    @Test
+    fun selectedPlatformAndProviderAreRestoredForTheSameApplication() {
+        val store = InMemoryProgressStore()
+        val viewModel = SetupGuideViewModel(UnavailableVerificationRepository(), store, "project-1", "application-1")
+        viewModel.selectManualTech(ProjectTechnology.ANDROID_KOTLIN)
+        viewModel.generateGuide(IntegrationType.BUGSNAG, "project-1")
+
+        val restored = SetupGuideViewModel(UnavailableVerificationRepository(), store, "project-1", "application-1")
+        assertEquals(ProjectTechnology.ANDROID_KOTLIN, restored.uiState.value.tech)
+        assertEquals(IntegrationType.BUGSNAG, restored.uiState.value.selectedService)
+    }
+
+    @Test
+    fun technologySelectionRendersEnglishAndArabicInOneComposition() {
+        val base = appContext()
+        val english = base.createConfigurationContext(
+            Configuration(base.resources.configuration).apply { setLocale(Locale.ENGLISH) }
+        )
+        val arabic = base.createConfigurationContext(
+            Configuration(base.resources.configuration).apply { setLocale(Locale("ar")) }
+        )
+        var showArabic by mutableStateOf(false)
+
+        composeRule.setContent {
+            val context = if (showArabic) arabic else english
+            CompositionLocalProvider(
+                LocalContext provides context,
+                LocalConfiguration provides context.resources.configuration,
+                LocalLayoutDirection provides if (showArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+            ) {
+                CrashIntelligenceTheme(darkTheme = true) {
+                    TechnologySelection(onTechSelected = {})
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(english.getString(R.string.setup_guide_technology_title)).assertIsDisplayed()
+        composeRule.runOnIdle { showArabic = true }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(arabic.getString(R.string.setup_guide_technology_title)).assertIsDisplayed()
+    }
+
+    private class InMemoryProgressStore : SetupGuideProgressStore {
+        private var saved: SetupGuideProgress? = null
+
+        override fun load(projectId: String, applicationId: String): SetupGuideProgress? = saved
+
+        override fun save(
+            projectId: String,
+            applicationId: String,
+            tech: ProjectTechnology?,
+            service: IntegrationType
+        ) {
+            saved = SetupGuideProgress(tech, service)
+        }
+    }
+
 }

@@ -2847,3 +2847,40 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Exact next step: inspect Android CI, APK and Code Quality terminal results for the latest code HEAD and confirm the new IntegrationWorkflowTest/Compose tests actually execute. Fix only failures supported by compiler/JUnit/lint evidence. If green, proceed to route #14 SetupGuide and implement evidence-backed per-step validation/persisted progress. Keep LiveTesting/LiveSession open until a real authenticated Agent transport, real event stream and emulator/device verification exist.
 - Screen status: LiveTesting and LiveSession remain IN_PROGRESS. Agent transport and device/event-stream acceptance are BLOCKED; the added source and regression coverage are awaiting execution.
 - Repository AGENTS.md / agents.md search: no matching instruction files were found in the inspected main tree.
+
+
+## 2026-11-23 — SetupGuide: platform-aware guides and resumable progress
+
+### Confirmed defects and CI corrections
+- The initial SetupGuide test changes exposed a compile failure because the pinned Compose UI test dependency does not provide assertDoesNotExist. Both affected tests now query the semantics tree with onAllNodesWithText/onAllNodesWithTag.
+- The follow-up CI run compiled and executed 362 tests but one LiveTesting locale test failed with IllegalStateException because it called setContent twice. The test was changed to switch locale through observable state in one composition. The latest result for that correction is still being checked; no pass is inferred.
+
+### Implementation
+- Replaced generic cross-platform Sentry/BugSnag snippets with platform-aware Android Kotlin/Java guides. Unsupported platforms and Firebase Crashlytics now return explicit unavailable reasons instead of receiving incorrect Android or React Native instructions.
+- Sentry uses the official Android Wizard command and includes upload-token handling and debug-only test-event guidance. BugSnag uses the documented Android dependency and Application lifecycle setup.
+- Added ordered step identifiers, prerequisites, official documentation links, copyable configuration blocks, explicit per-step unverified status, and navigation to project Integrations and Crashes.
+- Localized SetupGuide content in English and Arabic. Automatic source inspection and authenticated per-step validation remain unavailable; copying or reviewing instructions never marks a step complete.
+- Added a private SharedPreferences progress store scoped by a SHA-256 key derived from project and application IDs. It persists only the selected platform/provider so the user can resume; it stores no credentials and no completion flags.
+
+### Files changed
+- app/src/main/java/com/example/domain/model/SdkIntegrationModels.kt
+- app/src/main/java/com/example/domain/repository/SetupGuideProgressStore.kt
+- app/src/main/java/com/example/data/local/SharedPreferencesSetupGuideProgressStore.kt
+- app/src/main/java/com/example/data/repository/SdkIntegrationRepositoryImpl.kt
+- app/src/main/java/com/example/presentation/viewmodel/SetupGuideViewModel.kt
+- app/src/main/java/com/example/presentation/ui/screens/SetupGuideScreen.kt
+- app/src/main/java/com/example/di/DependencyProvider.kt
+- app/src/main/java/com/example/presentation/navigation/AppNavigation.kt
+- app/src/main/res/values/strings.xml
+- app/src/main/res/values-ar/strings.xml
+- app/src/test/java/com/example/presentation/ui/screens/SetupGuideAvailabilityTest.kt
+- app/src/test/java/com/example/data/local/SetupGuideProgressStoreTest.kt
+
+### Verification boundary
+- Added tests for Android guide compatibility, provider instructions, persisted selection scoping/restoration, and English/Arabic rendering.
+- Tests in this commit are pending CI execution. No Gradle build, emulator/device screenshot, TalkBack session, real source scan, or authenticated diagnostic-event delivery is claimed.
+- SetupGuide remains IN_PROGRESS. Automatic source inspection, per-step validation, and end-to-end event confirmation are BLOCKED until an authenticated project-scoped Agent/diagnostic receiver exists. Rendered device verification remains pending.
+
+### Persistent continuity
+- Last area worked: SetupGuide — accurate Android provider instructions, bilingual UI, copyable steps, project navigation, and resumable project/application selection.
+- Exact next step: inspect Android CI, APK, and Code Quality runs for this commit to terminal status and fix only failures supported by compiler/JUnit/lint evidence. If green, keep external validation/device gates BLOCKED and proceed to route #15 GitHubConnect rather than repeating SetupGuide source changes without a new capability.
