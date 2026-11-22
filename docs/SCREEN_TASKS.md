@@ -2949,3 +2949,31 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The separate APK workflow [45079133927](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45079133927) had passed its unit-test step and was building Debug/Release APKs when this update was prepared. Code Quality [45079133910](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45079133910) was still running lint; neither is marked successful until terminal completion.
 - Added a follow-up correctness fix: a GitHub 401 during repository loading now clears the stale connection from the UI and attempts to remove the invalid encrypted token locally. If local removal fails, the login screen exposes an explicit retry-to-forget action instead of showing the revoked token as connected. HTTP 403 remains a permission error and does not discard a potentially valid token.
 - Added a regression test for revoked-token invalidation. Its execution is pending the next CI run.
+
+
+## 2026-11-23 — DebugSymbols: remove simulated symbolication and validate Android mappings
+
+### Confirmed defect
+- `SymbolicationRepositoryImpl.symbolicate` fabricated `MainActivity.kt / onCreate / line 42` whenever an obfuscated frame contained `.a(`, regardless of the uploaded mapping contents.
+- `DebugSymbolsViewModel.uploadFile` marked every submitted string `SUCCESSFULLY_SYMBOLICATED` before any parser or symbolication request ran.
+- The upload flow accepted arbitrary application IDs and silently substituted `app_default`; it did not verify application/project ownership or validate mapping format.
+
+### Implementation
+- Added a real ProGuard/R8 text mapping parser that resolves obfuscated class and method names and maps line ranges from the supplied mapping. Unknown frames remain unresolved; the report is SUCCESS only when all non-system application frames are actually resolved.
+- Upload validation now limits this client to Android ProGuard/R8 `.txt/.map` files up to 10 MiB, requires a valid mapping, verifies the application exists and belongs to the selected project, and stores the artifact as PENDING rather than successful.
+- Symbolication now records the actual result status on the selected mapping. Unsupported formats, invalid mappings and unresolved frames return explicit failures rather than fabricated source locations.
+- The screen no longer accepts a made-up application fallback, identifies the currently supported formats, shows pending/error states, and states clearly that mapping files are local-only until remote artifact storage is implemented.
+- Added parser and repository regression tests for line mapping, unknown classes, cross-project rejection, pending upload state and real frame resolution.
+
+### Verification boundary
+- GitHubConnect commit `cf8f9bc7749487c5e730842127d5ea31a27d6f71` completed Android CI and Code Quality successfully:
+  - Android CI [45079133914](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45079133914): tests, Debug APK and artifact upload passed; APK artifact `14776159614`.
+  - APK workflow [45079133927](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45079133927): tests, Debug APK and signed Release APK passed; artifacts Debug `14777045781`, Release `14776078671`, JUnit `14776622276`.
+  - Code Quality [45079133910](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45079133910): lint succeeded; report contained 194 warnings, with no GitHubConnect-specific finding.
+- GitHubConnect follow-up commit `71c0c132513862222fae5c743d3ed27151e568f9` adds revoked-token invalidation; its tests and builds are pending.
+- New DebugSymbols parser/repository tests are added in this commit and remain pending CI. No emulator screenshot or live Supabase artifact-storage verification is available.
+
+### Persistent continuity
+- Last area worked: DebugSymbols — real ProGuard/R8 mapping parsing and truthful pending/symbolication states.
+- Exact next step: run and inspect CI for this DebugSymbols commit; fix compiler, parser-test or Room-test failures from evidence. Then implement a real file picker and validate binary/file-size handling; verify build-ID matching only after crash records carry a trustworthy build identifier. Cloud artifact storage remains blocked by the read-only/no-production-migration constraint.
+- Screen status: IN_PROGRESS — Android text mappings can be validated and parsed locally; native/iOS/JS formats, file-picker upload, remote storage, build-ID matching and device RTL/LTR verification remain open.

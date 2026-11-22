@@ -565,4 +565,35 @@
     <string name="github_link_repo_cancel">إلغاء</string>
 
     <string name="github_forget_token">حذف رمز GitHub المحفوظ</string>
+
+    <string name="debug_symbols_title">ملفات رموز التصحيح</string>
+    <string name="debug_symbols_back">رجوع</string>
+    <string name="debug_symbols_upload">إضافة ملف ربط</string>
+    <string name="debug_symbols_description">إدارة ملفات ProGuard/R8 النصية لنظام Android. تُحفظ الملفات محلياً؛ تخزين الملفات السحابي وصيغ iOS والملفات الأصلية غير مهيأة.</string>
+    <string name="debug_symbols_load_failed">تعذر تحميل سجلات ملفات التصحيح.</string>
+    <string name="debug_symbols_empty_title">لا توجد ملفات ربط</string>
+    <string name="debug_symbols_empty_description">أضف ملف ProGuard/R8 لتطبيق وإصدار محدد قبل محاولة حل الإطارات المحجوبة.</string>
+    <string name="debug_symbols_upload_title">إضافة ملف ربط ProGuard/R8</string>
+    <string name="debug_symbols_no_apps">أضف تطبيقاً إلى هذا المشروع قبل إضافة ملف الربط.</string>
+    <string name="debug_symbols_select_app">اختر التطبيق</string>
+    <string name="debug_symbols_supported_types">الصيغة المدعومة</string>
+    <string name="debug_symbols_app_version">إصدار التطبيق</string>
+    <string name="debug_symbols_build_id_optional">معرف البناء (بيانات اختيارية)</string>
+    <string name="debug_symbols_file_name">اسم الملف (.txt أو .map)</string>
+    <string name="debug_symbols_mapping_content">محتوى ملف الربط النصي</string>
+    <string name="debug_symbols_local_storage_notice">يُحفظ ملف الربط في قاعدة بيانات التطبيق المحلية ولا يُرفع إلى التخزين السحابي. تبقى الملفات الجديدة Pending حتى يستخدمها طلب فك رموز حقيقي.</string>
+    <string name="debug_symbols_upload_button">التحقق والحفظ محلياً</string>
+    <string name="debug_symbols_cancel">إلغاء</string>
+    <string name="debug_symbols_delete">حذف ملف الربط</string>
+    <string name="debug_symbols_version_type">الإصدار %1$s · %2$s</string>
+    <string name="debug_symbols_uploaded_at">أُضيف %1$s</string>
+    <string name="debug_symbols_status_pending">قيد الانتظار</string>
+    <string name="debug_symbols_status_success">نجح فك الرموز</string>
+    <string name="debug_symbols_status_partial">فك رموز جزئي</string>
+    <string name="debug_symbols_status_missing">ملفات مطابقة غير موجودة</string>
+    <string name="debug_symbols_status_failed">فشلت المعالجة</string>
+    <string name="debug_symbols_invalid_input">اختر تطبيقاً وأدخل الإصدار واسم الملف ومحتوى الربط.</string>
+    <string name="debug_symbols_upload_failed">تعذر التحقق من ملف الربط أو حفظه. تحقق من الصيغة والتطبيق والمشروع.</string>
+    <string name="debug_symbols_delete_failed">تعذر حذف ملف الربط.</string>
+
 </resources>

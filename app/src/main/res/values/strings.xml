@@ -565,4 +565,35 @@
     <string name="github_link_repo_cancel">Cancel</string>
 
     <string name="github_forget_token">Remove saved GitHub token</string>
+
+    <string name="debug_symbols_title">Debug symbols</string>
+    <string name="debug_symbols_back">Back</string>
+    <string name="debug_symbols_upload">Upload mapping</string>
+    <string name="debug_symbols_description">Manage Android ProGuard/R8 text mappings. Files are stored locally; remote artifact storage and native/iOS symbol formats are not configured.</string>
+    <string name="debug_symbols_load_failed">Debug symbol records could not be loaded.</string>
+    <string name="debug_symbols_empty_title">No mapping files</string>
+    <string name="debug_symbols_empty_description">Add an Android ProGuard/R8 mapping file for an application and version before resolving obfuscated frames.</string>
+    <string name="debug_symbols_upload_title">Add a ProGuard/R8 mapping</string>
+    <string name="debug_symbols_no_apps">Add an application to this project before uploading a mapping.</string>
+    <string name="debug_symbols_select_app">Select the application</string>
+    <string name="debug_symbols_supported_types">Supported format</string>
+    <string name="debug_symbols_app_version">Application version</string>
+    <string name="debug_symbols_build_id_optional">Build ID (optional metadata)</string>
+    <string name="debug_symbols_file_name">Mapping file name (.txt or .map)</string>
+    <string name="debug_symbols_mapping_content">Mapping file text</string>
+    <string name="debug_symbols_local_storage_notice">The mapping is stored in the local app database. It is not uploaded to cloud storage. New mappings remain Pending until a real symbolication request uses them.</string>
+    <string name="debug_symbols_upload_button">Validate and save locally</string>
+    <string name="debug_symbols_cancel">Cancel</string>
+    <string name="debug_symbols_delete">Delete mapping</string>
+    <string name="debug_symbols_version_type">Version %1$s · %2$s</string>
+    <string name="debug_symbols_uploaded_at">Added %1$s</string>
+    <string name="debug_symbols_status_pending">Pending</string>
+    <string name="debug_symbols_status_success">Symbolication succeeded</string>
+    <string name="debug_symbols_status_partial">Partially symbolicated</string>
+    <string name="debug_symbols_status_missing">Matching symbols missing</string>
+    <string name="debug_symbols_status_failed">Processing failed</string>
+    <string name="debug_symbols_invalid_input">Select an application and provide a version, file name and mapping content.</string>
+    <string name="debug_symbols_upload_failed">The mapping could not be validated or saved. Check the file format, application and project.</string>
+    <string name="debug_symbols_delete_failed">The mapping could not be deleted.</string>
+
 </resources>

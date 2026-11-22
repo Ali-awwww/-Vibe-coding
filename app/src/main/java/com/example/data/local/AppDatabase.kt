@@ -226,6 +226,9 @@ interface CrashDao {
     @Query("DELETE FROM debug_symbols WHERE id = :id")
     suspend fun deleteDebugSymbol(id: String)
 
+    @Query("UPDATE debug_symbols SET status = :status WHERE id = :id")
+    suspend fun updateDebugSymbolStatus(id: String, status: SymbolicationStatus)
+
     // Fix Suggestions
     @Query("SELECT * FROM fix_suggestions WHERE crashId = :crashId")
     fun getFixSuggestions(crashId: String): Flow<List<FixSuggestion>>
