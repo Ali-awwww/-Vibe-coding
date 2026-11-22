@@ -5,12 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.R
 import com.example.domain.model.*
 import com.example.domain.repository.SdkIntegrationRepository
+import com.example.domain.repository.SetupGuideProgressStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class SetupGuideUiState(
     val tech: ProjectTechnology? = null,
+    val selectedService: IntegrationType = IntegrationType.SENTRY,
     val guide: SdkSetupGuide? = null,
     val isScanning: Boolean = false,
     val isVerifying: Boolean = false,
@@ -20,49 +22,91 @@ data class SetupGuideUiState(
 )
 
 class SetupGuideViewModel(
-    private val repository: SdkIntegrationRepository
+    private val repository: SdkIntegrationRepository,
+    private val progressStore: SetupGuideProgressStore? = null,
+    private val projectId: String? = null,
+    private val applicationId: String? = null
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SetupGuideUiState())
+    private val restoredProgress = loadProgress()
+    private val _uiState = MutableStateFlow(
+        SetupGuideUiState(
+            tech = restoredProgress?.tech,
+            selectedService = restoredProgress?.service ?: IntegrationType.SENTRY
+        )
+    )
     val uiState = _uiState.asStateFlow()
 
     val isVerificationTransportAvailable: Boolean = repository.isVerificationTransportAvailable
 
+    init {
+        val restoredTech = restoredProgress?.tech
+        val restoredProjectId = projectId
+        if (restoredTech != null && restoredTech != ProjectTechnology.UNKNOWN && !restoredProjectId.isNullOrBlank()) {
+            generateGuide(_uiState.value.selectedService, restoredProjectId)
+        }
+    }
+
     fun scanProject(fileNames: List<String>) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isScanning = true, error = null, errorResId = null)
-            val result = repository.detectTechnology(fileNames)
-            _uiState.value = _uiState.value.copy(
-                tech = result.tech,
-                isScanning = false
+            val result = runCatching { repository.detectTechnology(fileNames) }
+            result.fold(
+                onSuccess = { scan ->
+                    val tech = scan.tech.takeUnless { it == ProjectTechnology.UNKNOWN }
+                    _uiState.value = _uiState.value.copy(tech = tech, guide = null, isScanning = false)
+                    persistSelection(tech, _uiState.value.selectedService)
+                },
+                onFailure = { failure ->
+                    _uiState.value = _uiState.value.copy(
+                        isScanning = false,
+                        error = failure.message,
+                        errorResId = R.string.setup_guide_load_failed
+                    )
+                }
             )
         }
     }
 
     fun selectManualTech(tech: ProjectTechnology) {
+        val selectedTech = tech.takeUnless { it == ProjectTechnology.UNKNOWN }
         _uiState.value = _uiState.value.copy(
-            tech = tech,
+            tech = selectedTech,
             guide = null,
             verificationResult = null,
             error = null,
             errorResId = null,
             isVerifying = false
         )
+        persistSelection(selectedTech, _uiState.value.selectedService)
     }
 
     fun generateGuide(service: IntegrationType, projectId: String) {
         val tech = _uiState.value.tech ?: return
+        _uiState.value = _uiState.value.copy(
+            selectedService = service,
+            isScanning = true,
+            guide = null,
+            verificationResult = null,
+            error = null,
+            errorResId = null
+        )
+        persistSelection(tech, service)
+
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isScanning = true,
-                verificationResult = null,
-                error = null,
-                errorResId = null
-            )
-            val guide = repository.getSetupGuide(tech, service, projectId)
-            _uiState.value = _uiState.value.copy(
-                guide = guide,
-                isScanning = false
+            val result = runCatching { repository.getSetupGuide(tech, service, projectId) }
+            result.fold(
+                onSuccess = { guide ->
+                    _uiState.value = _uiState.value.copy(guide = guide, isScanning = false)
+                },
+                onFailure = { failure ->
+                    _uiState.value = _uiState.value.copy(
+                        guide = null,
+                        isScanning = false,
+                        error = failure.message,
+                        errorResId = R.string.setup_guide_load_failed
+                    )
+                }
             )
         }
     }
@@ -84,7 +128,8 @@ class SetupGuideViewModel(
                 error = null,
                 errorResId = null
             )
-            val result = repository.verifyIntegration(applicationId)
+            val result = runCatching { repository.verifyIntegration(applicationId) }
+                .getOrElse { failure -> Result.failure(failure) }
             _uiState.value = _uiState.value.copy(
                 isVerifying = false,
                 verificationResult = result.getOrNull() ?: false,
@@ -100,5 +145,18 @@ class SetupGuideViewModel(
             error = null,
             errorResId = null
         )
+    }
+
+    private fun loadProgress() = if (
+        !projectId.isNullOrBlank() && !applicationId.isNullOrBlank()
+    ) {
+        runCatching { progressStore?.load(projectId, applicationId) }.getOrNull()
+    } else {
+        null
+    }
+
+    private fun persistSelection(tech: ProjectTechnology?, service: IntegrationType) {
+        if (projectId.isNullOrBlank() || applicationId.isNullOrBlank()) return
+        runCatching { progressStore?.save(projectId, applicationId, tech, service) }
     }
 }

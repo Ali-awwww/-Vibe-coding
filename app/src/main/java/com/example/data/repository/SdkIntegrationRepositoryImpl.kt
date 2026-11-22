@@ -5,19 +5,18 @@ import com.example.domain.model.*
 import com.example.domain.repository.SdkIntegrationRepository
 
 class SdkIntegrationRepositoryImpl(
-    private val crashDao: CrashDao? = null
+    @Suppress("unused") private val crashDao: CrashDao? = null
 ) : SdkIntegrationRepository {
 
-    // No authenticated diagnostic-event receiver is configured in this build.
+    // A real authenticated diagnostic-event receiver is not configured in this build.
     override val isVerificationTransportAvailable: Boolean = false
 
     override suspend fun detectTechnology(fileNames: List<String>): ProjectScanResult {
         val files = fileNames.map { it.lowercase() }
-        
         val tech = when {
             files.any { it.contains("pubspec.yaml") } -> ProjectTechnology.FLUTTER
             files.any { it.contains("package.json") } && files.any { it.contains("android") || it.contains("ios") } -> ProjectTechnology.REACT_NATIVE
-            files.any { it.contains("assets/pacakge") || it.contains("projectsettings") } -> ProjectTechnology.UNITY
+            files.any { it.contains("projectsettings/") || it.contains("assets/") } -> ProjectTechnology.UNITY
             files.any { it.endsWith(".swift") } -> ProjectTechnology.IOS_SWIFT
             files.any { it.endsWith(".m") || it.endsWith(".h") } -> ProjectTechnology.IOS_OBJC
             files.any { it.endsWith(".kt") } || files.any { it.contains("build.gradle.kts") } -> ProjectTechnology.ANDROID_KOTLIN
@@ -27,81 +26,159 @@ class SdkIntegrationRepositoryImpl(
 
         return ProjectScanResult(
             tech = tech,
-            detectedFiles = fileNames.filter { f -> 
-                listOf("gradle", "yaml", "json", "swift", "kt", "java", "plist", "xml").any { f.endsWith(it) }
+            detectedFiles = fileNames.filter { file ->
+                listOf("gradle", "yaml", "json", "swift", "kt", "java", "plist", "xml")
+                    .any { file.endsWith(it, ignoreCase = true) }
             }.take(5)
         )
     }
 
+    @Suppress("UNUSED_PARAMETER")
     override suspend fun getSetupGuide(
         tech: ProjectTechnology,
         service: IntegrationType,
         projectId: String
     ): SdkSetupGuide {
-        return when (service) {
-            IntegrationType.FIREBASE_CRASHLYTICS -> getFirebaseGuide(tech)
-            IntegrationType.SENTRY -> getSentryGuide(tech)
-            IntegrationType.BUGSNAG -> getBugsnagGuide(tech)
-            else -> getWebhookGuide(tech)
+        val isAndroid = tech == ProjectTechnology.ANDROID_KOTLIN || tech == ProjectTechnology.ANDROID_JAVA
+        return when {
+            service == IntegrationType.FIREBASE_CRASHLYTICS -> unavailableGuide(
+                tech,
+                service,
+                "setup_guide_firebase_unavailable_body"
+            )
+            service == IntegrationType.SENTRY && isAndroid -> getSentryGuide(tech)
+            service == IntegrationType.BUGSNAG && isAndroid -> getBugsnagGuide(tech)
+            service == IntegrationType.SENTRY || service == IntegrationType.BUGSNAG -> unavailableGuide(
+                tech,
+                service,
+                "setup_guide_platform_unsupported"
+            )
+            else -> unavailableGuide(tech, service, "setup_guide_service_unavailable")
         }
     }
 
-    private fun getFirebaseGuide(tech: ProjectTechnology): SdkSetupGuide =
-        SdkSetupGuide(
-            tech = tech,
-            service = IntegrationType.FIREBASE_CRASHLYTICS,
-            steps = emptyList(),
-            troubleshooting = emptyList()
-        )
-
     private fun getSentryGuide(tech: ProjectTechnology): SdkSetupGuide {
-        val steps = mutableListOf<IntegrationStep>()
-        steps.add(IntegrationStep(
-            "تثبيت Sentry SDK",
-            "أضف الاعتمادية إلى مشروعك",
-            if (tech == ProjectTechnology.ANDROID_KOTLIN) "implementation(\"io.sentry:sentry-android:7.3.0\")" else "npm install @sentry/react-native",
-            "build.gradle / package.json"
-        ))
-        steps.add(IntegrationStep(
-            "تهيئة Sentry",
-            "أضف كود التهيئة في نقطة انطلاق التطبيق",
-            "Sentry.init { options -> \n  options.dsn = \"YOUR_SENTRY_DSN\"\n  options.tracesSampleRate = 1.0\n}",
-            "MainActivity.kt / App.js"
-        ))
-        
+        val verificationSnippet = if (tech == ProjectTechnology.ANDROID_JAVA) {
+            "import io.sentry.Sentry;\nSentry.captureException(new RuntimeException(\"Vibe setup verification\"));"
+        } else {
+            "import io.sentry.Sentry\nSentry.captureException(RuntimeException(\"Vibe setup verification\"))"
+        }
         return SdkSetupGuide(
             tech = tech,
             service = IntegrationType.SENTRY,
-            steps = steps,
-            troubleshooting = listOf("تأكد من صحة الـ DSN الخاص بمشروعك في Sentry.")
+            documentationUrl = "https://docs.sentry.io/platforms/android/",
+            prerequisites = listOf(
+                "setup_guide_sentry_prerequisite_account",
+                "setup_guide_sentry_prerequisite_platform"
+            ),
+            steps = listOf(
+                IntegrationStep(
+                    id = "sentry_install",
+                    title = "Install Sentry",
+                    description = "Run the official Android wizard from the project root. It configures the SDK and Gradle integration; review its diff before accepting the changes.",
+                    codeSnippet = "npx @sentry/wizard@latest -i android",
+                    fileToModify = "Project root terminal"
+                ),
+                IntegrationStep(
+                    id = "sentry_credentials",
+                    title = "Protect the Sentry upload token",
+                    description = "Review the generated sentry.properties file. Keep its upload token out of source control and provide it to CI through a protected environment secret.",
+                    codeSnippet = "sentry.properties",
+                    fileToModify = "sentry.properties / .gitignore"
+                ),
+                IntegrationStep(
+                    id = "sentry_verify",
+                    title = "Send a test event",
+                    description = "Call this from a debug-only action or test. Do not leave a forced test event in the production user flow.",
+                    codeSnippet = verificationSnippet,
+                    fileToModify = if (tech == ProjectTechnology.ANDROID_JAVA) "Debug-only Java test" else "Debug-only Kotlin test"
+                ),
+                IntegrationStep(
+                    id = "sentry_dashboard",
+                    title = "Confirm the event in Sentry",
+                    description = "Open the linked Sentry project and confirm that the test event appears. This external check is not a verified Vibe Coding integration until the authenticated receiver is available.",
+                    fileToModify = "Sentry Issues dashboard"
+                )
+            ),
+            troubleshooting = listOf(
+                "setup_guide_troubleshooting_sentry_dsn",
+                "setup_guide_troubleshooting_sentry_token"
+            )
         )
     }
 
     private fun getBugsnagGuide(tech: ProjectTechnology): SdkSetupGuide {
+        val applicationSnippet = if (tech == ProjectTechnology.ANDROID_JAVA) {
+            "public class MyApp extends Application {\n    @Override\n    public void onCreate() {\n        super.onCreate();\n        Bugsnag.start(this);\n    }\n}"
+        } else {
+            "class MyApp : Application() {\n    override fun onCreate() {\n        super.onCreate()\n        Bugsnag.start(this)\n    }\n}"
+        }
+        val verificationSnippet = if (tech == ProjectTechnology.ANDROID_JAVA) {
+            "Bugsnag.notify(new IllegalStateException(\"Vibe setup verification\"));"
+        } else {
+            "Bugsnag.notify(IllegalStateException(\"Vibe setup verification\"))"
+        }
         return SdkSetupGuide(
             tech = tech,
             service = IntegrationType.BUGSNAG,
-            steps = listOf(
-                IntegrationStep("تثبيت Bugsnag", "أضف Bugsnag إلى اعتماديات المشروع", "implementation 'com.bugsnag:bugsnag-android:6.0.0'", "build.gradle"),
-                IntegrationStep("بدء Bugsnag", "قم باستدعاء Bugsnag.start()", "Bugsnag.start(this)", "Application class")
+            documentationUrl = "https://docs.bugsnag.com/platforms/android/",
+            prerequisites = listOf(
+                "setup_guide_bugsnag_prerequisite_account",
+                "setup_guide_bugsnag_prerequisite_platform"
             ),
-            troubleshooting = listOf("تأكد من إضافة الـ API Key في AndroidManifest.xml.")
+            steps = listOf(
+                IntegrationStep(
+                    id = "bugsnag_dependency",
+                    title = "Install the BugSnag Android SDK",
+                    description = "Add the current Android notifier dependency to the app module.",
+                    codeSnippet = "implementation(\"com.bugsnag:bugsnag-android:6.27.1\")",
+                    fileToModify = "app/build.gradle.kts"
+                ),
+                IntegrationStep(
+                    id = "bugsnag_manifest",
+                    title = "Configure the project API key",
+                    description = "Use the API key for this BugSnag project, not a personal or organization management token.",
+                    codeSnippet = "<meta-data android:name=\"com.bugsnag.android.API_KEY\" android:value=\"YOUR_PROJECT_API_KEY\" />",
+                    fileToModify = "AndroidManifest.xml"
+                ),
+                IntegrationStep(
+                    id = "bugsnag_initialize",
+                    title = "Initialize BugSnag",
+                    description = "Create or update the Application subclass and reference it from the application element in AndroidManifest.xml.",
+                    codeSnippet = applicationSnippet,
+                    fileToModify = if (tech == ProjectTechnology.ANDROID_JAVA) "MyApp.java" else "MyApp.kt"
+                ),
+                IntegrationStep(
+                    id = "bugsnag_verify",
+                    title = "Send a test notification",
+                    description = "Run this only from a debug-only action or test, then confirm the event in the BugSnag dashboard.",
+                    codeSnippet = verificationSnippet,
+                    fileToModify = "Debug-only test"
+                )
+            ),
+            troubleshooting = listOf(
+                "setup_guide_troubleshooting_bugsnag_key",
+                "setup_guide_troubleshooting_bugsnag_application"
+            )
         )
     }
 
-    private fun getWebhookGuide(tech: ProjectTechnology): SdkSetupGuide {
-        return SdkSetupGuide(
-            tech = tech,
-            service = IntegrationType.WEBHOOK,
-            steps = listOf(
-                IntegrationStep("إرسال طلب POST", "أرسل تقرير الانهيار بصيغة JSON إلى رابط الـ Webhook", "curl -X POST https://api.crash-intelligence.ai/webhook/your-id -d '{\"error\": \"NullPointer\"}'", "Network Client")
-            ),
-            troubleshooting = listOf("تأكد من تضمين التوقيع (Signature) إذا تم تفعيل الأمان.")
-        )
-    }
+    private fun unavailableGuide(
+        tech: ProjectTechnology,
+        service: IntegrationType,
+        reason: String
+    ): SdkSetupGuide = SdkSetupGuide(
+        tech = tech,
+        service = service,
+        steps = emptyList(),
+        troubleshooting = emptyList(),
+        unavailableReason = reason
+    )
 
     override suspend fun verifyIntegration(applicationId: String): Result<Boolean> =
-        Result.failure(UnsupportedOperationException(
-            "SDK verification is unavailable because no authenticated diagnostic-event receiver is configured."
-        ))
+        Result.failure(
+            UnsupportedOperationException(
+                "SDK verification is unavailable because no authenticated diagnostic-event receiver is configured."
+            )
+        )
 }
