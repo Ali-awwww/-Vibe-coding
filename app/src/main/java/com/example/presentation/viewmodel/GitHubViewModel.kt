@@ -86,11 +86,22 @@ class GitHubViewModel(private val repository: GitHubRepository, private val user
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, repositories = emptyList(), errorResId = null)
             val result = repository.fetchRepositories(userId)
-            _uiState.value = _uiState.value.copy(
-                repositories = result.getOrNull().orEmpty(),
-                isLoading = false,
-                errorResId = result.exceptionOrNull()?.let { requestError(it, R.string.github_error_load_repositories) }
-            )
+            val failure = result.exceptionOrNull()
+            if ((failure as? HttpException)?.code() == 401) {
+                val removal = runCatching { repository.disconnectGitHub(userId) }.getOrNull()
+                _uiState.value = _uiState.value.copy(
+                    connection = null,
+                    repositories = emptyList(),
+                    isLoading = false,
+                    errorResId = if (removal?.isSuccess == true) R.string.github_error_invalid_token else R.string.github_error_disconnect
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    repositories = result.getOrNull().orEmpty(),
+                    isLoading = false,
+                    errorResId = failure?.let { requestError(it, R.string.github_error_load_repositories) }
+                )
+            }
         }
     }
 

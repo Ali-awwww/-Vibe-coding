@@ -58,14 +58,21 @@ fun GitHubConnectScreen(projectId: String, navController: NavController, viewMod
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (connection == null) {
-                GitHubLoginCard(uiState.isLoading, uiState.errorResId, viewModel::connectWithToken)
+                GitHubLoginCard(
+                    isLoading = uiState.isLoading,
+                    errorResId = uiState.errorResId,
+                    onConnectToken = viewModel::connectWithToken,
+                    onForgetToken = if (uiState.errorResId == R.string.github_error_disconnect) viewModel::disconnect else null
+                )
             } else {
                 GitHubStatusCard(connection, uiState.isLoading, viewModel::disconnect)
                 uiState.errorResId?.let { errorResId ->
-                    GitHubErrorNotice(errorResId) {
-                        if (errorResId == R.string.github_error_load_mappings) viewModel.loadMappings(projectId)
-                        else viewModel.fetchRepositories()
+                    val retryAction: (() -> Unit)? = when (errorResId) {
+                        R.string.github_error_load_mappings -> ({ viewModel.loadMappings(projectId) })
+                        R.string.github_error_load_repositories -> ({ viewModel.fetchRepositories() })
+                        else -> null
                     }
+                    GitHubErrorNotice(errorResId, retryAction)
                 }
                 LazyColumn(
                     modifier = Modifier.weight(1f),
@@ -110,7 +117,12 @@ fun GitHubConnectScreen(projectId: String, navController: NavController, viewMod
 }
 
 @Composable
-fun GitHubLoginCard(isLoading: Boolean, errorResId: Int?, onConnectToken: (String) -> Unit) {
+fun GitHubLoginCard(
+    isLoading: Boolean,
+    errorResId: Int?,
+    onConnectToken: (String) -> Unit,
+    onForgetToken: (() -> Unit)? = null
+) {
     var personalToken by remember { mutableStateOf("") }
     var tokenVisible by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
@@ -176,6 +188,11 @@ fun GitHubLoginCard(isLoading: Boolean, errorResId: Int?, onConnectToken: (Strin
             }
         }
         errorResId?.let { GitHubErrorNotice(it) }
+        if (onForgetToken != null) {
+            TextButton(onClick = onForgetToken, enabled = !isLoading) {
+                Text(stringResource(R.string.github_forget_token))
+            }
+        }
     }
 }
 

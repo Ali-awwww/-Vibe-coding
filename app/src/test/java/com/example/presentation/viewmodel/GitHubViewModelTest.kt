@@ -8,11 +8,15 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.HttpException
+import retrofit2.Response
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -40,6 +44,21 @@ class GitHubViewModelTest {
         assertEquals(emptyList<GitHubRepo>(), viewModel.uiState.value.repositories)
         assertEquals(R.string.github_error_load_repositories, viewModel.uiState.value.errorResId)
         assertFalse(viewModel.uiState.value.toString().contains("private provider detail"))
+    }
+
+    @Test
+    fun revokedTokenIsRemovedAndNeverShownAsConnected() {
+        val connection = GitHubConnection(userId = "user-1", username = "developer", accessToken = "encrypted")
+        val unauthorized = HttpException(Response.error<Any>(401, "Unauthorized".toResponseBody()))
+        val repository = FakeGitHubRepository().apply {
+            connectionResult = Result.success(connection)
+            repositoriesResult = Result.failure(unauthorized)
+        }
+        val viewModel = GitHubViewModel(repository, "user-1")
+
+        assertNull(viewModel.uiState.value.connection)
+        assertEquals(1, repository.disconnectCalls)
+        assertEquals(R.string.github_error_invalid_token, viewModel.uiState.value.errorResId)
     }
 
     @Test
@@ -86,10 +105,11 @@ class GitHubViewModelTest {
         var mappingResult: Result<Unit> = Result.success(Unit)
         var getConnectionCalls = 0
         var connectTokenCalls = 0
+        var disconnectCalls = 0
         override suspend fun connectGitHub(userId: String, code: String): Result<Unit> =
             Result.failure(UnsupportedOperationException("OAuth is not configured"))
         override suspend fun connectGitHubWithToken(userId: String, token: String): Result<Unit> { connectTokenCalls++; return Result.success(Unit) }
-        override suspend fun disconnectGitHub(userId: String): Result<Unit> = disconnectResult
+        override suspend fun disconnectGitHub(userId: String): Result<Unit> { disconnectCalls++; return disconnectResult }
         override suspend fun getGitHubConnection(userId: String): Result<GitHubConnection?> { getConnectionCalls++; return connectionResult }
         override suspend fun fetchRepositories(userId: String): Result<List<GitHubRepo>> = repositoriesResult
         override suspend fun fetchBranches(userId: String, owner: String, repo: String): Result<List<GitHubBranch>> = Result.success(emptyList())

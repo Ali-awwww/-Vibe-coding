@@ -564,4 +564,5 @@
     <string name="github_link_repo_confirm">ربط المستودع</string>
     <string name="github_link_repo_cancel">إلغاء</string>
 
+    <string name="github_forget_token">حذف رمز GitHub المحفوظ</string>
 </resources>
