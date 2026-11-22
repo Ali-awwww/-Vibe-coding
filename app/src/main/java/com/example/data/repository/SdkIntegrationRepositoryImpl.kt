@@ -3,11 +3,13 @@ package com.example.data.repository
 import com.example.data.local.CrashDao
 import com.example.domain.model.*
 import com.example.domain.repository.SdkIntegrationRepository
-import kotlinx.coroutines.delay
 
 class SdkIntegrationRepositoryImpl(
     private val crashDao: CrashDao? = null
 ) : SdkIntegrationRepository {
+
+    // No authenticated diagnostic-event receiver is configured in this build.
+    override val isVerificationTransportAvailable: Boolean = false
 
     override suspend fun detectTechnology(fileNames: List<String>): ProjectScanResult {
         val files = fileNames.map { it.lowercase() }
@@ -44,45 +46,13 @@ class SdkIntegrationRepositoryImpl(
         }
     }
 
-    private fun getFirebaseGuide(tech: ProjectTechnology): SdkSetupGuide {
-        val steps = mutableListOf<IntegrationStep>()
-        
-        when (tech) {
-            ProjectTechnology.ANDROID_KOTLIN, ProjectTechnology.ANDROID_JAVA -> {
-                steps.add(IntegrationStep(
-                    "إضافة المكون الإضافي لـ Google Services",
-                    "أضف المكون الإضافي في ملف build.gradle (Project level)",
-                    "plugins {\n  id(\"com.google.gms.google-services\") version \"4.4.0\" apply false\n  id(\"com.google.firebase.crashlytics\") version \"2.9.9\" apply false\n}",
-                    "build.gradle.kts (Project)"
-                ))
-                steps.add(IntegrationStep(
-                    "تفعيل SDK في التطبيق",
-                    "أضف الاعتماديات والمكونات الإضافية في ملف build.gradle (App level)",
-                    "plugins {\n  id(\"com.android.application\")\n  id(\"com.google.gms.google-services\")\n  id(\"com.google.firebase.crashlytics\")\n}\n\ndependencies {\n  implementation(platform(\"com.google.firebase:firebase-bom:32.7.0\"))\n  implementation(\"com.google.firebase:firebase-crashlytics-ktx\")\n  implementation(\"com.google.firebase:firebase-analytics-ktx\")\n}",
-                    "app/build.gradle.kts"
-                ))
-            }
-            ProjectTechnology.FLUTTER -> {
-                steps.add(IntegrationStep(
-                    "إضافة حزمة FlutterFire",
-                    "قم بتشغيل الأمر التالي في مجلد المشروع",
-                    "flutter pub add firebase_crashlytics\nflutter pub add firebase_core",
-                    "Terminal"
-                ))
-            }
-            else -> {}
-        }
-        
-        return SdkSetupGuide(
+    private fun getFirebaseGuide(tech: ProjectTechnology): SdkSetupGuide =
+        SdkSetupGuide(
             tech = tech,
             service = IntegrationType.FIREBASE_CRASHLYTICS,
-            steps = steps,
-            troubleshooting = listOf(
-                "تأكد من تحميل ملف google-services.json ووضعه في مجلد app.",
-                "تحقق من أن الإصدارات متوافقة مع إصدار Gradle المستخدم."
-            )
+            steps = emptyList(),
+            troubleshooting = emptyList()
         )
-    }
 
     private fun getSentryGuide(tech: ProjectTechnology): SdkSetupGuide {
         val steps = mutableListOf<IntegrationStep>()
@@ -130,9 +100,8 @@ class SdkIntegrationRepositoryImpl(
         )
     }
 
-    override suspend fun verifyIntegration(applicationId: String): Result<Boolean> = runCatching {
-        delay(1200) // Validate backend event reception
-        crashDao?.updateApplicationSdkStatus(applicationId, SdkSetupStatus.CONFIGURED)
-        true
-    }
+    override suspend fun verifyIntegration(applicationId: String): Result<Boolean> =
+        Result.failure(UnsupportedOperationException(
+            "SDK verification is unavailable because no authenticated diagnostic-event receiver is configured."
+        ))
 }
