@@ -4,14 +4,6 @@ import com.example.domain.model.*
 import retrofit2.http.*
 
 interface GitHubApi {
-    @POST("https://github.com/login/oauth/access_token")
-    @Headers("Accept: application/json")
-    suspend fun getAccessToken(
-        @Query("client_id") clientId: String,
-        @Query("client_secret") client_secret: String,
-        @Query("code") code: String
-    ): GitHubTokenResponse
-
     @GET("user")
     suspend fun getUser(
         @Header("Authorization") token: String
@@ -78,12 +70,6 @@ interface GitHubApi {
         @Body body: GitHubCreatePrRequest
     ): GitHubPrResponse
 }
-
-data class GitHubTokenResponse(
-    val access_token: String,
-    val token_type: String,
-    val scope: String
-)
 
 data class GitHubUserResponse(
     val login: String,

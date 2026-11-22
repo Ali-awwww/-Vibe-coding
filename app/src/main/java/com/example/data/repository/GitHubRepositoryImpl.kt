@@ -1,6 +1,5 @@
 package com.example.data.repository
 
-import com.example.BuildConfig
 import com.example.data.local.CrashDao
 import com.example.data.remote.GitHubApi
 import com.example.domain.model.*
@@ -14,33 +13,26 @@ class GitHubRepositoryImpl(
     private val githubApi: GitHubApi
 ) : GitHubRepository {
 
-    private val clientId = BuildConfig.GITHUB_CLIENT_ID
-    private val clientSecret = BuildConfig.GITHUB_CLIENT_SECRET
-
-    override suspend fun connectGitHub(userId: String, code: String): Result<Unit> = runCatching {
-        val tokenResponse = githubApi.getAccessToken(clientId, clientSecret, code)
-        val authHeader = "Bearer ${tokenResponse.access_token}"
-        val userResponse = githubApi.getUser(authHeader)
-
-        val encryptedToken = SecurityUtils.encryptSecret(tokenResponse.access_token)
-        
-        val connection = GitHubConnection(
-            userId = userId,
-            accessToken = encryptedToken,
-            username = userResponse.login,
-            avatarUrl = userResponse.avatar_url
+    override suspend fun connectGitHub(userId: String, code: String): Result<Unit> =
+        Result.failure(
+            UnsupportedOperationException(
+                "GitHub OAuth code exchange is disabled in the Android client and must run on a trusted backend."
+            )
         )
-        crashDao.insertGitHubConnection(connection)
-    }
 
     override suspend fun connectGitHubWithToken(userId: String, token: String): Result<Unit> = runCatching {
-        val cleanToken = token.trim()
-        val authHeader = if (cleanToken.startsWith("Bearer ") || cleanToken.startsWith("token ")) cleanToken else "Bearer $cleanToken"
-        val userResponse = githubApi.getUser(authHeader)
-
-        val rawToken = if (cleanToken.startsWith("Bearer ") || cleanToken.startsWith("token ")) cleanToken.substringAfter(" ") else cleanToken
+        require(userId.isNotBlank()) { "A signed-in Vibe Coding user is required before linking GitHub." }
+        val suppliedToken = token.trim()
+        require(suppliedToken.isNotBlank()) { "A GitHub fine-grained personal access token is required." }
+        val rawToken = when {
+            suppliedToken.startsWith("Bearer ", ignoreCase = true) -> suppliedToken.substringAfter(" ").trim()
+            suppliedToken.startsWith("token ", ignoreCase = true) -> suppliedToken.substringAfter(" ").trim()
+            else -> suppliedToken
+        }
+        require(rawToken.isNotBlank()) { "A GitHub personal access token is required." }
+        val userResponse = githubApi.getUser("Bearer $rawToken")
         val encryptedToken = SecurityUtils.encryptSecret(rawToken)
-        
+
         val connection = GitHubConnection(
             userId = userId,
             accessToken = encryptedToken,
@@ -51,10 +43,12 @@ class GitHubRepositoryImpl(
     }
 
     override suspend fun disconnectGitHub(userId: String): Result<Unit> = runCatching {
+        require(userId.isNotBlank()) { "A signed-in Vibe Coding user is required." }
         crashDao.deleteGitHubConnection(userId)
     }
 
     override suspend fun getGitHubConnection(userId: String): Result<GitHubConnection?> = runCatching {
+        require(userId.isNotBlank()) { "A signed-in Vibe Coding user is required." }
         crashDao.getGitHubConnection(userId)
     }
 
@@ -190,6 +184,7 @@ class GitHubRepositoryImpl(
     }
 
     private suspend fun getAuthHeader(userId: String): String {
+        require(userId.isNotBlank()) { "A signed-in Vibe Coding user is required." }
         val connection = crashDao.getGitHubConnection(userId)
             ?: throw IllegalStateException("GitHub account not linked.")
         val token = SecurityUtils.decryptSecret(connection.accessToken)

@@ -104,6 +104,9 @@ android {
 secrets {
     propertiesFileName = ".env"
     defaultPropertiesFileName = ".env.example"
+    // OAuth client identifiers/secrets must never be injected into the APK BuildConfig.
+    ignoreList.add("GITHUB_CLIENT_ID")
+    ignoreList.add("GITHUB_CLIENT_SECRET")
 }
 
 ksp {
