@@ -2,6 +2,7 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.R
 import com.example.domain.model.*
 import com.example.domain.repository.CrashRepository
 import com.example.domain.repository.LiveTestingRepository
@@ -31,6 +32,11 @@ class LiveTestingViewModel(
 
     private val _operationError = MutableStateFlow<String?>(null)
     val operationError = _operationError.asStateFlow()
+
+    private val _operationErrorResId = MutableStateFlow<Int?>(null)
+    val operationErrorResId = _operationErrorResId.asStateFlow()
+
+    val isAgentTransportAvailable: Boolean = repository.isAgentTransportAvailable
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
@@ -78,8 +84,13 @@ class LiveTestingViewModel(
     }
 
     fun startSession(application: Application, version: String, buildId: String) {
+        if (!isAgentTransportAvailable) {
+            reportAgentTransportUnavailable()
+            return
+        }
         viewModelScope.launch {
             _operationError.value = null
+            _operationErrorResId.value = null
             val session = TestSession(
                 id = UUID.randomUUID().toString(),
                 projectId = application.projectId,
@@ -98,6 +109,7 @@ class LiveTestingViewModel(
                 observeEvents(session.id)
             }.onFailure { error ->
                 _operationError.value = error.message ?: "تعذر بدء جلسة الاختبار."
+                _operationErrorResId.value = null
             }
         }
     }
@@ -110,6 +122,10 @@ class LiveTestingViewModel(
     }
 
     fun observeEvents(sessionId: String) {
+        if (!isAgentTransportAvailable) {
+            _events.value = emptyList()
+            return
+        }
         viewModelScope.launch {
             repository.getTestEvents(sessionId).collect {
                 _events.value = it
@@ -118,6 +134,10 @@ class LiveTestingViewModel(
     }
 
     fun stopSession() {
+        if (!isAgentTransportAvailable) {
+            reportAgentTransportUnavailable()
+            return
+        }
         val session = _activeSession.value ?: return
         viewModelScope.launch {
             repository.endTestSession(session.id, TestSessionStatus.COMPLETED)
@@ -125,21 +145,43 @@ class LiveTestingViewModel(
     }
 
     fun connectAgent(applicationId: String) {
+        if (!isAgentTransportAvailable) {
+            reportAgentTransportUnavailable()
+            return
+        }
         viewModelScope.launch {
             _operationError.value = null
+            _operationErrorResId.value = null
             repository.connectToAgent(applicationId).onFailure { error ->
                 _operationError.value = error.message ?: "تعذر الاتصال بالعميل."
+                _operationErrorResId.value = null
             }
         }
     }
 
     fun sendCommandToAgent(sessionId: String, command: String) {
+        if (!isAgentTransportAvailable) {
+            reportAgentTransportUnavailable()
+            return
+        }
         viewModelScope.launch {
             _operationError.value = null
+            _operationErrorResId.value = null
             repository.sendCommandToAgent(sessionId, command).onFailure { error ->
                 _operationError.value = error.message ?: "تعذر إرسال الأمر."
+                _operationErrorResId.value = null
             }
         }
+    }
+
+    fun clearOperationError() {
+        _operationError.value = null
+        _operationErrorResId.value = null
+    }
+
+    private fun reportAgentTransportUnavailable() {
+        _operationError.value = null
+        _operationErrorResId.value = R.string.live_testing_agent_unavailable_body
     }
 
     fun updateSdkStatus(applicationId: String, status: SdkSetupStatus) {
