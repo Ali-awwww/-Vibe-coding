@@ -11,7 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -34,13 +34,19 @@ fun LiveTestingScreen(
     val selectedProjectId by viewModel.selectedProjectId.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val operationError by viewModel.operationError.collectAsState()
+    val operationErrorResId by viewModel.operationErrorResId.collectAsState()
+    val operationErrorMessage = operationErrorResId?.let { stringResource(it) } ?: operationError
+    val isAgentTransportAvailable = viewModel.isAgentTransportAvailable
     val snackbarHostState = remember { SnackbarHostState() }
     val sessions by viewModel.sessions.collectAsState()
 
     var showStartDialog by remember { mutableStateOf<Application?>(null) }
 
-    LaunchedEffect(operationError) {
-        operationError?.let { snackbarHostState.showSnackbar(it) }
+    LaunchedEffect(operationErrorMessage) {
+        operationErrorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearOperationError()
+        }
     }
 
     Scaffold(
@@ -50,7 +56,7 @@ fun LiveTestingScreen(
                 title = { Text(stringResource(R.string.live_testing)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.live_testing_back))
                     }
                 }
             )
@@ -62,6 +68,12 @@ fun LiveTestingScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
+            if (!isAgentTransportAvailable) {
+                AgentTransportUnavailableNotice(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                )
+            }
+
             // Project Selector
             Text(
                 stringResource(R.string.select_project),
@@ -111,7 +123,8 @@ fun LiveTestingScreen(
                             application = app,
                             navController = navController,
                             onStartTesting = { showStartDialog = app },
-                            onConnectAgent = { viewModel.connectAgent(app.id) }
+                            onConnectAgent = { viewModel.connectAgent(app.id) },
+                            agentTransportAvailable = isAgentTransportAvailable
                         )
                     }
 
@@ -128,7 +141,8 @@ fun LiveTestingScreen(
                         items(sessions) { session ->
                             SessionHistoryItem(
                                 session = session,
-                                onClick = { navController.navigate(Screen.LiveSession(session.id)) }
+                                onClick = { navController.navigate(Screen.LiveSession(session.id)) },
+                                agentTransportAvailable = isAgentTransportAvailable
                             )
                         }
                     }
@@ -142,11 +156,12 @@ fun LiveTestingScreen(
             application = showStartDialog!!,
             onDismiss = { showStartDialog = null },
             onConfirm = { version, buildId ->
-                viewModel.startSession(showStartDialog!!, version, buildId)
+                if (isAgentTransportAvailable) {
+                    viewModel.startSession(showStartDialog!!, version, buildId)
+                }
                 showStartDialog = null
-                // We'll navigate to LiveSessionScreen once the session is created
-                // For now, let's assume we can navigate directly if we have the ID or wait for state change
-            }
+            },
+            agentTransportAvailable = isAgentTransportAvailable
         )
     }
 
@@ -154,8 +169,45 @@ fun LiveTestingScreen(
     val activeSession by viewModel.activeSession.collectAsState()
     LaunchedEffect(activeSession) {
         activeSession?.let {
-            if (it.status == TestSessionStatus.PREPARING) {
+            if (isAgentTransportAvailable && it.status == TestSessionStatus.PREPARING) {
                 navController.navigate(Screen.LiveSession(it.id))
+            }
+        }
+    }
+}
+
+
+@Composable
+fun AgentTransportUnavailableNotice(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.live_testing_agent_unavailable_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.live_testing_agent_unavailable_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
             }
         }
     }
@@ -166,7 +218,8 @@ fun ApplicationCard(
     application: Application,
     navController: NavController,
     onStartTesting: () -> Unit,
-    onConnectAgent: () -> Unit
+    onConnectAgent: () -> Unit,
+    agentTransportAvailable: Boolean = false
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -217,11 +270,15 @@ fun ApplicationCard(
                     imageVector = Icons.Default.Link,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = if (application.agentConnectionStatus == AgentConnectionStatus.ONLINE) 
+                    tint = if (agentTransportAvailable && application.agentConnectionStatus == AgentConnectionStatus.ONLINE)
                         MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Agent: ${application.agentConnectionStatus}")
+                Text(
+                    text = if (agentTransportAvailable) "Agent: ${application.agentConnectionStatus}"
+                    else stringResource(R.string.live_testing_agent_unavailable_status),
+                    modifier = Modifier.testTag("live_testing_agent_status")
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -233,8 +290,11 @@ fun ApplicationCard(
                     Text("إعداد SDK")
                 }
 
-                if (application.agentConnectionStatus == AgentConnectionStatus.OFFLINE) {
-                    TextButton(onClick = onConnectAgent) {
+                if (agentTransportAvailable && application.agentConnectionStatus == AgentConnectionStatus.OFFLINE) {
+                    TextButton(
+                        onClick = onConnectAgent,
+                        modifier = Modifier.testTag("live_testing_connect_agent_button")
+                    ) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("ربط العميل (Connect Agent)")
@@ -243,7 +303,8 @@ fun ApplicationCard(
                 
                 Button(
                     onClick = onStartTesting,
-                    enabled = application.agentConnectionStatus == AgentConnectionStatus.ONLINE
+                    enabled = agentTransportAvailable && application.agentConnectionStatus == AgentConnectionStatus.ONLINE,
+                    modifier = Modifier.testTag("live_testing_start_button")
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
@@ -257,7 +318,8 @@ fun ApplicationCard(
 @Composable
 fun SessionHistoryItem(
     session: TestSession,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    agentTransportAvailable: Boolean = false
 ) {
     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
     
@@ -278,13 +340,13 @@ fun SessionHistoryItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = when(session.status) {
+                    imageVector = if (!agentTransportAvailable) Icons.Default.History else when(session.status) {
                         TestSessionStatus.COMPLETED -> Icons.Default.CheckCircle
                         TestSessionStatus.CRASH_DETECTED -> Icons.Default.Error
                         else -> Icons.Default.History
                     },
                     contentDescription = null,
-                    tint = when(session.status) {
+                    tint = if (!agentTransportAvailable) MaterialTheme.colorScheme.onSurfaceVariant else when(session.status) {
                         TestSessionStatus.COMPLETED -> MaterialTheme.colorScheme.primary
                         TestSessionStatus.CRASH_DETECTED -> MaterialTheme.colorScheme.error
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -298,12 +360,15 @@ fun SessionHistoryItem(
             }
 
             StatusBadge(
-                status = session.status.name,
-                color = when(session.status) {
-                    TestSessionStatus.COMPLETED -> MaterialTheme.colorScheme.primaryContainer
-                    TestSessionStatus.CRASH_DETECTED -> MaterialTheme.colorScheme.errorContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
+                status = if (agentTransportAvailable) session.status.name
+                    else stringResource(R.string.live_testing_local_record_unverified),
+                color = if (agentTransportAvailable) {
+                    when(session.status) {
+                        TestSessionStatus.COMPLETED -> MaterialTheme.colorScheme.primaryContainer
+                        TestSessionStatus.CRASH_DETECTED -> MaterialTheme.colorScheme.errorContainer
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                } else MaterialTheme.colorScheme.surfaceVariant
             )
         }
     }
@@ -313,7 +378,8 @@ fun SessionHistoryItem(
 fun StartTestingDialog(
     application: Application,
     onDismiss: () -> Unit,
-    onConfirm: (version: String, buildId: String) -> Unit
+    onConfirm: (version: String, buildId: String) -> Unit,
+    agentTransportAvailable: Boolean = false
 ) {
     var version by remember { mutableStateOf("1.0.0") }
     var buildId by remember { mutableStateOf("B${System.currentTimeMillis().toString().takeLast(6)}") }
@@ -339,15 +405,25 @@ fun StartTestingDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text(
-                    "الاختبار المباشر غير متاح حتى يتم تثبيت Agent حقيقي وربطه. لن تُنشأ جلسة أو نتائج محاكاة.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
+                if (!agentTransportAvailable) {
+                    Text(
+                        stringResource(R.string.live_testing_agent_unavailable_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(version, buildId) }) {
+            Button(
+                onClick = {
+                    if (agentTransportAvailable && version.isNotBlank() && buildId.isNotBlank()) {
+                        onConfirm(version, buildId)
+                    }
+                },
+                enabled = agentTransportAvailable && version.isNotBlank() && buildId.isNotBlank(),
+                modifier = Modifier.testTag("start_testing_confirm_button")
+            ) {
                 Text("بدء")
             }
         },
