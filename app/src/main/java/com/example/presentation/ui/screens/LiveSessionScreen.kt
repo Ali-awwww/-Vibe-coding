@@ -14,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -86,7 +85,7 @@ fun LiveSessionScreen(
                     session?.let {
                         if (agentTransportAvailable && it.status != TestSessionStatus.COMPLETED && it.status != TestSessionStatus.FAILED) {
                             TextButton(onClick = { viewModel.stopSession() }) {
-                                Text("إنهاء الجلسة", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.live_session_end_button), color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -172,23 +171,23 @@ fun SessionStatusHeader(session: TestSession) {
                         .clip(CircleShape)
                         .background(
                             when(session.status) {
-                                TestSessionStatus.APP_RUNNING -> Color.Green
-                                TestSessionStatus.CRASH_DETECTED -> Color.Red
-                                TestSessionStatus.COMPLETED -> Color.Blue
-                                else -> Color.Gray
+                                TestSessionStatus.APP_RUNNING -> MaterialTheme.colorScheme.primary
+                                TestSessionStatus.CRASH_DETECTED -> MaterialTheme.colorScheme.error
+                                TestSessionStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
+                                else -> MaterialTheme.colorScheme.outline
                             }
                         )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = when(session.status) {
-                        TestSessionStatus.PREPARING -> "جاري التجهيز..."
-                        TestSessionStatus.CONNECTED -> "متصل بالجهاز"
-                        TestSessionStatus.APP_RUNNING -> "التطبيق يعمل حاليًا"
-                        TestSessionStatus.CRASH_DETECTED -> "تم رصد انهيار (Crash)!"
-                        TestSessionStatus.WAITING_FOR_REPORT -> "في انتظار التقرير..."
-                        TestSessionStatus.COMPLETED -> "انتهى الاختبار"
-                        TestSessionStatus.FAILED -> "فشل الاختبار"
+                        TestSessionStatus.PREPARING -> stringResource(R.string.live_session_status_preparing)
+                        TestSessionStatus.CONNECTED -> stringResource(R.string.live_session_status_connected)
+                        TestSessionStatus.APP_RUNNING -> stringResource(R.string.live_session_status_app_running)
+                        TestSessionStatus.CRASH_DETECTED -> stringResource(R.string.live_session_status_crash_detected)
+                        TestSessionStatus.WAITING_FOR_REPORT -> stringResource(R.string.live_session_status_waiting_report)
+                        TestSessionStatus.COMPLETED -> stringResource(R.string.live_session_status_completed)
+                        TestSessionStatus.FAILED -> stringResource(R.string.live_session_status_failed)
                     },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
@@ -196,7 +195,7 @@ fun SessionStatusHeader(session: TestSession) {
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "الجهاز: ${session.deviceName} | OS: ${session.os}",
+                stringResource(R.string.live_session_device_os, session.deviceName, session.os),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -204,12 +203,12 @@ fun SessionStatusHeader(session: TestSession) {
 
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                "بدأ: ${dateFormat.format(Date(session.startTime))}",
+                stringResource(R.string.live_session_started_at, dateFormat.format(Date(session.startTime))),
                 style = MaterialTheme.typography.labelSmall
             )
             session.endTime?.let {
                 Text(
-                    "انتهى: ${dateFormat.format(Date(it))}",
+                    stringResource(R.string.live_session_ended_at, dateFormat.format(Date(it))),
                     style = MaterialTheme.typography.labelSmall
                 )
             }
@@ -256,7 +255,7 @@ fun EventItem(event: TestEvent) {
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    event.type.name,
+                    eventTypeLabel(event.type),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -275,6 +274,18 @@ fun EventItem(event: TestEvent) {
 }
 
 @Composable
+private fun eventTypeLabel(type: TestEventType): String = when (type) {
+    TestEventType.APP_START -> stringResource(R.string.live_session_event_app_start)
+    TestEventType.SCREEN_TRANSITION -> stringResource(R.string.live_session_event_screen_transition)
+    TestEventType.SDK_EVENT -> stringResource(R.string.live_session_event_sdk)
+    TestEventType.NON_FATAL_ERROR -> stringResource(R.string.live_session_event_non_fatal_error)
+    TestEventType.NETWORK_REQUEST -> stringResource(R.string.live_session_event_network_request)
+    TestEventType.APP_STATE_CHANGE -> stringResource(R.string.live_session_event_app_state_change)
+    TestEventType.ANR -> stringResource(R.string.live_session_event_anr)
+    TestEventType.CRASH -> stringResource(R.string.live_session_event_crash)
+}
+
+@Composable
 fun CrashDetectedAlert(onViewDetails: () -> Unit) {
     Card(
         modifier = Modifier
@@ -289,7 +300,7 @@ fun CrashDetectedAlert(onViewDetails: () -> Unit) {
                 Icon(Icons.Default.Dangerous, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "تم رصد انهيار مفاجئ!",
+                    stringResource(R.string.live_session_crash_title),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     fontWeight = FontWeight.Bold
@@ -297,7 +308,7 @@ fun CrashDetectedAlert(onViewDetails: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "توقف التطبيق عن العمل بسبب خطأ برمجية. تم جلب تقرير الانهيار وتحليله بواسطة محرك الذكاء الاصطناعي.",
+                stringResource(R.string.live_session_crash_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
@@ -308,7 +319,7 @@ fun CrashDetectedAlert(onViewDetails: () -> Unit) {
                     containerColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("مشاهدة تقرير الانهيار والحل المقترح")
+                Text(stringResource(R.string.live_session_view_crash))
             }
         }
     }
