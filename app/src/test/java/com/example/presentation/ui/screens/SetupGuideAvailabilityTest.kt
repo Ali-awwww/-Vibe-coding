@@ -1,10 +1,10 @@
 package com.example.presentation.ui.screens
 
 import android.content.Context
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
@@ -98,8 +98,7 @@ class SetupGuideAvailabilityTest {
             .assertIsDisplayed()
         composeRule.onNodeWithText(appContext().getString(R.string.setup_guide_automated_changes_unavailable_body))
             .assertIsDisplayed()
-        composeRule.onNodeWithText("تم إرسال التعديلات المقترحة إلى Local Agent")
-            .assertDoesNotExist()
+        assertTrue(composeRule.onAllNodesWithText("تم إرسال التعديلات المقترحة إلى Local Agent").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
@@ -111,7 +110,7 @@ class SetupGuideAvailabilityTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("اكتشاف تلقائي (Auto Detect)").assertDoesNotExist()
+        assertTrue(composeRule.onAllNodesWithText("اكتشاف تلقائي (Auto Detect)").fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithText(appContext().getString(R.string.setup_guide_auto_detect_unavailable))
             .assertIsDisplayed()
     }
