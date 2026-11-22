@@ -227,7 +227,12 @@ fun AppNavigation(
         composable<Screen.SetupGuide> { backStackEntry ->
             val route: Screen.SetupGuide = backStackEntry.toRoute()
             val setupViewModel: SetupGuideViewModel = viewModel {
-                SetupGuideViewModel(DependencyProvider.provideSdkIntegrationRepository(context))
+                SetupGuideViewModel(
+                    repository = DependencyProvider.provideSdkIntegrationRepository(context),
+                    progressStore = DependencyProvider.provideSetupGuideProgressStore(context),
+                    projectId = route.projectId,
+                    applicationId = route.applicationId
+                )
             }
             SetupGuideScreen(
                 projectId = route.projectId,

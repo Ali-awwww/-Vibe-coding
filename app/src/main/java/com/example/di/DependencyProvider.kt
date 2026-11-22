@@ -438,6 +438,9 @@ object DependencyProvider {
         return sdkIntegrationRepository ?: com.example.data.repository.SdkIntegrationRepositoryImpl(dao).also { sdkIntegrationRepository = it }
     }
 
+    fun provideSetupGuideProgressStore(context: Context): com.example.domain.repository.SetupGuideProgressStore =
+        com.example.data.local.SharedPreferencesSetupGuideProgressStore(context)
+
     fun provideGitHubRepository(context: Context): com.example.domain.repository.GitHubRepository {
         return githubRepository ?: com.example.data.repository.GitHubRepositoryImpl(
             getDatabase(context).crashDao(),
