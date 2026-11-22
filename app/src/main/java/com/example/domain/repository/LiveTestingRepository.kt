@@ -4,6 +4,13 @@ import com.example.domain.model.*
 import kotlinx.coroutines.flow.Flow
 
 interface LiveTestingRepository {
+    /**
+     * True only when an authenticated Android Agent transport is configured and usable.
+     * The safe default prevents persisted status flags from being treated as live connectivity.
+     */
+    val isAgentTransportAvailable: Boolean
+        get() = false
+
     fun getTestSessions(projectId: String): Flow<List<TestSession>>
     fun getTestSessionById(sessionId: String): Flow<TestSession?>
     suspend fun startTestSession(session: TestSession): Result<Unit>
