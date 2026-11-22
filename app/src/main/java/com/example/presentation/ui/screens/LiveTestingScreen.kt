@@ -104,12 +104,12 @@ fun LiveTestingScreen(
             } else if (applications.isEmpty()) {
                 EmptyState(
                     icon = Icons.Default.AppRegistration,
-                    title = "لا توجد تطبيقات",
-                    description = "أضف تطبيقًا إلى هذا المشروع لبدء الاختبار المباشر."
+                    title = stringResource(R.string.live_testing_no_apps_title),
+                    description = stringResource(R.string.live_testing_no_apps_description)
                 )
             } else {
                 Text(
-                    "التطبيقات المتاحة",
+                    stringResource(R.string.live_testing_available_apps),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
@@ -132,7 +132,7 @@ fun LiveTestingScreen(
                         item {
                             Spacer(modifier = Modifier.height(24.dp))
                             Text(
-                                "جلسات الاختبار السابقة",
+                                stringResource(R.string.live_testing_previous_sessions),
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
@@ -262,7 +262,7 @@ fun ApplicationCard(
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("SDK: ${application.sdkSetupStatus}")
+                Text(stringResource(R.string.live_testing_sdk_status, sdkSetupStatusLabel(application.sdkSetupStatus)))
             }
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
@@ -275,7 +275,7 @@ fun ApplicationCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (agentTransportAvailable) "Agent: ${application.agentConnectionStatus}"
+                    text = if (agentTransportAvailable) stringResource(R.string.live_testing_agent_status, agentConnectionStatusLabel(application.agentConnectionStatus))
                     else stringResource(R.string.live_testing_agent_unavailable_status),
                     modifier = Modifier.testTag("live_testing_agent_status")
                 )
@@ -287,7 +287,7 @@ fun ApplicationCard(
                 TextButton(onClick = { navController.navigate(Screen.SetupGuide(application.projectId, application.id)) }) {
                     Icon(Icons.Default.Build, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("إعداد SDK")
+                    Text(stringResource(R.string.live_testing_setup_sdk))
                 }
 
                 if (agentTransportAvailable && application.agentConnectionStatus == AgentConnectionStatus.OFFLINE) {
@@ -297,7 +297,7 @@ fun ApplicationCard(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("ربط العميل (Connect Agent)")
+                        Text(stringResource(R.string.live_testing_connect_agent))
                     }
                 }
                 
@@ -308,7 +308,7 @@ fun ApplicationCard(
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("بدء الاختبار")
+                    Text(stringResource(R.string.live_testing_start_testing))
                 }
             }
         }
@@ -355,7 +355,7 @@ fun SessionHistoryItem(
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                Text("Build: ${session.buildId} (${session.version})", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.live_testing_session_build, session.buildId, session.version), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 Text(dateFormat.format(Date(session.startTime)), style = MaterialTheme.typography.bodySmall)
             }
 
@@ -386,22 +386,22 @@ fun StartTestingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("بدء جلسة اختبار جديدة") },
+        title = { Text(stringResource(R.string.live_testing_start_session_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("التطبيق: ${application.name}")
+                Text(stringResource(R.string.live_testing_application_label, application.name))
                 
                 OutlinedTextField(
                     value = version,
                     onValueChange = { version = it },
-                    label = { Text("إصدار التطبيق") },
+                    label = { Text(stringResource(R.string.live_testing_version_label)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
                 OutlinedTextField(
                     value = buildId,
                     onValueChange = { buildId = it },
-                    label = { Text("رقم البناء (Build ID)") },
+                    label = { Text(stringResource(R.string.live_testing_build_id_label)) },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -424,15 +424,30 @@ fun StartTestingDialog(
                 enabled = agentTransportAvailable && version.isNotBlank() && buildId.isNotBlank(),
                 modifier = Modifier.testTag("start_testing_confirm_button")
             ) {
-                Text("بدء")
+                Text(stringResource(R.string.live_testing_start))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("إلغاء")
+                Text(stringResource(R.string.live_testing_cancel))
             }
         }
     )
+}
+
+@Composable
+private fun sdkSetupStatusLabel(status: SdkSetupStatus): String = when (status) {
+    SdkSetupStatus.NOT_CONFIGURED -> stringResource(R.string.live_testing_sdk_not_configured)
+    SdkSetupStatus.PENDING -> stringResource(R.string.live_testing_sdk_pending)
+    SdkSetupStatus.CONFIGURED -> stringResource(R.string.live_testing_sdk_configured)
+    SdkSetupStatus.ERROR -> stringResource(R.string.live_testing_sdk_error)
+}
+
+@Composable
+private fun agentConnectionStatusLabel(status: AgentConnectionStatus): String = when (status) {
+    AgentConnectionStatus.OFFLINE -> stringResource(R.string.live_testing_agent_offline)
+    AgentConnectionStatus.ONLINE -> stringResource(R.string.live_testing_agent_online)
+    AgentConnectionStatus.BUSY -> stringResource(R.string.live_testing_agent_busy)
 }
 
 @Composable
