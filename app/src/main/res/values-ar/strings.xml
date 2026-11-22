@@ -452,4 +452,12 @@
     <string name="live_session_crash_title">تم رصد انهيار</string>
     <string name="live_session_crash_body">أبلغ التطبيق المتصل عن انهيار. افتح تقرير الانهيار لمراجعة الأدلة المسجلة.</string>
     <string name="live_session_view_crash">عرض تقرير الانهيار</string>
+
+    <string name="setup_guide_auto_detect_unavailable">فحص ملفات المصدر تلقائيًا غير متاح لأن هذه الشاشة لا تملك صلاحية الوصول إلى ملفات المشروع. اختر التقنية يدويًا.</string>
+    <string name="setup_guide_firebase_unavailable_label">Firebase Crashlytics (غير متاح)</string>
+    <string name="setup_guide_firebase_unavailable_body">استقبال تقارير Crashlytics غير مدعوم في الخادم الحالي. اختر Sentry أو Bugsnag فقط إذا أعددت إرسال الأحداث الحقيقي لديهما؛ لن يُعلَن اكتمال أي إعداد هنا.</string>
+    <string name="setup_guide_automated_changes_unavailable_title">التعديلات التلقائية غير متاحة</string>
+    <string name="setup_guide_automated_changes_unavailable_body">لا يوجد Local Agent موثّق متصل. هذه التعليمات للمعاينة فقط؛ لم تُعدّل ملفات المشروع ولم تُرسل أي تغييرات.</string>
+    <string name="setup_guide_verification_unavailable">لم يتم إعداد مستقبل موثّق لأحداث التشخيص. لا يمكن اعتماد التكامل حتى يستقبل الخادم حدثًا حقيقيًا من هذا التطبيق.</string>
+    <string name="setup_guide_verification_unavailable_button">التحقق غير متاح</string>
 </resources>
