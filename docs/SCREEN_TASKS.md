@@ -2789,3 +2789,61 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Corrected those two imports. `ImeAction` and `KeyboardType` remain in `androidx.compose.ui.text.input`.
 - The Android CI, APK and Code Quality runs for the failed commit must be recorded separately from the corrected commit; no success is inferred from the import fix.
 - Exact next step: inspect the new main-head Android CI/APK/lint runs. Confirm the IME Done regression test and switch/key accessibility assertions actually execute and pass; then verify Debug/Release artifacts and lint.
+
+
+## 2026-11-23 — LiveTesting and LiveSession fail-closed behavior and bilingual UI
+
+### Confirmed defects
+- The application model could retain an old AgentConnectionStatus.ONLINE value even though this build has no authenticated Android Agent transport. The screen used that persisted value to enable the start action.
+- The LiveTesting dialog still exposed an enabled confirmation action, and the ViewModel could attempt to create a local session when invoked directly.
+- LiveSession could load locally stored events, show a live status header, offer stop/command controls, and wait indefinitely for events even though no authenticated stream existed. Historical local records could therefore be mistaken for verified live results.
+- The crash alert claimed that an AI engine had analyzed the report without evidence that such an analysis had occurred.
+- Both screens contained Arabic UI literals that did not follow the selected English locale.
+
+### Implementation
+- Added LiveTestingRepository.isAgentTransportAvailable with a fail-closed default; the production implementation explicitly reports false until a functioning authenticated transport is implemented.
+- Guarded ViewModel start/connect/stop/send operations and event observation. A stale persisted ONLINE status no longer bypasses the capability check.
+- The repository now rejects ending live sessions, writing live test events, or marking an Agent ONLINE/BUSY while no verified transport exists. Existing local records remain readable but are not represented as live evidence.
+- LiveTesting now shows a localized unavailable notice, does not expose Connect Agent without a transport, disables Start regardless of persisted status, and prevents dialog submission. Historical records use an explicit local/unverified label and neutral status icon.
+- LiveSession hides local event rows, session lifecycle indicators, stop controls and command input when transport is unavailable. Its header identifies the record as local/unverified instead of presenting it as a live session.
+- Localized the visible LiveTesting/LiveSession labels, SDK and Agent statuses, session lifecycle states, event types, crash alert and command descriptions in English and Arabic. Replaced the unsupported AI-analysis claim with a neutral statement that the connected app reported a crash.
+
+### Files changed
+- app/src/main/java/com/example/domain/repository/LiveTestingRepository.kt
+- app/src/main/java/com/example/data/repository/LiveTestingRepositoryImpl.kt
+- app/src/main/java/com/example/presentation/viewmodel/LiveTestingViewModel.kt
+- app/src/main/java/com/example/presentation/ui/screens/LiveTestingScreen.kt
+- app/src/main/java/com/example/presentation/ui/screens/LiveSessionScreen.kt
+- app/src/main/res/values/strings.xml
+- app/src/main/res/values-ar/strings.xml
+- app/src/test/java/com/example/IntegrationWorkflowTest.kt
+- app/src/test/java/com/example/presentation/ui/screens/LiveTestingAvailabilityTest.kt
+
+### Commits on main
+- b88fc7cb01b970db566cbf47162b0de35eb07f82 — declare Agent transport capability.
+- 6f6e540d26d8ada14869a65630e763ca54b755a4 — fail closed for unverified live-session writes.
+- 46c8a267317f6844916f17a50314924f816002b8 — guard LiveTesting ViewModel operations.
+- 373e948191e658c6d9719e36a496328aa8310018 — expose truthful LiveTesting availability.
+- 0d0c5c65783337411b930295e21d01dd4af93895 — hide unverified LiveSession state and controls.
+- 8d4411b670fade2ebf30e90711da3aa845d3e559 and c47ea9de33dd60c5bc8ed04865615be519092c0e — add English and Arabic unavailable-state resources.
+- 9c6acc06e206fe648fe0999d651b4964309dff5b — add repository/ViewModel fail-closed regression coverage.
+- a8dfa8fd80504dfed4e4af44c48ebeff8aef70e7 — add Compose availability-state regressions.
+- c1c244a154b4f6da3b4f0f817ab051ad46e36e3d — identify stored session headers as unverified.
+- 92fe773ec5fb61d939763d6f978b72285c989dfa and 6e7da8f2931498fc8dfd08954cc488f75fdee8a8 — localize LiveTesting and LiveSession controls/statuses.
+- e68d15e1f8c25898a32df03239b2dc43253106bc and 4ea13160f70d5b6c42bae345a52d2f3d0cebdc04 — add bilingual screen resources.
+- a647cab346636adeb86e8908c5c5ad68878dec41 — add English/Arabic rendering regression coverage.
+
+### Verification boundary
+- Source consistency check: all 56 resource IDs referenced by the two screens exist in both locale resource files; no duplicate resource names were found; no hard-coded Arabic UI literals remain in these two screen files. This is source inspection only, not Android resource compilation.
+- Added one IntegrationWorkflowTest regression covering stale ONLINE state, session creation, event exposure, stop-session mutation and repository write guards. Added five Compose tests covering persisted ONLINE state, disabled submission, unavailable messaging, local-record labeling and English/Arabic resource rendering.
+- Tests were added but not executed. The environment has Java and Kotlin compiler binaries, but no Gradle executable, Android SDK or ADB; no Gradle test/build or emulator/device check was run.
+- The latest code HEAD before this log entry is a647cab346636adeb86e8908c5c5ad68878dec41. Its combined commit-status response contained no status contexts, and the available workflow-run listing did not expose push-triggered runs. Therefore Android CI, APK packaging, lint and the new tests remain unverified; no pass is claimed.
+- The push workflows were inspected before writing: Android CI, Code Quality and APK build are push-triggered; the release workflow is tag-triggered. No release tag or external deployment was created.
+- No Supabase schema, Auth, policy, secret or production data was changed. No Agent transport was fabricated or enabled.
+
+### Persistent continuity
+- Last area worked: LiveTesting/LiveSession — transport capability, fail-closed session/event handling, truthful unavailable UI and bilingual copy.
+- AIModels IME import correction 328fdd0841e944f61f5bc841b9dce20d465346b0 remains unverified: no push-run result was exposed, so its tests/build must not be marked PASS.
+- Exact next step: inspect Android CI, APK and Code Quality terminal results for the latest code HEAD and confirm the new IntegrationWorkflowTest/Compose tests actually execute. Fix only failures supported by compiler/JUnit/lint evidence. If green, proceed to route #14 SetupGuide and implement evidence-backed per-step validation/persisted progress. Keep LiveTesting/LiveSession open until a real authenticated Agent transport, real event stream and emulator/device verification exist.
+- Screen status: LiveTesting and LiveSession remain IN_PROGRESS. Agent transport and device/event-stream acceptance are BLOCKED; the added source and regression coverage are awaiting execution.
+- Repository AGENTS.md / agents.md search: no matching instruction files were found in the inspected main tree.
