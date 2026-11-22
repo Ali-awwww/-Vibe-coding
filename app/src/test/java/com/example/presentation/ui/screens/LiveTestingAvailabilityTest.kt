@@ -3,6 +3,9 @@ package com.example.presentation.ui.screens
 import android.content.Context
 import android.content.res.Configuration
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -142,13 +145,19 @@ class LiveTestingAvailabilityTest {
         val englishContext = baseContext.createConfigurationContext(
             Configuration(baseContext.resources.configuration).apply { setLocale(Locale.ENGLISH) }
         )
+        val arabicContext = baseContext.createConfigurationContext(
+            Configuration(baseContext.resources.configuration).apply { setLocale(Locale("ar")) }
+        )
+        var showArabic by mutableStateOf(false)
+
         composeRule.setContent {
-            CrashIntelligenceTheme(darkTheme = true) {
-                CompositionLocalProvider(
-                    LocalContext provides englishContext,
-                    LocalConfiguration provides englishContext.resources.configuration,
-                    LocalLayoutDirection provides LayoutDirection.Ltr
-                ) {
+            val localeContext = if (showArabic) arabicContext else englishContext
+            CompositionLocalProvider(
+                LocalContext provides localeContext,
+                LocalConfiguration provides localeContext.resources.configuration,
+                LocalLayoutDirection provides if (showArabic) LayoutDirection.Rtl else LayoutDirection.Ltr
+            ) {
+                CrashIntelligenceTheme(darkTheme = true) {
                     AgentTransportUnavailableNotice()
                 }
             }
@@ -157,20 +166,7 @@ class LiveTestingAvailabilityTest {
         composeRule.onNodeWithText(englishContext.getString(R.string.live_testing_agent_unavailable_title))
             .assertIsDisplayed()
 
-        val arabicContext = baseContext.createConfigurationContext(
-            Configuration(baseContext.resources.configuration).apply { setLocale(Locale("ar")) }
-        )
-        composeRule.setContent {
-            CrashIntelligenceTheme(darkTheme = true) {
-                CompositionLocalProvider(
-                    LocalContext provides arabicContext,
-                    LocalConfiguration provides arabicContext.resources.configuration,
-                    LocalLayoutDirection provides LayoutDirection.Rtl
-                ) {
-                    AgentTransportUnavailableNotice()
-                }
-            }
-        }
+        composeRule.runOnIdle { showArabic = true }
         composeRule.waitForIdle()
         composeRule.onNodeWithText(arabicContext.getString(R.string.live_testing_agent_unavailable_title))
             .assertIsDisplayed()
