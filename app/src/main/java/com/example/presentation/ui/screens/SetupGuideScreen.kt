@@ -1,11 +1,13 @@
 package com.example.presentation.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -15,16 +17,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import com.example.R
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.R
 import com.example.domain.model.*
+import com.example.presentation.navigation.Screen
 import com.example.presentation.viewmodel.SetupGuideViewModel
 import com.example.presentation.viewmodel.SetupGuideUiState
 
@@ -37,41 +42,31 @@ fun SetupGuideScreen(
     viewModel: SetupGuideViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedService by remember { mutableStateOf(IntegrationType.SENTRY) }
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("دليل إعداد SDK") },
+                title = { Text(stringResource(R.string.setup_guide_title)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.setup_guide_back))
                     }
                 }
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
+        Box(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
             if (uiState.tech == null) {
-                TechnologySelection(
-                    onTechSelected = { viewModel.selectManualTech(it) }
-                )
+                TechnologySelection(onTechSelected = viewModel::selectManualTech)
             } else {
                 GuideContent(
                     uiState = uiState,
-                    selectedService = selectedService,
+                    selectedService = uiState.selectedService,
+                    onServiceSelected = { viewModel.generateGuide(it, projectId) },
                     isVerificationAvailable = viewModel.isVerificationTransportAvailable,
-                    onServiceSelected = { 
-                        selectedService = it
-                        viewModel.generateGuide(it, projectId)
-                    },
                     onVerify = { viewModel.verifyIntegration(applicationId) },
-                    onResetTech = { viewModel.selectManualTech(ProjectTechnology.UNKNOWN) }
+                    onResetTech = { viewModel.selectManualTech(ProjectTechnology.UNKNOWN) },
+                    onOpenIntegrations = { navController.navigate(Screen.Integrations(projectId)) },
+                    onOpenCrashes = { navController.navigate(Screen.Crashes(projectId = projectId, applicationId = applicationId)) }
                 )
             }
         }
@@ -79,36 +74,33 @@ fun SetupGuideScreen(
 }
 
 @Composable
-fun TechnologySelection(
-    onTechSelected: (ProjectTechnology) -> Unit
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
-        Icon(Icons.Default.Code, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+fun TechnologySelection(onTechSelected: (ProjectTechnology) -> Unit) {
+    val technologies = listOf(
+        ProjectTechnology.ANDROID_KOTLIN to R.string.setup_guide_tech_android_kotlin,
+        ProjectTechnology.ANDROID_JAVA to R.string.setup_guide_tech_android_java,
+        ProjectTechnology.IOS_SWIFT to R.string.setup_guide_tech_ios_swift,
+        ProjectTechnology.IOS_OBJC to R.string.setup_guide_tech_ios_objc,
+        ProjectTechnology.FLUTTER to R.string.setup_guide_tech_flutter,
+        ProjectTechnology.REACT_NATIVE to R.string.setup_guide_tech_react_native,
+        ProjectTechnology.UNITY to R.string.setup_guide_tech_unity
+    )
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
-        Text("اكتشاف تقنية المشروع", style = MaterialTheme.typography.headlineSmall)
-        Text("اختر التقنية يدويًا أو دعنا نكتشفها لك", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        
-        Spacer(Modifier.height(24.dp))
-        Text(
-            stringResource(R.string.setup_guide_auto_detect_unavailable),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error
-        )
+        Text(stringResource(R.string.setup_guide_technology_title), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.setup_guide_technology_body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
-        Text("أو اختر يدويًا:")
+        Text(stringResource(R.string.setup_guide_auto_detect_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(16.dp))
+        Text(stringResource(R.string.setup_guide_manual_choice), style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
-        
-        val technologies = listOf(
-            ProjectTechnology.ANDROID_KOTLIN to "Android (Kotlin)",
-            ProjectTechnology.ANDROID_JAVA to "Android (Java)",
-            ProjectTechnology.IOS_SWIFT to "iOS (Swift)",
-            ProjectTechnology.FLUTTER to "Flutter",
-            ProjectTechnology.REACT_NATIVE to "React Native"
-        )
-        
         technologies.forEach { (tech, label) ->
-            OutlinedButton(onClick = { onTechSelected(tech) }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Text(label)
+            OutlinedButton(onClick = { onTechSelected(tech) }, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                Text(stringResource(label))
             }
         }
     }
@@ -121,70 +113,82 @@ fun GuideContent(
     onServiceSelected: (IntegrationType) -> Unit,
     isVerificationAvailable: Boolean,
     onVerify: () -> Unit,
-    onResetTech: () -> Unit
+    onResetTech: () -> Unit,
+    onOpenIntegrations: () -> Unit = {},
+    onOpenCrashes: () -> Unit = {}
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("التقنية المكتشفة: ", style = MaterialTheme.typography.bodyMedium)
-            Text(uiState.tech?.name ?: "غير معروف", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onResetTech) { Text("تغيير") }
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Text("اختر خدمة المراقبة:", style = MaterialTheme.typography.titleMedium)
-        
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(IntegrationType.FIREBASE_CRASHLYTICS, IntegrationType.SENTRY, IntegrationType.BUGSNAG).forEach { service ->
-                FilterChip(
-                    selected = selectedService == service,
-                    enabled = service != IntegrationType.FIREBASE_CRASHLYTICS,
-                    onClick = { onServiceSelected(service) },
-                    modifier = if (service == IntegrationType.FIREBASE_CRASHLYTICS) Modifier.testTag("setup_guide_firebase_chip") else Modifier,
-                    label = {
-                        Text(
-                            if (service == IntegrationType.FIREBASE_CRASHLYTICS) {
-                                stringResource(R.string.setup_guide_firebase_unavailable_label)
-                            } else {
-                                service.name.split("_").last().lowercase().capitalize()
-                            }
-                        )
-                    }
-                )
+    val uriHandler = LocalUriHandler.current
+    val guide = uiState.guide
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 24.dp)
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.setup_guide_current_technology), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(technologyLabel(uiState.tech), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+                TextButton(onClick = onResetTech) { Text(stringResource(R.string.setup_guide_change_technology)) }
             }
         }
-        Text(
-            stringResource(R.string.setup_guide_firebase_unavailable_body),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-        if (uiState.guide == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (uiState.isScanning) {
-                    CircularProgressIndicator()
-                } else {
-                    Button(onClick = { onServiceSelected(selectedService) }) {
-                        Text("عرض خطوات التكامل")
-                    }
+        item {
+            Text(stringResource(R.string.setup_guide_progress_saved), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        item {
+            Text(stringResource(R.string.setup_guide_service_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = selectedService == IntegrationType.SENTRY,
+                    onClick = { onServiceSelected(IntegrationType.SENTRY) },
+                    label = { Text(stringResource(R.string.setup_guide_service_sentry)) }
+                )
+                FilterChip(
+                    selected = selectedService == IntegrationType.BUGSNAG,
+                    onClick = { onServiceSelected(IntegrationType.BUGSNAG) },
+                    label = { Text(stringResource(R.string.setup_guide_service_bugsnag)) }
+                )
+                FilterChip(
+                    selected = selectedService == IntegrationType.FIREBASE_CRASHLYTICS,
+                    enabled = false,
+                    onClick = {},
+                    modifier = Modifier.testTag("setup_guide_firebase_chip"),
+                    label = { Text(stringResource(R.string.setup_guide_firebase_unavailable_label)) }
+                )
+            }
+            Text(stringResource(R.string.setup_guide_firebase_unavailable_body), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (uiState.error != null || uiState.errorResId != null) {
+            item { Text(uiState.errorResId?.let { stringResource(it) } ?: uiState.error.orEmpty(), color = MaterialTheme.colorScheme.error) }
+        }
+        if (guide == null) {
+            item {
+                Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                    if (uiState.isScanning) CircularProgressIndicator()
+                    else Button(onClick = { onServiceSelected(selectedService) }) { Text(stringResource(R.string.setup_guide_show_steps)) }
                 }
             }
         } else {
-            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(uiState.guide.steps) { step ->
-                    StepCard(step)
-                }
-                
+            if (guide.prerequisites.isNotEmpty()) item { PrerequisitesSection(guide.prerequisites) }
+            guide.documentationUrl?.let { url ->
                 item {
-                    TroubleshootingSection(uiState.guide.troubleshooting)
+                    TextButton(onClick = { uriHandler.openUri(url) }) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.setup_guide_open_documentation))
+                    }
                 }
-
-                item {
-                    AutomatedChangesSection()
-                }
-
+            }
+            guide.unavailableReason?.let { reason ->
+                item { Text(guideText(reason), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+            }
+            itemsIndexed(guide.steps, key = { _, step -> step.id }) { index, step ->
+                StepCard(step, index + 1)
+            }
+            if (guide.steps.isNotEmpty()) {
+                if (guide.troubleshooting.isNotEmpty()) item { TroubleshootingSection(guide.troubleshooting) }
+                item { AutomatedChangesSection() }
                 item {
                     VerificationSection(
                         isVerifying = uiState.isVerifying,
@@ -195,87 +199,85 @@ fun GuideContent(
                         onVerify = onVerify
                     )
                 }
+                item { NavigationLinksSection(onOpenIntegrations, onOpenCrashes) }
             }
         }
     }
 }
 
 @Composable
-fun StepCard(step: IntegrationStep) {
-    val clipboardManager = LocalClipboardManager.current
-    
-    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
+fun StepCard(step: IntegrationStep, number: Int) {
+    val clipboard = LocalClipboardManager.current
+    val titleRes = stepTitleResource(step.id)
+    val descriptionRes = stepDescriptionResource(step.id)
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(step.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            
-            Text(step.description, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 8.dp))
-            
-            step.fileToModify?.let {
-                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
-                    Text(it, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(30.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Text(number.toString(), fontWeight = FontWeight.Bold) }
                 }
+                Spacer(Modifier.width(10.dp))
+                Text(if (titleRes != null) stringResource(titleRes) else step.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-
+            Text(if (descriptionRes != null) stringResource(descriptionRes) else step.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            step.fileToModify?.let { Text(stringResource(R.string.setup_guide_file_label, it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
             step.codeSnippet?.let { code ->
-                Spacer(Modifier.height(8.dp))
-                Box(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1E1E), RoundedCornerShape(8.dp)).padding(12.dp)) {
-                    Column {
-                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text("Code Snippet", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
-                            IconButton(onClick = { clipboardManager.setText(AnnotatedString(code)) }, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.ContentCopy, null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.setup_guide_configuration_label), style = MaterialTheme.typography.labelSmall)
+                            IconButton(onClick = { clipboard.setText(AnnotatedString(code)) }, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.setup_guide_copy_code))
                             }
                         }
-                        Text(code, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        Text(code, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     }
                 }
             }
+            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text(stringResource(R.string.setup_guide_step_validation_pending), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+            Text(stringResource(R.string.setup_guide_step_validation_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun PrerequisitesSection(prerequisites: List<String>) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f))) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.setup_guide_requirements_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            prerequisites.forEach { Row(verticalAlignment = Alignment.Top) {
+                Icon(Icons.Default.CheckCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(guideText(it), style = MaterialTheme.typography.bodySmall)
+            } }
         }
     }
 }
 
 @Composable
 fun TroubleshootingSection(issues: List<String>) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f))) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("حل المشكلات الشائعة", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            issues.forEach { issue ->
-                Row(modifier = Modifier.padding(top = 4.dp)) {
-                    Text("• ", fontWeight = FontWeight.Bold)
-                    Text(issue, style = MaterialTheme.typography.bodySmall)
-                }
-            }
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f))) {
+        Column(Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.setup_guide_troubleshooting_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            issues.forEach { issue -> Row(Modifier.padding(top = 4.dp)) {
+                Text("• ", fontWeight = FontWeight.Bold)
+                Text(guideText(issue), style = MaterialTheme.typography.bodySmall)
+            } }
         }
     }
 }
 
 @Composable
 fun AutomatedChangesSection() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AutoFixHigh, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Default.AutoFixHigh, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    stringResource(R.string.setup_guide_automated_changes_unavailable_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(stringResource(R.string.setup_guide_automated_changes_unavailable_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             }
-            Text(
-                stringResource(R.string.setup_guide_automated_changes_unavailable_body),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            Text(stringResource(R.string.setup_guide_automated_changes_unavailable_body), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }
@@ -290,48 +292,97 @@ fun VerificationSection(
     onVerify: () -> Unit
 ) {
     val verificationError = errorResId?.let { stringResource(it) } ?: error
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("اختبار الاتصال", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("لا يُعتمد الإعداد إلا بعد استلام حدث تشخيص حقيقي من التطبيق.", style = MaterialTheme.typography.bodySmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-
-            Spacer(Modifier.height(16.dp))
-
-            if (isVerifying) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            } else if (result == true) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text("تم استلام حدث التحقق بنجاح.", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                }
-            } else if (verificationError != null) {
-                Text(verificationError, color = MaterialTheme.colorScheme.error)
-            } else if (result == false) {
-                Text("لم يتم تأكيد وصول حدث التحقق.", color = MaterialTheme.colorScheme.error)
-            } else if (!isVerificationAvailable) {
-                Text(
-                    stringResource(R.string.setup_guide_verification_unavailable),
-                    color = MaterialTheme.colorScheme.error
-                )
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(stringResource(R.string.setup_guide_verification_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.setup_guide_verification_body), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(12.dp))
+            when {
+                isVerifying -> CircularProgressIndicator(Modifier.size(24.dp))
+                result == true -> Text(stringResource(R.string.setup_guide_verification_success), color = MaterialTheme.colorScheme.primary)
+                verificationError != null -> Text(verificationError, color = MaterialTheme.colorScheme.error)
+                result == false -> Text(stringResource(R.string.setup_guide_verification_failed), color = MaterialTheme.colorScheme.error)
+                !isVerificationAvailable -> Text(stringResource(R.string.setup_guide_verification_unavailable), color = MaterialTheme.colorScheme.error)
             }
-
             Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = onVerify,
-                enabled = !isVerifying && isVerificationAvailable,
-                modifier = Modifier.testTag("setup_guide_verify_button")
-            ) {
-                Text(
-                    if (!isVerificationAvailable) stringResource(R.string.setup_guide_verification_unavailable_button)
-                    else "بدء التحقق"
-                )
+            Button(onClick = onVerify, enabled = !isVerifying && isVerificationAvailable, modifier = Modifier.testTag("setup_guide_verify_button")) {
+                Text(if (isVerificationAvailable) stringResource(R.string.setup_guide_verification_start) else stringResource(R.string.setup_guide_verification_unavailable_button))
             }
         }
     }
 }
 
-private fun String.capitalize() = replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
+@Composable
+fun NavigationLinksSection(onOpenIntegrations: () -> Unit, onOpenCrashes: () -> Unit) {
+    Card {
+        Column(Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.setup_guide_navigation_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            OutlinedButton(onClick = onOpenIntegrations, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Extension, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.setup_guide_open_integrations))
+            }
+            OutlinedButton(onClick = onOpenCrashes, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.BugReport, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.setup_guide_open_crashes))
+            }
+        }
+    }
+}
+
+@Composable
+private fun guideText(key: String): String {
+    val res = when (key) {
+        "setup_guide_sentry_prerequisite_account" -> R.string.setup_guide_sentry_prerequisite_account
+        "setup_guide_sentry_prerequisite_platform" -> R.string.setup_guide_sentry_prerequisite_platform
+        "setup_guide_bugsnag_prerequisite_account" -> R.string.setup_guide_bugsnag_prerequisite_account
+        "setup_guide_bugsnag_prerequisite_platform" -> R.string.setup_guide_bugsnag_prerequisite_platform
+        "setup_guide_troubleshooting_sentry_dsn" -> R.string.setup_guide_troubleshooting_sentry_dsn
+        "setup_guide_troubleshooting_sentry_token" -> R.string.setup_guide_troubleshooting_sentry_token
+        "setup_guide_troubleshooting_bugsnag_key" -> R.string.setup_guide_troubleshooting_bugsnag_key
+        "setup_guide_troubleshooting_bugsnag_application" -> R.string.setup_guide_troubleshooting_bugsnag_application
+        "setup_guide_platform_unsupported" -> R.string.setup_guide_platform_unsupported
+        "setup_guide_firebase_unavailable_body" -> R.string.setup_guide_firebase_unavailable_body
+        else -> R.string.setup_guide_service_unavailable
+    }
+    return stringResource(res)
+}
+
+private fun stepTitleResource(id: String): Int? = when (id) {
+    "sentry_install" -> R.string.setup_guide_sentry_step_install_title
+    "sentry_credentials" -> R.string.setup_guide_sentry_step_protect_title
+    "sentry_verify" -> R.string.setup_guide_sentry_step_verify_title
+    "sentry_dashboard" -> R.string.setup_guide_sentry_step_dashboard_title
+    "bugsnag_dependency" -> R.string.setup_guide_bugsnag_step_dependency_title
+    "bugsnag_manifest" -> R.string.setup_guide_bugsnag_step_manifest_title
+    "bugsnag_initialize" -> R.string.setup_guide_bugsnag_step_initialize_title
+    "bugsnag_verify" -> R.string.setup_guide_bugsnag_step_verify_title
+    else -> null
+}
+
+private fun stepDescriptionResource(id: String): Int? = when (id) {
+    "sentry_install" -> R.string.setup_guide_sentry_step_install_description
+    "sentry_credentials" -> R.string.setup_guide_sentry_step_protect_description
+    "sentry_verify" -> R.string.setup_guide_sentry_step_verify_description
+    "sentry_dashboard" -> R.string.setup_guide_sentry_step_dashboard_description
+    "bugsnag_dependency" -> R.string.setup_guide_bugsnag_step_dependency_description
+    "bugsnag_manifest" -> R.string.setup_guide_bugsnag_step_manifest_description
+    "bugsnag_initialize" -> R.string.setup_guide_bugsnag_step_initialize_description
+    "bugsnag_verify" -> R.string.setup_guide_bugsnag_step_verify_description
+    else -> null
+}
+
+@Composable
+private fun technologyLabel(tech: ProjectTechnology?): String = stringResource(
+    when (tech) {
+        ProjectTechnology.ANDROID_KOTLIN -> R.string.setup_guide_tech_android_kotlin
+        ProjectTechnology.ANDROID_JAVA -> R.string.setup_guide_tech_android_java
+        ProjectTechnology.IOS_SWIFT -> R.string.setup_guide_tech_ios_swift
+        ProjectTechnology.IOS_OBJC -> R.string.setup_guide_tech_ios_objc
+        ProjectTechnology.FLUTTER -> R.string.setup_guide_tech_flutter
+        ProjectTechnology.REACT_NATIVE -> R.string.setup_guide_tech_react_native
+        ProjectTechnology.UNITY -> R.string.setup_guide_tech_unity
+        else -> R.string.setup_guide_unknown_technology
+    }
+)
