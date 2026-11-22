@@ -1,20 +1,31 @@
 package com.example
 
 import android.content.Context
+import androidx.lifecycle.ViewModelStore
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppDatabase
 import com.example.data.remote.BugsnagApi
 import com.example.data.remote.SentryApi
 import com.example.data.repository.CrashRepositoryImpl
+import com.example.data.repository.LiveTestingRepositoryImpl
 import com.example.data.repository.SymbolicationRepositoryImpl
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
+import com.example.presentation.viewmodel.LiveTestingViewModel
 import com.example.domain.repository.GitHubRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import com.example.R
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -124,6 +135,90 @@ class IntegrationWorkflowTest {
     @After
     fun tearDown() {
         db.close()
+    }
+
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun liveTestingFailsClosedWhenNoAuthenticatedAgentTransportExists() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val viewModelStore = ViewModelStore()
+        try {
+            val liveRepository = LiveTestingRepositoryImpl(db.crashDao())
+            val legacySession = TestSession(
+                id = "legacy-local-session",
+                projectId = "proj-live",
+                applicationId = "app-live",
+                buildId = "local-build",
+                version = "1.0.0",
+                deviceName = "Local record",
+                status = TestSessionStatus.APP_RUNNING
+            )
+            db.crashDao().insertTestSession(legacySession)
+            db.crashDao().insertTestEvent(
+                TestEvent(
+                    id = "legacy-local-event",
+                    sessionId = legacySession.id,
+                    type = TestEventType.APP_START,
+                    details = "Legacy local event"
+                )
+            )
+
+            val viewModel = LiveTestingViewModel(liveRepository, repository)
+            viewModelStore.put("live-testing", viewModel)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.isAgentTransportAvailable)
+            viewModel.observeEvents(legacySession.id)
+            assertTrue(viewModel.events.value.isEmpty())
+
+            viewModel.startSession(
+                Application(
+                    id = "app-live",
+                    projectId = "proj-live",
+                    name = "Live app",
+                    packageName = "com.example.live",
+                    agentConnectionStatus = AgentConnectionStatus.ONLINE
+                ),
+                version = "1.0.0",
+                buildId = "new-build"
+            )
+            advanceUntilIdle()
+
+            assertEquals(R.string.live_testing_agent_unavailable_body, viewModel.operationErrorResId.value)
+            assertEquals(1, db.crashDao().getTestSessions("proj-live").first().size)
+            assertEquals(
+                TestSessionStatus.APP_RUNNING,
+                db.crashDao().getTestSessionById(legacySession.id).first()?.status
+            )
+
+            viewModel.observeSession(legacySession.id)
+            advanceUntilIdle()
+            viewModel.stopSession()
+            advanceUntilIdle()
+            assertEquals(
+                TestSessionStatus.APP_RUNNING,
+                db.crashDao().getTestSessionById(legacySession.id).first()?.status
+            )
+
+            assertTrue(liveRepository.startTestSession(legacySession.copy(id = "blocked-new-session")).isFailure)
+            assertNull(db.crashDao().getTestSessionById("blocked-new-session").first())
+            assertTrue(liveRepository.endTestSession(legacySession.id, TestSessionStatus.COMPLETED).isFailure)
+            assertTrue(
+                liveRepository.addTestEvent(
+                    TestEvent(sessionId = legacySession.id, details = "Must not be stored")
+                ).isFailure
+            )
+            assertTrue(
+                runCatching {
+                    liveRepository.updateApplicationAgentStatus("app-live", AgentConnectionStatus.ONLINE)
+                }.isFailure
+            )
+            assertEquals(1, db.crashDao().getTestEvents(legacySession.id).first().size)
+        } finally {
+            viewModelStore.clear()
+            Dispatchers.resetMain()
+        }
     }
 
     @Test
