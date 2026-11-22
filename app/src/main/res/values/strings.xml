@@ -525,4 +525,43 @@
     <string name="setup_guide_troubleshooting_bugsnag_key">Check that the manifest contains the API key for the intended BugSnag project.</string>
     <string name="setup_guide_troubleshooting_bugsnag_application">Check that AndroidManifest.xml points to the Application subclass where Bugsnag.start is called.</string>
 
+
+    <string name="github_screen_title">GitHub integration</string>
+    <string name="github_back">Back</string>
+    <string name="github_connect_title">Connect a GitHub account</string>
+    <string name="github_connect_description">Use a fine-grained personal access token to list repositories and link one to an application in this project. The token permissions also allow branch, commit and pull-request operations when those actions are requested.</string>
+    <string name="github_token_label">Fine-grained personal access token</string>
+    <string name="github_token_placeholder">github_pat_…</string>
+    <string name="github_token_permissions">Required repository permissions: Metadata (read-only), Contents (read and write), and Pull requests (read and write). Select only the repositories used by this project and set an expiration date. Workflow permissions are not required.</string>
+    <string name="github_token_storage_notice">The token is encrypted with Android Keystore and stored locally on this device. Disconnect GitHub to remove the saved token.</string>
+    <string name="github_token_settings">Create a fine-grained token on GitHub</string>
+    <string name="github_token_submit">Verify token and connect</string>
+    <string name="github_token_show">Show token</string>
+    <string name="github_token_hide">Hide token</string>
+    <string name="github_token_required">Enter a personal access token.</string>
+    <string name="github_sign_in_required">Sign in to Vibe Coding before connecting GitHub.</string>
+    <string name="github_connected_as">Connected to GitHub as %1$s</string>
+    <string name="github_disconnect">Disconnect GitHub</string>
+    <string name="github_repositories_title">Available repositories</string>
+    <string name="github_repositories_empty">No repositories are available to this token. Check its repository selection and permissions.</string>
+    <string name="github_linked_repositories">Repositories linked to this project</string>
+    <string name="github_retry">Retry</string>
+    <string name="github_error_invalid_token">GitHub rejected this token. Check that it is active and has not expired.</string>
+    <string name="github_error_permission_denied">GitHub denied this request. Check the selected repositories and required permissions, or wait for a rate limit to reset.</string>
+    <string name="github_error_load_connection">The saved GitHub connection could not be loaded.</string>
+    <string name="github_error_connect">GitHub could not verify or save this token.</string>
+    <string name="github_error_disconnect">The GitHub token could not be removed from local storage. The connection is still shown as active.</string>
+    <string name="github_error_load_repositories">Repositories could not be loaded from GitHub.</string>
+    <string name="github_error_load_branches">Branches could not be loaded from GitHub.</string>
+    <string name="github_error_link_repository">The repository mapping could not be saved.</string>
+    <string name="github_error_load_mappings">Linked repositories could not be loaded from local storage.</string>
+    <string name="github_error_invalid_mapping">Enter a valid application ID, project and branch.</string>
+    <string name="github_link_repo_title">Link repository to an application</string>
+    <string name="github_link_repo_project">Project: %1$s</string>
+    <string name="github_link_repo_app_id">Application ID</string>
+    <string name="github_link_repo_branch">Branch</string>
+    <string name="github_link_repo_description">Enter an application ID that belongs to this project. The app checks the application-to-project relationship before saving the mapping.</string>
+    <string name="github_link_repo_confirm">Link repository</string>
+    <string name="github_link_repo_cancel">Cancel</string>
+
 </resources>

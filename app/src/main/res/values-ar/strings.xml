@@ -525,4 +525,43 @@
     <string name="setup_guide_troubleshooting_bugsnag_key">تحقق من أن Manifest يحتوي مفتاح API الخاص بمشروع BugSnag المقصود.</string>
     <string name="setup_guide_troubleshooting_bugsnag_application">تحقق من أن AndroidManifest.xml يشير إلى فئة Application التي تستدعي Bugsnag.start.</string>
 
+
+    <string name="github_screen_title">تكامل GitHub</string>
+    <string name="github_back">رجوع</string>
+    <string name="github_connect_title">ربط حساب GitHub</string>
+    <string name="github_connect_description">استخدم رمز وصول شخصياً دقيق الصلاحيات لعرض المستودعات وربط أحدها بتطبيق ضمن هذا المشروع. تسمح صلاحيات الرمز أيضاً بعمليات الفروع والالتزامات وطلبات الدمج عند طلبها.</string>
+    <string name="github_token_label">رمز وصول شخصي دقيق الصلاحيات</string>
+    <string name="github_token_placeholder">github_pat_…</string>
+    <string name="github_token_permissions">صلاحيات المستودع المطلوبة: Metadata للقراءة فقط، وContents للقراءة والكتابة، وPull requests للقراءة والكتابة. اختر المستودعات المستخدمة في هذا المشروع فقط، وحدد تاريخ انتهاء للرمز. لا نحتاج إلى صلاحيات Workflows.</string>
+    <string name="github_token_storage_notice">يُشفّر الرمز باستخدام Android Keystore ويُحفظ محلياً على هذا الجهاز. افصل GitHub لحذف الرمز المحفوظ.</string>
+    <string name="github_token_settings">إنشاء رمز دقيق الصلاحيات على GitHub</string>
+    <string name="github_token_submit">التحقق من الرمز والربط</string>
+    <string name="github_token_show">إظهار الرمز</string>
+    <string name="github_token_hide">إخفاء الرمز</string>
+    <string name="github_token_required">أدخل رمز وصول شخصياً.</string>
+    <string name="github_sign_in_required">سجّل الدخول إلى Vibe Coding قبل ربط GitHub.</string>
+    <string name="github_connected_as">متصل بـ GitHub باسم %1$s</string>
+    <string name="github_disconnect">قطع اتصال GitHub</string>
+    <string name="github_repositories_title">المستودعات المتاحة</string>
+    <string name="github_repositories_empty">لا توجد مستودعات متاحة لهذا الرمز. تحقق من اختيار المستودعات والصلاحيات.</string>
+    <string name="github_linked_repositories">المستودعات المرتبطة بهذا المشروع</string>
+    <string name="github_retry">إعادة المحاولة</string>
+    <string name="github_error_invalid_token">رفض GitHub هذا الرمز. تحقق من صلاحيته وتاريخ انتهائه.</string>
+    <string name="github_error_permission_denied">رفض GitHub هذا الطلب. تحقق من المستودعات المحددة والصلاحيات المطلوبة، أو انتظر انتهاء حد الطلبات.</string>
+    <string name="github_error_load_connection">تعذر تحميل اتصال GitHub المحفوظ.</string>
+    <string name="github_error_connect">تعذر على GitHub التحقق من الرمز أو حفظ الاتصال.</string>
+    <string name="github_error_disconnect">تعذر حذف رمز GitHub من التخزين المحلي. ما زال الاتصال معروضاً على أنه نشط.</string>
+    <string name="github_error_load_repositories">تعذر تحميل المستودعات من GitHub.</string>
+    <string name="github_error_load_branches">تعذر تحميل الفروع من GitHub.</string>
+    <string name="github_error_link_repository">تعذر حفظ ربط المستودع بالتطبيق.</string>
+    <string name="github_error_load_mappings">تعذر تحميل المستودعات المرتبطة من التخزين المحلي.</string>
+    <string name="github_error_invalid_mapping">أدخل معرف تطبيق ومشروع وفرعاً صالحاً.</string>
+    <string name="github_link_repo_title">ربط المستودع بتطبيق</string>
+    <string name="github_link_repo_project">المشروع: %1$s</string>
+    <string name="github_link_repo_app_id">معرف التطبيق</string>
+    <string name="github_link_repo_branch">الفرع</string>
+    <string name="github_link_repo_description">أدخل معرف تطبيق تابعاً لهذا المشروع. يتحقق التطبيق من علاقة التطبيق بالمشروع قبل حفظ الربط.</string>
+    <string name="github_link_repo_confirm">ربط المستودع</string>
+    <string name="github_link_repo_cancel">إلغاء</string>
+
 </resources>

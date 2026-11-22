@@ -2893,3 +2893,44 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The first CI failure also reported the new load-failed string as unresolved because the core and resource commits were separate. The resource was added in the subsequent UI/resource commit; the current source now contains it.
 - The final commit fe9e442 was pushed while its Android CI/APK/Code Quality runs were queued or in progress. Those results must be checked to terminal status after this correction; no success is inferred.
 - Exact next step: run CI/APK/Code Quality on the correction commit to terminal status, fix any further compiler/resource/JUnit issues with evidence, then verify the progress-store and locale tests execute. Keep SetupGuide open until device/RTL and authenticated event verification gates are addressed.
+
+
+## 2026-11-23 — GitHubConnect least-privilege token flow and mapping validation
+
+### Confirmed defects
+- The screen still exposed an OAuth option that submitted the literal `simulated_github_code`, while the repository had deliberately disabled client-side OAuth exchange. That button could never complete a real connection.
+- The PAT was rendered as ordinary visible text and the instructions requested broad classic `repo, workflow` scopes even though the API client does not call workflow endpoints.
+- The connected card claimed the integration was read-only although the repository client supports creating branches, committing file updates and creating pull requests.
+- GitHubViewModel discarded connection-load, repository-list, branch-list, disconnect and repository-mapping failures. A failed repository request could appear as an empty list; a failed disconnect cleared the UI state even though the encrypted token could remain stored.
+- Repository mappings were written without checking that the application existed or belonged to the selected project.
+
+### Implementation
+- Removed the nonfunctional simulated OAuth action from the user-facing screen. The current client flow is explicitly fine-grained PAT only; OAuth remains unavailable until a trusted backend exchange exists.
+- Replaced broad scope guidance with least-privilege fine-grained repository permissions: Metadata read-only, Contents read/write, Pull requests read/write; the UI explicitly says Workflow permission is not required and recommends limiting repository selection and token lifetime.
+- Masked the token by default, added an accessible show/hide control, password keyboard and Done submission, and linked to GitHub's fine-grained token creation page. The UI states that the token is encrypted with Android Keystore and saved locally.
+- Localized the GitHub connection screen and token guidance in English and Arabic. Corrected the connection status to avoid the false read-only claim, added empty/error/retry states, and displayed existing project mappings.
+- GitHubViewModel now maps HTTP 401/403 and operation failures to localized resource IDs without exposing raw provider exception text. Disconnect failure preserves the connection state; failed list and mapping operations remain visible.
+- GitHubRepositoryImpl validates all mapping fields and verifies that the selected application exists and belongs to the supplied project before writing the local Room mapping.
+
+### Files changed
+- `app/src/main/java/com/example/presentation/ui/screens/GitHubConnectScreen.kt`
+- `app/src/main/java/com/example/presentation/viewmodel/GitHubViewModel.kt`
+- `app/src/main/java/com/example/data/repository/GitHubRepositoryImpl.kt`
+- `app/src/main/res/values/strings.xml`
+- `app/src/main/res/values-ar/strings.xml`
+- `app/src/test/java/com/example/presentation/ui/screens/GitHubConnectScreenTest.kt`
+- `app/src/test/java/com/example/presentation/viewmodel/GitHubViewModelTest.kt`
+- `app/src/test/java/com/example/data/repository/GitHubRepositoryImplTest.kt`
+
+### Verification boundary
+- Previous HEAD `2298f024aa529938e31bcc446addb86ca78ce673` completed all push-triggered workflows:
+  - Android CI run [45077711771](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45077711771): unit tests and Debug APK succeeded; artifact `app-debug-apk` ID `14775688808`.
+  - APK run [45077711775](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45077711775): unit tests, Debug APK and signed Release APK succeeded; artifacts `CrashIntelligence-Debug-APK` ID `14775529360`, `CrashIntelligence-Release-APK-signed` ID `14776102591`, and `unit-test-reports` ID `14776276356`.
+  - Code Quality run [45077711813](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45077711813): `lintDebug` succeeded; artifact `lint-results` ID `14776137167`.
+- New Compose, ViewModel and repository regression tests are added in this commit; their execution is pending the new CI runs. No real GitHub token was used and no live GitHub account was linked.
+- No emulator/device screenshot, TalkBack session or rendered RTL/LTR verification is available in this execution environment. No OAuth backend exchange or remote/cloud repository-mapping persistence is implemented; those criteria remain open.
+
+### Persistent continuity
+- Last area worked: GitHubConnect — token-only connection UX, least-privilege permission guidance, truthful errors and project/application mapping validation.
+- Exact next step: inspect the new Android CI, APK and Code Quality runs for this commit to terminal status. Fix only failures supported by compiler/JUnit/lint evidence; confirm all new GitHubConnect tests execute. If green, continue route #16 DebugSymbols and retain the GitHubConnect device/live-token/cloud persistence gates as OPEN/BLOCKED rather than claiming screen completion.
+- Screen status: IN_PROGRESS — source and regression tests added; fresh CI execution and device/live-provider/cloud persistence gates remain open.

@@ -74,6 +74,17 @@ class GitHubRepositoryImpl(
     }
 
     override suspend fun linkRepositoryToApp(mapping: RepositoryMapping): Result<Unit> = runCatching {
+        require(mapping.applicationId.isNotBlank()) { "An application ID is required." }
+        require(mapping.projectId.isNotBlank()) { "A project ID is required." }
+        require(mapping.repoOwner.isNotBlank() && mapping.repoName.isNotBlank()) {
+            "A GitHub repository owner and name are required."
+        }
+        require(mapping.defaultBranch.isNotBlank()) { "A repository branch is required." }
+        val application = crashDao.getApplicationById(mapping.applicationId)
+            ?: throw IllegalArgumentException("The selected application does not exist.")
+        require(application.projectId == mapping.projectId) {
+            "The selected application does not belong to this project."
+        }
         crashDao.insertRepositoryMapping(mapping)
     }
 
