@@ -2977,3 +2977,9 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last area worked: DebugSymbols — real ProGuard/R8 mapping parsing and truthful pending/symbolication states.
 - Exact next step: run and inspect CI for this DebugSymbols commit; fix compiler, parser-test or Room-test failures from evidence. Then implement a real file picker and validate binary/file-size handling; verify build-ID matching only after crash records carry a trustworthy build identifier. Cloud artifact storage remains blocked by the read-only/no-production-migration constraint.
 - Screen status: IN_PROGRESS — Android text mappings can be validated and parsed locally; native/iOS/JS formats, file-picker upload, remote storage, build-ID matching and device RTL/LTR verification remain open.
+
+
+### GitHubConnect test compile correction — 2026-11-23
+- CI for `71c0c132513862222fae5c743d3ed27151e568f9` passed Code Quality but Android unit-test compilation failed in `GitHubConnectScreenTest.kt`: after adding optional `onForgetToken`, one trailing lambda was bound to the last parameter instead of `onConnectToken`.
+- Corrected the test call to use the named `onConnectToken` argument. No test was executed in the failed run.
+- The DebugSymbols implementation commit `aaaea92672557b845ad9d3f2f264eaf48a3ec015` is queued for CI; this test correction is applied before its test execution can be trusted.

@@ -62,7 +62,7 @@ class GitHubConnectScreenTest {
     fun tokenSubmitTrimsWhitespaceBeforeInvokingConnection() {
         var submittedToken: String? = null
         composeRule.setContent {
-            CrashIntelligenceTheme(darkTheme = true) { GitHubLoginCard(false, null) { submittedToken = it } }
+            CrashIntelligenceTheme(darkTheme = true) { GitHubLoginCard(isLoading = false, errorResId = null, onConnectToken = { submittedToken = it }) }
         }
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("github_token_field").performTextInput("  github_pat_test_token  ")
