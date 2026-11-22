@@ -7,11 +7,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.navigation.compose.rememberNavController
@@ -23,6 +23,7 @@ import com.example.domain.model.TestSession
 import com.example.domain.model.TestSessionStatus
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -64,7 +65,7 @@ class LiveTestingAvailabilityTest {
         composeRule.onNodeWithTag("live_testing_agent_status")
             .assertTextEquals(appContext().getString(R.string.live_testing_agent_unavailable_status))
         composeRule.onNodeWithTag("live_testing_start_button").assertIsNotEnabled()
-        composeRule.onNodeWithTag("live_testing_connect_agent_button").assertDoesNotExist()
+        assertTrue(composeRule.onAllNodesWithText(appContext().getString(R.string.live_testing_connect_agent_button)).fetchSemanticsNodes().isEmpty())
     }
 
     @Test
