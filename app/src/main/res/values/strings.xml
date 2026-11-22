@@ -502,7 +502,7 @@
     <string name="setup_guide_navigation_title">Continue in the project</string>
     <string name="setup_guide_sentry_prerequisite_account">Create a Sentry account and Android project before installing the SDK.</string>
     <string name="setup_guide_sentry_prerequisite_platform">The current Android guide requires Android 5.0 (API 21) or later. Use Sentry Android SDK 8.58.0 or later for the current configuration options.</string>
-    <string name="setup_guide_bugsnag_prerequisite_account">Create a BugSnag account and project, then copy that project's API key.</string>
+    <string name="setup_guide_bugsnag_prerequisite_account">Create a BugSnag account and project, then copy the API key for that project.</string>
     <string name="setup_guide_bugsnag_prerequisite_platform">BugSnag Android supports Android API 14 and later. Do not use a personal or organization management token as the project API key.</string>
     <string name="setup_guide_sentry_step_install_title">Install and configure Sentry</string>
     <string name="setup_guide_sentry_step_install_description">Run the official Sentry Android wizard from the project root. It updates the Gradle integration and Android manifest; review its changes before committing.</string>

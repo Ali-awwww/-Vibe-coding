@@ -2884,3 +2884,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: SetupGuide — accurate Android provider instructions, bilingual UI, copyable steps, project navigation, and resumable project/application selection.
 - Exact next step: inspect Android CI, APK, and Code Quality runs for this commit to terminal status and fix only failures supported by compiler/JUnit/lint evidence. If green, keep external validation/device gates BLOCKED and proceed to route #15 GitHubConnect rather than repeating SetupGuide source changes without a new capability.
+
+
+## 2026-11-23 — SetupGuide CI corrections
+
+- CI on commit 2d4303c failed Kotlin compilation because the progress-store methods passed nullable constructor properties inside lambdas. The ViewModel now snapshots nonblank project/application IDs into local non-null values before loading or saving.
+- CI on commit 9b8e0a1 failed Android resource merging because an unescaped apostrophe in the English BugSnag prerequisite string was interpreted by AAPT2 as an invalid escape. The sentence now avoids the apostrophe.
+- The first CI failure also reported the new load-failed string as unresolved because the core and resource commits were separate. The resource was added in the subsequent UI/resource commit; the current source now contains it.
+- The final commit fe9e442 was pushed while its Android CI/APK/Code Quality runs were queued or in progress. Those results must be checked to terminal status after this correction; no success is inferred.
+- Exact next step: run CI/APK/Code Quality on the correction commit to terminal status, fix any further compiler/resource/JUnit issues with evidence, then verify the progress-store and locale tests execute. Keep SetupGuide open until device/RTL and authenticated event verification gates are addressed.

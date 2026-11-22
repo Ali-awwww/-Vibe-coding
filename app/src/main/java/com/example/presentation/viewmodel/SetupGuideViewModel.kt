@@ -147,16 +147,15 @@ class SetupGuideViewModel(
         )
     }
 
-    private fun loadProgress() = if (
-        !projectId.isNullOrBlank() && !applicationId.isNullOrBlank()
-    ) {
-        runCatching { progressStore?.load(projectId, applicationId) }.getOrNull()
-    } else {
-        null
+    private fun loadProgress(): com.example.domain.repository.SetupGuideProgress? {
+        val savedProjectId = projectId?.takeIf { it.isNotBlank() } ?: return null
+        val savedApplicationId = applicationId?.takeIf { it.isNotBlank() } ?: return null
+        return runCatching { progressStore?.load(savedProjectId, savedApplicationId) }.getOrNull()
     }
 
     private fun persistSelection(tech: ProjectTechnology?, service: IntegrationType) {
-        if (projectId.isNullOrBlank() || applicationId.isNullOrBlank()) return
-        runCatching { progressStore?.save(projectId, applicationId, tech, service) }
+        val savedProjectId = projectId?.takeIf { it.isNotBlank() } ?: return
+        val savedApplicationId = applicationId?.takeIf { it.isNotBlank() } ?: return
+        runCatching { progressStore?.save(savedProjectId, savedApplicationId, tech, service) }
     }
 }
