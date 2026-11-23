@@ -3103,3 +3103,31 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Persistent continuity**
 - DevDebugCenter now fails closed instead of manufacturing monitoring, sessions, or runtime evidence.
 - Exact next step: implement the authenticated Android Agent/SDK handshake and isolated process runner, then persist a real session only after handshake success and run a real build/test command against the same workspace revision. Until then, keep SDK/session status unavailable and verification `INCONCLUSIVE`; continue other independent screens rather than waiting on this integration.
+
+
+### Dashboard and local-cache ownership isolation — 2026-11-24
+
+**Confirmed defect**
+- When Firestore was unavailable, local Room fallbacks for crash and issue lists/details and notification lists/counts returned records across all cached accounts. Project-scoped issue/application/crash reads also trusted a caller-supplied project ID without consistently confirming membership.
+- Local notification mutations (`mark all read` and `clear`) operated on the entire notifications table, so one signed-in account could mutate another account's cached notifications.
+
+**Implementation**
+- Added `currentUserProjectIds()`, derived through the existing project identity guard and authenticated project membership query.
+- Scoped local and cloud crash/issue/application reads to projects visible to the active account; direct project-scoped reads return empty/null for unowned projects.
+- Notification reads and unread counts now filter by the active account's project IDs. Project-specific notification reads and writes verify membership.
+- Notification mark/read-all/clear operations now use project-scoped Room queries and filter Firestore batch operations to the same project set. No schema migration was required; only DAO queries were added.
+- Dashboard consumers continue using the repository API, which now enforces the boundary before emitting data rather than relying only on presentation-layer filtering.
+
+**Regression coverage added**
+- A two-account local-cache test seeds separate projects, crashes, issues, and notifications, then verifies that one account cannot read the other's rows, mark its notifications read, clear them, or create a notification for its project.
+
+**Verification boundary**
+- Code HEAD before this register update: `9692f03d0b5038fe18e69aa3e3c6ebe130b131a2`.
+- Source-level consistency checks passed for the project-scope helper, local crash/issue/notification filters, scoped Room mutation queries, and regression-test presence.
+- The Robolectric/Room regression test was added but **not executed**. Gradle, Android SDK/`ANDROID_HOME`, and ADB remain unavailable in the execution container.
+- The latest commit has no combined status contexts; the connected workflow-run query returned no runs. No CI result is claimed.
+- No Supabase production data, schema, RLS, Auth, or Storage configuration was changed. No screen is marked complete by this batch.
+
+**Persistent continuity**
+- Dashboard's main local-cache exposure path is now scoped at the repository boundary. Continue auditing remaining project-owned reads/mutations in `CrashRepositoryImpl` and related repositories, then run the two-account regression and broader suite in CI.
+- Do not treat repository filtering as proof of RLS correctness; production RLS remains read-only and requires independent evidence. Continue other screen tasks while build/device validation is unavailable.
