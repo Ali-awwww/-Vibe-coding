@@ -10,6 +10,7 @@ import com.example.data.repository.VibeStudioRepositoryImpl
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
 import com.example.util.UnifiedDevDebugEngine
+import com.example.util.VibeQualityTestingEngine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -263,20 +264,22 @@ class UnifiedClosedLoopTest {
             stackTrace = stackTrace
         ).getOrThrow()
 
-        val (_, fix) = repository.diagnoseCrashAndGenerateFix(crash.id).getOrThrow()
+        val (_, proposedFix) = repository.diagnoseCrashAndGenerateFix(crash.id).getOrThrow()
+        val appliedFix = proposedFix.copy(status = FixStatus.APPLIED)
 
-        // Test passing verification outcome
+        // A complete, real test run is required for a successful verification.
         val successResult = TestExecutionResult(
             totalTests = 5,
             passed = 5,
             failed = 0,
             durationMs = 120,
-            isSuccess = true
+            isSuccess = true,
+            executionVerified = true
         )
 
         val outcomePass = UnifiedDevDebugEngine.evaluateVerificationOutcome(
             crashReport = crash,
-            fixSuggestion = fix,
+            fixSuggestion = appliedFix,
             previousBuildId = "build-1",
             newBuildId = "build-2",
             testResult = successResult
@@ -291,12 +294,13 @@ class UnifiedClosedLoopTest {
             passed = 3,
             failed = 2,
             durationMs = 120,
-            isSuccess = false
+            isSuccess = false,
+            executionVerified = true
         )
 
         val outcomeFail = UnifiedDevDebugEngine.evaluateVerificationOutcome(
             crashReport = crash,
-            fixSuggestion = fix,
+            fixSuggestion = appliedFix,
             previousBuildId = "build-1",
             newBuildId = "build-3",
             testResult = failResult
@@ -304,6 +308,116 @@ class UnifiedClosedLoopTest {
 
         assertFalse(outcomeFail.isFixed)
         assertEquals(VerificationStatus.TEST_FAILED, outcomeFail.status)
+
+        val staticAuditOnly = UnifiedDevDebugEngine.evaluateVerificationOutcome(
+            crashReport = crash,
+            fixSuggestion = appliedFix,
+            previousBuildId = "build-1",
+            newBuildId = "static-audit-only",
+            testResult = TestExecutionResult(
+                totalTests = 5,
+                passed = 5,
+                failed = 0,
+                isSuccess = true,
+                executionVerified = false
+            )
+        )
+        assertFalse(staticAuditOnly.isFixed)
+        assertEquals(VerificationStatus.INCONCLUSIVE, staticAuditOnly.status)
+        assertFalse(staticAuditOnly.verificationRecord.environmentValid)
+
+        val emptyExecutedRun = UnifiedDevDebugEngine.evaluateVerificationOutcome(
+            crashReport = crash,
+            fixSuggestion = appliedFix,
+            previousBuildId = "build-1",
+            newBuildId = "empty-run",
+            testResult = TestExecutionResult(
+                totalTests = 0,
+                passed = 0,
+                failed = 0,
+                isSuccess = true,
+                executionVerified = true
+            )
+        )
+        assertFalse(emptyExecutedRun.isFixed)
+        assertEquals(VerificationStatus.INCONCLUSIVE, emptyExecutedRun.status)
+    }
+
+    @Test
+    fun testRetestRejectsUnappliedFixBeforeAnyVerificationMutation() = runTest {
+        val crash = repository.ingestSimulatedOrRuntimeCrash(
+            workspaceId = testWorkspaceId,
+            testSessionId = null,
+            exceptionType = "IllegalStateException",
+            message = "unapplied fix",
+            stackTrace = "at com.example.MainActivity.onCreate(MainActivity.kt:1)"
+        ).getOrThrow()
+        val (_, fix) = repository.diagnoseCrashAndGenerateFix(crash.id).getOrThrow()
+
+        val result = repository.retestAndVerifyClosedLoop(crash.id, fix.id)
+
+        assertTrue(result.isFailure)
+        assertTrue(crashDao.getVerificationsByProject(testWorkspaceId).first().isEmpty())
+    }
+
+    @Test
+    fun testRetestRejectsFixBelongingToAnotherCrash() = runTest {
+        repository.initGitRepository(testWorkspaceId)
+        val firstCrash = repository.ingestSimulatedOrRuntimeCrash(
+            workspaceId = testWorkspaceId,
+            testSessionId = null,
+            exceptionType = "IllegalArgumentException",
+            message = "first crash",
+            stackTrace = "at com.example.MainActivity.onCreate(MainActivity.kt:1)"
+        ).getOrThrow()
+        val secondCrash = repository.ingestSimulatedOrRuntimeCrash(
+            workspaceId = testWorkspaceId,
+            testSessionId = null,
+            exceptionType = "IllegalStateException",
+            message = "second crash",
+            stackTrace = "at com.example.MainActivity.onCreate(MainActivity.kt:2)"
+        ).getOrThrow()
+        val (_, firstFix) = repository.diagnoseCrashAndGenerateFix(firstCrash.id).getOrThrow()
+        repository.applyClosedLoopFix(firstFix.id).getOrThrow()
+
+        val result = repository.retestAndVerifyClosedLoop(secondCrash.id, firstFix.id)
+
+        assertTrue(result.isFailure)
+        assertTrue(crashDao.getVerificationsByProject(testWorkspaceId).first().isEmpty())
+    }
+
+    @Test
+    fun testStaticAuditDoesNotMarkDiscoveredUnitTestFileAsExecuted() = runTest {
+        val workspace = vibeStudioDao.getWorkspaceById(testWorkspaceId)!!
+        val testFile = WorkspaceFile(
+            id = "sample-unit-test",
+            workspaceId = testWorkspaceId,
+            name = "SampleFeatureTest.kt",
+            path = "src/test/java/SampleFeatureTest.kt",
+            content = "class SampleFeatureTest { fun testFeature() { assert(true) } }",
+            extension = "kt",
+            isFolder = false
+        )
+
+        val report = VibeQualityTestingEngine.executeIntelligentAudit(workspace, listOf(testFile))
+        val unitTestCheck = report.testResults.first { it.type == TestType.UNIT_TEST }
+
+        assertEquals(TestStatus.SKIPPED, unitTestCheck.status)
+        assertTrue(unitTestCheck.name.contains("لم يتم تشغيل"))
+    }
+
+    @Test
+    fun testWorkspaceBuildAndTestsDoNotClaimRuntimeExecution() = runTest {
+        val buildLogs = repository.runWorkspaceBuild(testWorkspaceId).getOrThrow()
+        assertTrue(buildLogs.none { it.type == LogType.SUCCESS })
+        assertTrue(buildLogs.any { it.message.contains("فحص ساكن") })
+
+        val testResult = repository.runWorkspaceTests(testWorkspaceId).getOrThrow()
+        assertFalse(testResult.executionVerified)
+        assertFalse(testResult.isSuccess)
+        assertEquals(0, testResult.totalTests)
+        assertTrue(testResult.staticChecksTotal > 0)
+        assertTrue(testResult.outputLogs.any { it.contains("لم يتم تشغيل") })
     }
 
     @Test
@@ -339,11 +453,13 @@ class UnifiedClosedLoopTest {
         // Step 6: Retest and Verify
         val outcome = repository.retestAndVerifyClosedLoop(crash.id, fix.id).getOrThrow()
         assertNotNull(outcome)
-        assertTrue(outcome.isFixed)
+        assertFalse(outcome.isFixed)
+        assertEquals(VerificationStatus.INCONCLUSIVE, outcome.status)
+        assertFalse(outcome.verificationRecord.environmentValid)
 
-        // Step 7: Check DevDebugCenterState reflects closed-loop verified incident
+        // Step 7: The applied fix is visible, but the incident remains unverified.
         val state = repository.getDevDebugState(testWorkspaceId).getOrThrow()
         assertEquals(1, state.incidents.size)
-        assertEquals(IncidentStatus.VERIFIED, state.incidents.first().status)
+        assertEquals(IncidentStatus.FIX_APPLIED, state.incidents.first().status)
     }
 }
