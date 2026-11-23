@@ -201,7 +201,6 @@ fun DevDebugCenterScreen(
                         MonitoringAndSessionCard(
                             state = state,
                             onViewSdkSnippet = { showSdkDialog = true },
-                            onStartTestSession = { viewModel.startTestRun() },
                             onReportCrash = { showSimulateCrashDialog = true }
                         )
                     }
@@ -289,7 +288,7 @@ fun DevDebugCenterScreen(
         SimulateCrashDialog(
             onDismiss = { showSimulateCrashDialog = false },
             onConfirm = { excType, msg, stack ->
-                viewModel.simulateOrReportCrash(excType, msg, stack)
+                viewModel.simulateCrash(excType, msg, stack)
                 showSimulateCrashDialog = false
             }
         )
@@ -300,7 +299,6 @@ fun DevDebugCenterScreen(
 fun MonitoringAndSessionCard(
     state: DevDebugCenterState,
     onViewSdkSnippet: () -> Unit,
-    onStartTestSession: () -> Unit,
     onReportCrash: () -> Unit
 ) {
     val ws = state.selectedWorkspace
@@ -345,15 +343,15 @@ fun MonitoringAndSessionCard(
             // IDs and Setup Summary
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "معرف المشروع (Project ID)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = "معرف مساحة العمل (Workspace ID)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(text = ws?.id?.take(12) ?: "---", style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = "حالة ربط SDK", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
-                        text = if (profile?.isSdkConfigured == true) "مربوط ومفعل ✓" else "غير مهيأ",
+                        text = if (profile?.isSdkConfigured == true) "مربوط ومتحقق منه" else "المقتطف جاهز؛ SDK غير مثبت",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (profile?.isSdkConfigured == true) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                        color = if (profile?.isSdkConfigured == true) Color(0xFF2E7D32) else MaterialTheme.colorScheme.tertiary,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -374,12 +372,12 @@ fun MonitoringAndSessionCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "جلسة الاختبار الحية (Live Test Session)",
+                            text = "جلسة اختبار فعلية (Android Agent)",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         runContext?.let {
                             StatusChip(status = it.status.name)
-                        } ?: Text(text = "لا توجد جلسة نشطة", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } ?: Text(text = "غير متاحة: لا يوجد Agent متصل", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
                     if (runContext != null) {
@@ -409,12 +407,13 @@ fun MonitoringAndSessionCard(
                 }
 
                 Button(
-                    onClick = onStartTestSession,
+                    onClick = {},
+                    enabled = false,
                     modifier = Modifier.weight(1.2f).testTag("btn_start_test_session")
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = stringResource(R.string.start_test_session), fontSize = 12.sp)
+                    Text(text = "غير متاح حالياً", fontSize = 11.sp)
                 }
 
                 FilledTonalButton(
@@ -423,9 +422,14 @@ fun MonitoringAndSessionCard(
                 ) {
                     Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "تسجيل عطل", fontSize = 12.sp)
+                    Text(text = "محاكاة عطل محلي", fontSize = 11.sp)
                 }
             }
+            Text(
+                text = "لن تُنشأ جلسة اختبار وهمية. يلزم Android Agent فعلي ومشغّل عمليات معزول لبدء الاختبار.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary
+            )
         }
     }
 }
@@ -484,7 +488,7 @@ fun IncidentsResolutionCard(
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                         )
                         Text(
-                            text = "ابدأ جلسة اختبار أو استقبل تقارير telemetry للبدء بالتحليل التلقائي.",
+                            text = "استقبل تقارير telemetry من SDK مثبت فعلياً أو أنشئ سجل محاكاة محلياً للتحليل الأولي.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -668,7 +672,7 @@ fun ActiveIncidentDetails(
                         Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "تحليل الذكاء الاصطناعي للسبب الجذري",
+                            text = "تحليل محلي أولي للسبب المحتمل",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                         )
                     }
@@ -751,7 +755,7 @@ fun ActiveIncidentDetails(
                 ) {
                     Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("تشخيص العطل وتوليد الإصلاح بالعقل البرمجي")
+                    Text("تحليل محلي أولي وتوليد مقترح إصلاح")
                 }
             }
             IncidentStatus.DIAGNOSED, IncidentStatus.FIX_PROPOSED -> {
@@ -956,11 +960,16 @@ fun SimulateCrashDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.BugReport, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("تسجيل / محاكاة عطل تشغيلي")
+                Text("محاكاة عطل محلي")
             }
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "هذا سجل تجريبي محلي فقط؛ لا يمثل عطلاً من جهاز حقيقي ولا يرسل بيانات إلى خدمة خارجية.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
                 OutlinedTextField(
                     value = exceptionType,
                     onValueChange = { exceptionType = it },
@@ -987,10 +996,10 @@ fun SimulateCrashDialog(
         confirmButton = {
             Button(
                 onClick = { onConfirm(exceptionType, message, stackTrace) },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier.testTag("btn_confirm_simulate_crash")
             ) {
-                Text("تسجيل العطل في الدورة")
+                Text("إنشاء سجل محاكاة محلي")
             }
         },
         dismissButton = {
