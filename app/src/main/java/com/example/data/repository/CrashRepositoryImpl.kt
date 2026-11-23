@@ -69,6 +69,17 @@ class CrashRepositoryImpl(
         }
         return uid
     }
+    private suspend fun currentUserProjectIds(): Set<String> =
+        getProjectsForUser(requireProjectUserId()).first().map { it.id }.toSet()
+
+    private suspend fun requireOwnedProject(projectId: String, requestedUserId: String? = null): Project {
+        val uid = requireProjectUserId(requestedUserId)
+        val project = getProjectById(projectId)
+            ?: throw SecurityException("The selected project is not available to the active account.")
+        if (project.ownerId != uid) throw SecurityException("Project operations are restricted to the project owner.")
+        return project
+    }
+
     override fun getProjects(): Flow<List<Project>> = flow {
         val currentUserId = authRepository?.getCurrentUserSync()?.id
             ?.takeIf { it.isNotBlank() }
@@ -392,8 +403,13 @@ class CrashRepositoryImpl(
         }
     }
     override suspend fun addCrash(crash: CrashReport) {
-        // 1. Deduplication: Check if an identical crash was logged within deduplication window (5000ms)
-        val recentCrashes = crashDao.getAllCrashes().first()
+        val uid = requireProjectUserId(crash.userId.takeIf { it.isNotBlank() })
+        val project = requireOwnedProject(crash.projectId, uid)
+        if (crash.applicationId.isNotBlank() &&
+            getApplications(crash.projectId).first().none { it.id == crash.applicationId }
+        ) throw SecurityException("The selected application is not available in this project.")
+        // Deduplicate only against records visible to the active account.
+        val recentCrashes = getLatestCrashes(crash.projectId, crash.applicationId.ifBlank { null }).first()
         val isDuplicate = recentCrashes.any { existing ->
             existing.projectId == crash.projectId &&
             existing.exceptionType == crash.exceptionType &&
@@ -402,9 +418,7 @@ class CrashRepositoryImpl(
         }
         if (isDuplicate) return
 
-        val uid = requireUserId()
-        val project = if (crash.projectId.isNotBlank()) getProjectById(crash.projectId) else null
-        val shouldScrub = project?.piiScrubbingEnabled ?: true
+        val shouldScrub = project.piiScrubbingEnabled
 
         val scrubbedMsg = if (shouldScrub) SecurityUtils.PiiScrubber.scrub(crash.message) else crash.message
         val scrubbedStack = if (shouldScrub) SecurityUtils.PiiScrubber.scrub(crash.stackTrace) else crash.stackTrace
@@ -533,11 +547,11 @@ class CrashRepositoryImpl(
             )
         }
     }
-
     override suspend fun updateCrashStatus(crashId: String, isResolved: Boolean) {
-        val uid = requireUserId()
+        val uid = requireProjectUserId()
         val crashes = getAllCrashes().first()
         val crash = crashes.find { it.id == crashId } ?: return
+        requireOwnedProject(crash.projectId, uid)
         
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(crash.projectId)
             ?.collection("crashes")?.document(crashId)?.let { ref ->
@@ -556,31 +570,36 @@ class CrashRepositoryImpl(
 
     // Advanced AI Diagnosis combining Crash Report, Symbolication, and Source Code
     override suspend fun getAIDiagnosis(crashReport: CrashReport): AIDiagnosis {
-        val uid = requireUserId()
+        val uid = requireProjectUserId()
+        val authorizedCrash = getCrashDetails(crashReport.id).first()
+            ?: throw SecurityException("The crash is not available to the active account.")
+        requireOwnedProject(authorizedCrash.projectId, uid)
+
+
         val fs = firestore
         val existing = if (fs != null) {
-            fs.collection("users").document(uid).collection("projects").document(crashReport.projectId)
-                .collection("diagnoses").document(crashReport.id).get().await().toObject<AIDiagnosis>()
+            fs.collection("users").document(uid).collection("projects").document(authorizedCrash.projectId)
+                .collection("diagnoses").document(authorizedCrash.id).get().await().toObject<AIDiagnosis>()
         } else {
-            crashDao.getAIDiagnosis(crashReport.id).first()
+            crashDao.getAIDiagnosis(authorizedCrash.id).first()
         }
         
         if (existing != null && existing.summary != "Analysis Failed" && existing.summary != "Analysis incomplete.") return existing
 
         // 1. Symbolicate
-        val symbolication = symbolicationRepository.symbolicate(crashReport).getOrNull()
+        val symbolication = symbolicationRepository.symbolicate(authorizedCrash).getOrNull()
         val stackTraceToUse = if (symbolication != null && symbolication.frames.isNotEmpty()) {
             symbolication.frames.joinToString("\n") { frame ->
                 "${frame.methodName ?: "unknown"}(${frame.fileName ?: "unknown"}:${frame.lineNumber ?: 0})"
             }
         } else {
-            crashReport.stackTrace
+            authorizedCrash.stackTrace
         }
         
         // 2. Fetch Source Code Context if available
         var sourceContext = ""
         try {
-            val mapping = githubRepository.getMappingForApp(crashReport.applicationId)
+            val mapping = githubRepository.getMappingForApp(authorizedCrash.applicationId)
             if (mapping != null) {
                 val fileName = stackTraceToUse.lines().firstOrNull { it.contains(".kt") || it.contains(".java") }
                     ?.substringAfterLast(".")?.substringBefore("(") ?: ""
@@ -605,11 +624,11 @@ class CrashRepositoryImpl(
             You are a Senior Android Engineer and Crash Expert. Analyze this crash report and provide a detailed diagnosis.
             
             CRASH DETAILS:
-            Type: ${crashReport.exceptionType}
-            Message: ${crashReport.message}
-            Severity: ${crashReport.severity}
-            Device: ${crashReport.deviceModel} (Android ${crashReport.osVersion})
-            App Version: ${crashReport.appVersion}
+            Type: ${authorizedCrash.exceptionType}
+            Message: ${authorizedCrash.message}
+            Severity: ${authorizedCrash.severity}
+            Device: ${authorizedCrash.deviceModel} (Android ${authorizedCrash.osVersion})
+            App Version: ${authorizedCrash.appVersion}
             
             STACK TRACE:
             $stackTraceToUse
@@ -645,7 +664,7 @@ class CrashRepositoryImpl(
             modelId = defaultModel.id,
             prompt = prompt,
             systemInstruction = "You are an AI Crash Diagnostic Assistant. Provide accurate, production-grade root cause analysis.",
-            taskId = crashReport.id,
+            taskId = authorizedCrash.id,
             taskType = AITaskType.ROOT_CAUSE_DIAGNOSIS
         ).getOrThrow()
 
@@ -653,7 +672,7 @@ class CrashRepositoryImpl(
         val parsed = moshi.adapter(AIDiagnosisResponse::class.java).fromJson(json) ?: throw Exception("Failed to parse diagnosis response")
 
         val diagnosis = AIDiagnosis(
-            crashId = crashReport.id,
+            crashId = authorizedCrash.id,
             summary = parsed.summary,
             rootCause = parsed.rootCause,
             certainty = try { DiagnosisCertainty.valueOf(parsed.certainty) } catch (e: Exception) { DiagnosisCertainty.UNKNOWN },
@@ -669,8 +688,8 @@ class CrashRepositoryImpl(
         )
 
         // 5. Save
-        fs?.collection("users")?.document(uid)?.collection("projects")?.document(crashReport.projectId)
-            ?.collection("diagnoses")?.document(crashReport.id)?.set(diagnosis)?.await()
+        fs?.collection("users")?.document(uid)?.collection("projects")?.document(authorizedCrash.projectId)
+            ?.collection("diagnoses")?.document(authorizedCrash.id)?.set(diagnosis)?.await()
             
         crashDao.insertAIDiagnosis(diagnosis)
         
@@ -679,6 +698,8 @@ class CrashRepositoryImpl(
 
     // Integrations & Secret Encryption
     override fun getIntegrations(projectId: String): Flow<List<Integration>> = flow {
+        if (projectId !in currentUserProjectIds()) { emit(emptyList()); return@flow }
+
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -692,39 +713,42 @@ class CrashRepositoryImpl(
             emitAll(crashDao.getIntegrations(projectId))
         }
     }
-
     override suspend fun addIntegration(integration: Integration) {
+        requireOwnedProject(integration.projectId)
+
         val uid = requireUserId()
         val secret = if (integration.webhookSecret.isBlank()) SecurityUtils.generateSalt() else integration.webhookSecret
         val encryptedConfig = SecurityUtils.encryptSecret(integration.configJson)
 
         val newIntegration = (if (integration.id.isEmpty()) integration.copy(id = UUID.randomUUID().toString()) else integration)
-            .copy(webhookSecret = secret, configJson = encryptedConfig)
+            .copy(webhookSecret = secret, configJson = encryptedConfig, status = IntegrationStatus.DISCONNECTED, lastSyncedAt = null)
 
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(integration.projectId)
             ?.collection("integrations")?.document(newIntegration.id)?.set(newIntegration)?.await()
 
         crashDao.insertIntegration(newIntegration)
     }
-
     override suspend fun deleteIntegration(
         integrationId: String,
         projectId: String,
         callerUserId: String
-    ): Result<Unit> = runCatching {
-        val uid = requireUserId()
+    ): Result<Unit> = runCatchingCancellable {
+        val uid = requireProjectUserId(callerUserId)
+        requireOwnedProject(projectId, uid)
+        val integration = crashDao.getIntegrationById(integrationId) ?: throw NoSuchElementException("Integration not found.")
+        if (integration.projectId != projectId) throw SecurityException("Integration is outside the selected project.")
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)
             ?.collection("integrations")?.document(integrationId)?.delete()?.await()
             
         crashDao.deleteIntegration(integrationId)
     }
-
     override suspend fun validateWebhook(
         projectId: String,
         integrationId: String,
         payload: String,
         signatureHeader: String?
-    ): Result<Boolean> = runCatching {
+    ): Result<Boolean> = runCatchingCancellable {
+        requireOwnedProject(projectId)
         if (!SecurityUtils.checkRateLimit(projectId)) {
             crashDao.insertAuditLog(
                 AuditLog(
@@ -739,6 +763,8 @@ class CrashRepositoryImpl(
         val integration = crashDao.getIntegrationById(integrationId)
             ?: throw IllegalArgumentException("لم يتم العثور على التكامل")
 
+        if (integration.projectId != projectId) throw SecurityException("Integration is outside the selected project.")
+        if (integration.webhookSecret.isNotBlank() && signatureHeader.isNullOrBlank()) return@runCatchingCancellable false
         if (integration.webhookSecret.isNotBlank() && signatureHeader != null) {
             val valid = SecurityUtils.verifyWebhookSignature(payload, integration.webhookSecret, signatureHeader)
             if (!valid) {
@@ -832,7 +858,9 @@ class CrashRepositoryImpl(
         }
     }
     override suspend fun addIssue(issue: Issue) {
-        val uid = requireUserId()
+        val uid = requireProjectUserId()
+        requireOwnedProject(issue.projectId, uid)
+        if (issue.applicationId.isNotBlank() && getApplications(issue.projectId).first().none { it.id == issue.applicationId }) throw SecurityException("The selected application is not available in this project.")
         val id = if (issue.id.isEmpty()) UUID.randomUUID().toString() else issue.id
         val issueWithAuth = issue.copy(id = id)
         
@@ -851,10 +879,10 @@ class CrashRepositoryImpl(
             
         crashDao.insertIssue(issueWithAuth)
     }
-
     override suspend fun updateIssueStatus(issueId: String, status: IssueStatus) {
-        val uid = requireUserId()
+        val uid = requireProjectUserId()
         val issue = getAllIssues().first().find { it.id == issueId } ?: return
+        requireOwnedProject(issue.projectId, uid)
         
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(issue.projectId)
             ?.collection("issues")?.document(issueId)?.let { ref ->
@@ -870,7 +898,6 @@ class CrashRepositoryImpl(
             
         crashDao.updateIssueStatus(issueId, status)
     }
-
     private fun issueToFirestoreMap(issue: Issue, ownerId: String): Map<String, Any?> = buildMap {
         put("id", issue.id)
         put("projectId", issue.projectId)
@@ -894,6 +921,8 @@ class CrashRepositoryImpl(
     }
 
     override suspend fun getVersionStats(projectId: String, version: String): VersionStats {
+        requireOwnedProject(projectId)
+
         val crashes = getAllCrashes().first().filter { it.projectId == projectId && it.appVersion == version }
         val affectedUsers = crashes.map { it.userId }.filter { it.isNotEmpty() }.distinct().size
         val topErrors = crashes.groupBy { it.exceptionType }
@@ -916,6 +945,8 @@ class CrashRepositoryImpl(
 
     // Team Members & Access Control
     override fun getProjectMembers(projectId: String): Flow<List<ProjectMember>> = flow {
+        if (projectId !in currentUserProjectIds()) { emit(emptyList()); return@flow }
+
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -929,72 +960,80 @@ class CrashRepositoryImpl(
             emitAll(crashDao.getProjectMembers(projectId))
         }
     }
-
     override suspend fun getUserRoleInProject(projectId: String, userId: String): Role? {
-        val uid = requireUserId()
-        val project = getProjectById(projectId)
-        if (project != null && project.ownerId == userId) return Role.OWNER
+        val uid = requireProjectUserId()
+        if (projectId !in currentUserProjectIds()) return null
+        val project = requireOwnedProject(projectId, uid)
+        if (project.ownerId == userId && userId == uid) return Role.OWNER
         
         return firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)
             ?.collection("members")?.document(userId)?.get()?.await()?.toObject<ProjectMember>()?.role ?: crashDao.getProjectMember(projectId, userId)?.role
     }
-
     override suspend fun addProjectMember(
         projectId: String,
         email: String,
         role: Role,
         callerUserId: String
-    ): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        // We'll use the email as an identifier for simplicity in this turn
-        // In a real app, we'd search for the user by email first to get their UID.
-        val id = UUID.randomUUID().toString() 
+    ): Result<Unit> = runCatchingCancellable {
+        val uid = requireProjectUserId(callerUserId)
+        requireOwnedProject(projectId, uid)
+        if (!AccessControl.canManageMembers(getUserRoleInProject(projectId, uid))) throw SecurityException("You are not allowed to manage project members.")
+        if (role == Role.OWNER) throw SecurityException("Project ownership cannot be granted through an invitation.")
+        val fs = firestore ?: throw UnsupportedOperationException("A remote user directory is required; no synthetic member was created.")
+        val normalizedEmail = email.trim().lowercase()
+        require(normalizedEmail.matches(Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) { "A valid email address is required." }
+        val matches = fs.collection("users").whereEqualTo("email", normalizedEmail).limit(2).get().await().documents
+        val target = matches.singleOrNull() ?: throw NoSuchElementException("No unique registered account was found for this email.")
+        if (target.id == uid) throw IllegalArgumentException("The project owner is already a member.")
         val member = ProjectMember(
-            projectId = projectId,
-            userId = id,
-            userEmail = email,
-            displayName = email.substringBefore("@"),
+            projectId = projectId, userId = target.id, userEmail = normalizedEmail,
+            displayName = target.getString("displayName")?.takeIf { it.isNotBlank() } ?: normalizedEmail.substringBefore("@"),
             role = role
         )
-        firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)
-            ?.collection("members")?.document(id)?.set(member)?.await()
-            
+        fs.collection("users").document(uid).collection("projects").document(projectId)
+            .collection("members").document(target.id).set(member).await()
         crashDao.insertProjectMember(member)
     }
-
     override suspend fun updateMemberRole(
         projectId: String,
         userId: String,
         newRole: Role,
         callerUserId: String
-    ): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)
-            ?.collection("members")?.document(userId)?.update("role", newRole.name)?.await()
-            
-        crashDao.updateProjectMemberRole(projectId, userId, newRole)
+    ): Result<Unit> = runCatchingCancellable {
+        val uid = requireProjectUserId(callerUserId)
+        val project = requireOwnedProject(projectId, uid)
+        if (!AccessControl.canManageMembers(getUserRoleInProject(projectId, uid))) throw SecurityException("You are not allowed to manage project members.")
+        if (userId == project.ownerId || newRole == Role.OWNER) throw SecurityException("Project ownership cannot be changed through member-role updates.")
+        val fs = firestore ?: throw UnsupportedOperationException("Remote member management is unavailable.")
+        val ref = fs.collection("users").document(uid).collection("projects").document(projectId).collection("members").document(userId)
+        val member = ref.get().await().toObject<ProjectMember>() ?: throw NoSuchElementException("Project member not found.")
+        ref.update("role", newRole.name).await()
+        crashDao.updateProjectMemberRole(projectId, member.userId, newRole)
     }
-
     override suspend fun removeProjectMember(
         projectId: String,
         userId: String,
         callerUserId: String
-    ): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)
-            ?.collection("members")?.document(userId)?.delete()?.await()
-            
-        crashDao.deleteProjectMember(projectId, userId)
+    ): Result<Unit> = runCatchingCancellable {
+        val uid = requireProjectUserId(callerUserId)
+        val project = requireOwnedProject(projectId, uid)
+        if (!AccessControl.canManageMembers(getUserRoleInProject(projectId, uid))) throw SecurityException("You are not allowed to manage project members.")
+        if (userId == project.ownerId) throw SecurityException("The project owner cannot be removed.")
+        val fs = firestore ?: throw UnsupportedOperationException("Remote member management is unavailable.")
+        val ref = fs.collection("users").document(uid).collection("projects").document(projectId).collection("members").document(userId)
+        val member = ref.get().await().toObject<ProjectMember>() ?: throw NoSuchElementException("Project member not found.")
+        ref.delete().await()
+        crashDao.deleteProjectMember(projectId, member.userId)
     }
-
-    // Data Retention Policy & Security
     override suspend fun updateProjectSecurityPolicy(
         projectId: String,
         retentionDays: Int,
         piiScrubbing: Boolean,
         callerUserId: String
     ): Result<Unit> = runCatching {
+        require(retentionDays in 1..3650) { "Retention must be between 1 and 3650 days." }
         val uid = requireProjectUserId(callerUserId)
+        requireOwnedProject(projectId, uid)
         supabaseProjectDataSource?.let {
             it.updateProjectSettings(projectId, retentionDays, piiScrubbing)
             crashDao.updateProjectSecurityPolicy(projectId, retentionDays, piiScrubbing)
@@ -1008,14 +1047,14 @@ class CrashRepositoryImpl(
             
         crashDao.updateProjectSecurityPolicy(projectId, retentionDays, piiScrubbing)
     }
-
-    override suspend fun purgeOldCrashes(projectId: String, callerUserId: String): Result<Int> = runCatching {
-        // Implementation for Firestore purge would require a batch delete of old docs
-        0 // Simplified for this turn
-    }
-
-    // Audit Logging
+    override suspend fun purgeOldCrashes(projectId: String, callerUserId: String): Result<Int> =
+        runCatchingCancellable {
+            requireOwnedProject(projectId, callerUserId)
+            throw UnsupportedOperationException("Crash retention purge is unavailable until a transactional cloud and local deletion path is implemented.")
+        }
     override fun getAuditLogsForProject(projectId: String): Flow<List<AuditLog>> = flow {
+        if (projectId !in currentUserProjectIds()) { emit(emptyList()); return@flow }
+
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -1029,8 +1068,9 @@ class CrashRepositoryImpl(
             emitAll(crashDao.getAuditLogsForProject(projectId))
         }
     }
-
     override fun getRecentAuditLogs(): Flow<List<AuditLog>> = flow {
+        val projectIds = currentUserProjectIds()
+        if (projectIds.isEmpty()) { emit(emptyList()); return@flow }
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -1039,15 +1079,15 @@ class CrashRepositoryImpl(
                     .orderBy("timestamp", Query.Direction.DESCENDING)
                     .limit(50)
                     .snapshots()
-                    .map { it.toObjects(AuditLog::class.java) }
+                    .map { it.toObjects(AuditLog::class.java).filter { log -> log.projectId in projectIds } }
             )
         } else {
-            emitAll(crashDao.getRecentAuditLogs())
+            emitAll(crashDao.getRecentAuditLogs().map { logs -> logs.filter { it.projectId in projectIds } })
         }
     }
-
     override suspend fun logAuditEvent(auditLog: AuditLog) {
-        val uid = requireUserId()
+        val uid = requireProjectUserId(auditLog.userId.takeIf { it.isNotBlank() })
+        requireOwnedProject(auditLog.projectId, uid)
         val id = if (auditLog.id.isEmpty()) UUID.randomUUID().toString() else auditLog.id
         val scopedLog = auditLog.copy(id = id, userId = uid)
         firestore?.collection("users")?.document(uid)?.collection("audit_logs")?.document(id)
@@ -1065,8 +1105,9 @@ class CrashRepositoryImpl(
     }
 
     // Sync from Sentry / Bugsnag
-    override suspend fun syncCrashes(projectId: String): Result<Unit> = runCatching {
-        val integrations = crashDao.getIntegrations(projectId).first()
+    override suspend fun syncCrashes(projectId: String): Result<Unit> = runCatchingCancellable {
+        requireOwnedProject(projectId)
+        val integrations = getIntegrations(projectId).first()
         if (integrations.isEmpty()) throw IllegalStateException("لا توجد تكاملات مرتبطة بهذا المشروع.")
 
         integrations.forEach { integration ->
@@ -1084,7 +1125,6 @@ class CrashRepositoryImpl(
             }
         }
     }
-
     private suspend fun syncSentry(projectId: String, integration: Integration) {
         val config = parseConfig<SentryConfig>(integration.configJson) ?: return
         val issues = sentryApi.getIssues(
@@ -1251,22 +1291,31 @@ class CrashRepositoryImpl(
     }
 
     override suspend fun addRepositoryMapping(mapping: RepositoryMapping) {
+        requireOwnedProject(mapping.projectId)
+        if (getApplications(mapping.projectId).first().none { it.id == mapping.applicationId }) throw SecurityException("The application mapping is outside the active account's project.")
         crashDao.insertRepositoryMapping(mapping)
     }
-
     override suspend fun saveGitHubConnection(connection: GitHubConnection) {
-        crashDao.insertGitHubConnection(connection)
+        val uid = requireProjectUserId(connection.userId)
+        crashDao.insertGitHubConnection(connection.copy(userId = uid))
     }
 
     // AI Fix Assistant Implementation
-    override fun getFixSuggestions(crashId: String): Flow<List<FixSuggestion>> =
-        crashDao.getFixSuggestions(crashId)
-
+    override fun getFixSuggestions(crashId: String): Flow<List<FixSuggestion>> = flow {
+        if (getCrashDetails(crashId).first() == null) { emit(emptyList()); return@flow }
+        emitAll(crashDao.getFixSuggestions(crashId))
+    }
     override suspend fun generateFixSuggestion(
         crashReport: CrashReport,
         diagnosis: AIDiagnosis
     ): Result<FixSuggestion> = runCatchingCancellable {
-        val mapping = crashDao.getRepositoryMapping(crashReport.applicationId)
+        val uid = requireProjectUserId(crashReport.userId.takeIf { it.isNotBlank() })
+        val authorizedCrash = getCrashDetails(crashReport.id).first()
+            ?: throw SecurityException("The crash is not available to the active account.")
+        requireOwnedProject(authorizedCrash.projectId, uid)
+        require(diagnosis.crashId == authorizedCrash.id) { "The diagnosis does not belong to this crash." }
+
+        val mapping = crashDao.getRepositoryMapping(authorizedCrash.applicationId)?.takeIf { it.projectId == authorizedCrash.projectId }
             ?: throw IllegalStateException("يجب ربط مستودع GitHub أولاً لاقتراح إصلاح برمجي.")
         
         val sourceLocation = diagnosis.sourceLocation // e.g. "ProfileFragment.kt:74"
@@ -1274,7 +1323,7 @@ class CrashRepositoryImpl(
         
         // Search for the file to get the full path
         val searchResults = githubRepository.searchCode(
-            userId = crashReport.userId,
+            userId = uid,
             owner = mapping.repoOwner,
             repo = mapping.repoName,
             query = "filename:$fileName",
@@ -1284,7 +1333,7 @@ class CrashRepositoryImpl(
         val filePath = searchResults.firstOrNull() ?: throw IllegalStateException("لم يتم العثور على الملف $fileName في المستودع.")
         
         val originalCode = githubRepository.fetchFileContent(
-            userId = crashReport.userId,
+            userId = authorizedCrash.userId,
             owner = mapping.repoOwner,
             repo = mapping.repoName,
             path = filePath,
@@ -1319,14 +1368,14 @@ class CrashRepositoryImpl(
             }
         """.trimIndent()
 
-        val userId = crashReport.userId.ifBlank { requireUserId() }
+        val userId = uid
         val defaultModel = aiModelRepository.getDefaultModel(userId) ?: throw Exception("No AI model configured for this user")
         val responseText = aiModelRepository.generateResponse(
             userId = userId,
             modelId = defaultModel.id,
             prompt = prompt,
             systemInstruction = "You are an AI Fix Assistant. Propose high-quality code fixes for application crashes.",
-            taskId = crashReport.id,
+            taskId = authorizedCrash.id,
             taskType = AITaskType.CODE_FIX_SUGGESTION
         ).getOrThrow()
 
@@ -1338,13 +1387,13 @@ class CrashRepositoryImpl(
         val fixId = UUID.randomUUID().toString()
         val fixSuggestion = FixSuggestion(
             id = fixId,
-            crashId = crashReport.id,
+            crashId = authorizedCrash.id,
             originalCode = originalCode,
             suggestedCode = fixResult.suggestedCode,
             explanation = fixResult.explanation,
             potentialSideEffects = fixResult.potentialSideEffects,
             filePath = filePath,
-            branchName = "fix/${crashReport.exceptionType.lowercase()}-${fixId.take(5)}",
+            branchName = "fix/${authorizedCrash.exceptionType.lowercase()}-${fixId.take(5)}",
             status = FixStatus.PROPOSED,
             testResults = null // Compilation, static analysis, and unit tests have not been executed here.
         )
@@ -1355,101 +1404,67 @@ class CrashRepositoryImpl(
         crashDao.insertNotification(
             SystemNotification(
                 id = UUID.randomUUID().toString(),
-                projectId = crashReport.projectId,
+                projectId = authorizedCrash.projectId,
                 title = "اقتراح إصلاح كود جاهز للمراجعة",
-                message = "اكتمل تحليل واقتراح تصحيح لـ ${crashReport.exceptionType} في $filePath",
+                message = "اكتمل تحليل واقتراح تصحيح لـ ${authorizedCrash.exceptionType} في $filePath",
                 type = NotificationType.FIX_READY,
-                targetCrashId = crashReport.id
+                targetCrashId = authorizedCrash.id
             )
         )
 
         fixSuggestion
     }
+    override suspend fun applyFixAndCreatePR(fixId: String, userId: String): Result<String> =
+        runCatchingCancellable {
+            val uid = requireProjectUserId(userId)
+            val fix = crashDao.getFixSuggestionById(fixId) ?: throw IllegalArgumentException("لم يتم العثور على مقترح الإصلاح المعني.")
+            if (fix.status == FixStatus.PR_CREATED) throw IllegalStateException("A pull request has already been created for this fix.")
+            val crash = getCrashDetails(fix.crashId).first() ?: throw SecurityException("The crash is not available to the active account.")
+            requireOwnedProject(crash.projectId, uid)
+            val mapping = crashDao.getRepositoryMapping(crash.applicationId)?.takeIf { it.projectId == crash.projectId }
+                ?: throw IllegalStateException("المستودع غير مرتبط بهذا التطبيق.")
+            githubRepository.createBranch(uid, mapping.repoOwner, mapping.repoName, fix.branchName, mapping.defaultBranch).getOrThrow()
+            githubRepository.commitChanges(uid, mapping.repoOwner, mapping.repoName, fix.branchName, fix.filePath, fix.suggestedCode,
+                "Fix: ${crash.exceptionType} in ${fix.filePath}").getOrThrow()
+            val body = """
+                ## Crash Diagnosis
+                ${crash.exceptionType}: ${crash.message}
 
-    override suspend fun applyFixAndCreatePR(fixId: String, userId: String): Result<String> = runCatchingCancellable {
-        val fix = crashDao.getFixSuggestionById(fixId)
-            ?: throw IllegalArgumentException("لم يتم العثور على مقترح الإصلاح المعني.")
-            
-        val crash = crashDao.getCrashDetails(fix.crashId).first()
-            ?: throw IllegalArgumentException("تقرير الانهيار غير موجود.")
-            
-        val mapping = crashDao.getRepositoryMapping(crash.applicationId)
-            ?: throw IllegalStateException("المستودع غير مرتبط.")
+                ## Root Cause
+                ${fix.explanation}
 
-        // 1. Create Branch
-        githubRepository.createBranch(
-            userId = userId,
-            owner = mapping.repoOwner,
-            repo = mapping.repoName,
-            branchName = fix.branchName,
-            fromRef = mapping.defaultBranch
-        ).getOrThrow()
-
-        // 2. Commit Changes
-        githubRepository.commitChanges(
-            userId = userId,
-            owner = mapping.repoOwner,
-            repo = mapping.repoName,
-            branchName = fix.branchName,
-            path = fix.filePath,
-            content = fix.suggestedCode,
-            message = "Fix: ${crash.exceptionType} in ${fix.filePath}\n\nGenerated by Crash Intelligence AI Fix Assistant."
-        ).getOrThrow()
-
-        // 3. Create PR
-        val prBody = """
-            ## Crash Diagnosis
-            ${crash.exceptionType}: ${crash.message}
-            
-            ## Root Cause
-            ${fix.explanation}
-            
-            ## Potential Side Effects
-            ${fix.potentialSideEffects}
-            
-            Generated by [Crash Intelligence AI](https://crash-intelligence.ai)
-        """.trimIndent()
-
-        val prUrl = githubRepository.createPullRequest(
-            userId = userId,
-            owner = mapping.repoOwner,
-            repo = mapping.repoName,
-            title = "Fix: ${crash.exceptionType} in ${fix.filePath}",
-            head = fix.branchName,
-            base = mapping.defaultBranch,
-            body = prBody
-        ).getOrThrow()
-
-        crashDao.updateFixStatus(fixId, FixStatus.PR_CREATED, prUrl)
-
-        // System notification
-        crashDao.insertNotification(
-            SystemNotification(
-                id = UUID.randomUUID().toString(),
-                projectId = crash.projectId,
+                ## Potential Side Effects
+                ${fix.potentialSideEffects}
+            """.trimIndent()
+            val prUrl = githubRepository.createPullRequest(uid, mapping.repoOwner, mapping.repoName,
+                "Fix: ${crash.exceptionType} in ${fix.filePath}", fix.branchName, mapping.defaultBranch, body).getOrThrow()
+            crashDao.updateFixStatus(fixId, FixStatus.PR_CREATED, prUrl)
+            addNotification(SystemNotification(
+                id = UUID.randomUUID().toString(), projectId = crash.projectId,
                 title = "تم إنشاء Pull Request على GitHub بنجاح",
                 message = "تم إنشاء PR لإصلاح ${crash.exceptionType} في ${fix.filePath}",
-                type = NotificationType.PR_CREATED,
-                targetCrashId = crash.id
-            )
-        )
-
-        prUrl
+                type = NotificationType.PR_CREATED, targetCrashId = crash.id
+            ))
+            prUrl
+        }
+    override fun getAllVerifications(): Flow<List<CrashVerificationRecord>> = flow {
+        val ids = currentUserProjectIds()
+        if (ids.isEmpty()) { emit(emptyList()); return@flow }
+        emitAll(crashDao.getAllVerifications().map { rows -> rows.filter { it.projectId in ids } })
     }
-
-    // Crash Fix Verification & Comparison Implementation
-    override fun getAllVerifications(): Flow<List<CrashVerificationRecord>> =
-        crashDao.getAllVerifications()
-
-    override fun getVerificationsByProject(projectId: String): Flow<List<CrashVerificationRecord>> =
-        crashDao.getVerificationsByProject(projectId)
-
-    override fun getVerificationsByCrash(crashId: String): Flow<List<CrashVerificationRecord>> =
-        crashDao.getVerificationsByCrash(crashId)
-
-    override suspend fun getVerificationById(id: String): CrashVerificationRecord? =
-        crashDao.getVerificationById(id)
-
+    override fun getVerificationsByProject(projectId: String): Flow<List<CrashVerificationRecord>> = flow {
+        if (projectId !in currentUserProjectIds()) { emit(emptyList()); return@flow }
+        emitAll(crashDao.getVerificationsByProject(projectId))
+    }
+    override fun getVerificationsByCrash(crashId: String): Flow<List<CrashVerificationRecord>> = flow {
+        val crash = getCrashDetails(crashId).first()
+        if (crash == null) { emit(emptyList()); return@flow }
+        emitAll(crashDao.getVerificationsByCrash(crashId).map { rows -> rows.filter { it.projectId == crash.projectId } })
+    }
+    override suspend fun getVerificationById(id: String): CrashVerificationRecord? {
+        val record = crashDao.getVerificationById(id) ?: return null
+        return record.takeIf { it.projectId in currentUserProjectIds() }
+    }
     override suspend fun verifyFix(
         crashId: String,
         fixSuggestionId: String?,
@@ -1464,6 +1479,13 @@ class CrashRepositoryImpl(
     )
 
         override suspend fun addVerificationRecord(record: CrashVerificationRecord) {
+        requireOwnedProject(record.projectId)
+        val crash = getCrashDetails(record.crashId).first()
+            ?: throw SecurityException("The crash is not available to the active account.")
+        require(record.projectId == crash.projectId) { "The verification project does not match the crash." }
+        if (record.status != VerificationStatus.INCONCLUSIVE) {
+            throw UnsupportedOperationException("Verification records require execution evidence; no real Android test runner is connected.")
+        }
         crashDao.insertVerification(record)
     }
 
