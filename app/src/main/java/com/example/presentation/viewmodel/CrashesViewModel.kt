@@ -43,8 +43,8 @@ private data class CrashPagingState(
 
 class CrashesViewModel(
     private val repository: CrashRepository,
-    initialProjectId: String? = null,
-    initialAppId: String? = null,
+    private val initialProjectId: String? = null,
+    private val initialAppId: String? = null,
     initialExceptionType: String? = null,
     initialAppVersion: String? = null,
     initialSeverity: String? = null,

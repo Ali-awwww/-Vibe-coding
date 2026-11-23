@@ -3279,4 +3279,4 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added a backward-compatible default page method to CrashRepository for existing implementations. The production repository overrides it with Firestore/Room paging.
 - The ViewModel requests later pages only on demand, deduplicates records, preserves loaded data after a page failure and retries the same cursor. Search and optional filters run across all pages already loaded.
 - Regression tests cover project/application scope, first-page retry, multiple cursors, filtering across loaded pages and later-page retry.
-- CI for this cursor-paging revision is pending. No emulator or rendered RTL/LTR evidence is claimed.
+- The first CI run for the cursor-paging revision failed at Kotlin compilation because the constructor's route IDs were not retained as properties for the page loader. The IDs are now private constructor properties; a new CI run must validate the correction and any downstream Room/Firestore issues. No emulator or rendered RTL/LTR evidence is claimed.
