@@ -657,7 +657,10 @@ class VibeStudioViewModel(
 
             repository.applyAutoDebugFix(workspace.id, proposal).onSuccess { newReport ->
                 repository.runWorkspaceTests(workspace.id).onSuccess { tests ->
-                    val isFixed = newReport.failedTests == 0 && newReport.confirmedErrorsCount == 0
+                    val isFixed = tests.executionVerified &&
+                        tests.isSuccess &&
+                        newReport.failedTests == 0 &&
+                        newReport.confirmedErrorsCount == 0
                     _uiState.update {
                         it.copy(
                             qualityReport = newReport,
@@ -666,8 +669,11 @@ class VibeStudioViewModel(
                                 isDebugging = false,
                                 activeProposal = null,
                                 isFinished = isFixed || it.autoDebugState.attemptCount >= it.autoDebugState.maxAttempts,
-                                finalStatus = if (isFixed) "نجح الإصلاح الذاتي! التطبيق الآن مستقر ومطابق لمعايير الجودة."
-                                else "تم تطبيق الإصلاح وما زالت بعض الفحوصات تحتاج لمراجعة."
+                                finalStatus = when {
+                                    isFixed -> "نجح الإصلاح الذاتي بعد تنفيذ البناء والاختبارات الفعلية."
+                                    !tests.executionVerified -> "تم تطبيق المقترح، لكن لم يُنفذ بناء واختبار فعلي؛ لا يمكن تأكيد استقرار التطبيق بعد."
+                                    else -> "تم تطبيق الإصلاح وما زالت بعض الفحوصات تحتاج لمراجعة."
+                                }
                             )
                         )
                     }
