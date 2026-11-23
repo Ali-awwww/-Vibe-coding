@@ -921,6 +921,63 @@ class CrashRepositoryImpl(
         put("mostAffectedDevice", issue.mostAffectedDevice)
     }
 
+    private suspend fun persistSyncedIssue(issue: Issue) {
+        val uid = requireProjectUserId()
+        firestore?.let { fs ->
+            val ref = fs.collection("users").document(uid).collection("projects").document(issue.projectId)
+                .collection("issues").document(issue.id)
+            try {
+                ref.set(issueToFirestoreMap(issue, uid)).await()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                handleFirestoreError(error, OperationType.WRITE, ref.path)
+                throw error
+            }
+        }
+        crashDao.insertIssue(issue)
+    }
+
+    private suspend fun persistSyncedCrash(crash: CrashReport) {
+        val uid = requireProjectUserId()
+        val scoped = crash.copy(
+            userId = uid,
+            message = SecurityUtils.PiiScrubber.scrub(crash.message),
+            stackTrace = SecurityUtils.PiiScrubber.scrub(crash.stackTrace)
+        )
+        firestore?.let { fs ->
+            val ref = fs.collection("users").document(uid).collection("projects").document(scoped.projectId)
+                .collection("crashes").document(scoped.id)
+            try {
+                ref.set(scoped).await()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                handleFirestoreError(error, OperationType.WRITE, ref.path)
+                throw error
+            }
+        }
+        crashDao.insertCrash(scoped)
+    }
+
+    private suspend fun updateIntegrationState(integration: Integration, status: IntegrationStatus, syncedAt: Long? = null) {
+        val updated = integration.copy(status = status, lastSyncedAt = syncedAt ?: integration.lastSyncedAt)
+        firestore?.let { fs ->
+            val uid = requireProjectUserId()
+            val ref = fs.collection("users").document(uid).collection("projects").document(integration.projectId)
+                .collection("integrations").document(integration.id)
+            try {
+                ref.set(updated).await()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                handleFirestoreError(error, OperationType.UPDATE, ref.path)
+                throw error
+            }
+        }
+        crashDao.insertIntegration(updated)
+    }
+
     override suspend fun getVersionStats(projectId: String, version: String): VersionStats {
         requireOwnedProject(projectId)
 
@@ -1112,22 +1169,31 @@ class CrashRepositoryImpl(
         if (integrations.isEmpty()) throw IllegalStateException("لا توجد تكاملات مرتبطة بهذا المشروع.")
 
         integrations.forEach { integration ->
-            when (integration.type) {
-                IntegrationType.SENTRY -> syncSentry(projectId, integration)
-                IntegrationType.BUGSNAG -> syncBugsnag(projectId, integration)
-                IntegrationType.FIREBASE_CRASHLYTICS -> {
-                    // Firebase Crashlytics requires Google Cloud IAM / Service Account.
-                    // This is currently planned for a backend proxy integration.
-                    throw UnsupportedOperationException("تكامل Firebase Crashlytics يتطلب حاليًا وسيطًا برمجيًا (Backend Proxy) للتحقق من هوية Google Cloud. العمل جاري على دعمه.")
+            try {
+                when (integration.type) {
+                    IntegrationType.SENTRY -> syncSentry(projectId, integration)
+                    IntegrationType.BUGSNAG -> syncBugsnag(projectId, integration)
+                    IntegrationType.FIREBASE_CRASHLYTICS -> throw UnsupportedOperationException(
+                        "تكامل Firebase Crashlytics يتطلب وسيطًا برمجيًا خلفيًا موثوقًا للتحقق من هوية Google Cloud."
+                    )
+                    else -> throw UnsupportedOperationException("نوع التكامل ${integration.type} غير مدعوم حاليًا.")
                 }
-                else -> {
-                    throw UnsupportedOperationException("نوع التكامل ${integration.type} غير مدعوم حاليًا في هذه النسخة.")
+                updateIntegrationState(integration, IntegrationStatus.CONNECTED, System.currentTimeMillis())
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                try {
+                    updateIntegrationState(integration, IntegrationStatus.ERROR)
+                } catch (statusError: Exception) {
+                    error.addSuppressed(statusError)
                 }
+                throw error
             }
         }
     }
     private suspend fun syncSentry(projectId: String, integration: Integration) {
-        val config = parseConfig<SentryConfig>(integration.configJson) ?: return
+        val config = parseConfig<SentryConfig>(integration.configJson)
+            ?: throw IllegalStateException("Sentry integration credentials are invalid or unreadable.")
         val issues = sentryApi.getIssues(
             authToken = "Bearer ${config.token}",
             orgSlug = config.org,
@@ -1159,7 +1225,7 @@ class CrashRepositoryImpl(
                 mostAffectedDevice = firstEvent?.contexts?.device?.model ?: "Unknown",
                 trend = 0f
             )
-            crashDao.insertIssue(issue)
+            persistSyncedIssue(issue)
 
             firstEvent?.let { event ->
                 val rawMsg = event.message ?: ""
@@ -1180,13 +1246,13 @@ class CrashRepositoryImpl(
                     osVersion = event.contexts?.os?.version ?: "Unknown",
                     deviceModel = event.contexts?.device?.model ?: "Unknown"
                 )
-                crashDao.insertCrash(crash)
+                persistSyncedCrash(crash)
             }
         }
     }
-
     private suspend fun syncBugsnag(projectId: String, integration: Integration) {
-        val config = parseConfig<BugsnagConfig>(integration.configJson) ?: return
+        val config = parseConfig<BugsnagConfig>(integration.configJson)
+            ?: throw IllegalStateException("Bugsnag integration credentials are invalid or unreadable.")
         val errors = bugsnagApi.getErrors(
             authToken = "token ${config.token}",
             projectId = config.projectId
@@ -1208,7 +1274,7 @@ class CrashRepositoryImpl(
                 lastOccurrence = parseDate(bugsnagError.last_seen),
                 source = IntegrationType.BUGSNAG
             )
-            crashDao.insertIssue(issue)
+            persistSyncedIssue(issue)
 
             val events = bugsnagApi.getErrorEvents("token ${config.token}", bugsnagError.id)
             events.firstOrNull()?.let { event ->
@@ -1231,11 +1297,10 @@ class CrashRepositoryImpl(
                     osVersion = event.device?.osVersion ?: "Unknown",
                     deviceModel = event.device?.model ?: "Unknown"
                 )
-                crashDao.insertCrash(crash)
+                persistSyncedCrash(crash)
             }
         }
     }
-
     private inline fun <reified T> parseConfig(encryptedOrRawJson: String): T? {
         val decrypted = SecurityUtils.decryptSecret(encryptedOrRawJson)
         return try {
