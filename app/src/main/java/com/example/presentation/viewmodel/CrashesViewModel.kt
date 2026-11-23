@@ -3,10 +3,12 @@ package com.example.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.CrashReport
+import com.example.domain.repository.CrashPageCursor
 import com.example.domain.repository.CrashRepository
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
 data class CrashesFilterState(
     val projectId: String? = null,
@@ -26,17 +28,19 @@ data class CrashesUiState(
     val filter: CrashesFilterState = CrashesFilterState(),
     val isLoading: Boolean = true,
     val error: String? = null,
-    val currentPage: Int = 0,
+    val isLoadingMore: Boolean = false,
+    val loadMoreError: String? = null,
     val canLoadMore: Boolean = false
 )
 
-private data class CrashSourceState(
-    val crashes: List<CrashReport> = emptyList(),
-    val isLoading: Boolean = false,
-    val error: String? = null
+private data class CrashPagingState(
+    val isLoading: Boolean,
+    val error: String?,
+    val isLoadingMore: Boolean,
+    val loadMoreError: String?,
+    val nextCursor: CrashPageCursor?
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class CrashesViewModel(
     private val repository: CrashRepository,
     initialProjectId: String? = null,
@@ -59,30 +63,31 @@ class CrashesViewModel(
             filterTitle = initialFilterTitle
         )
     )
-    private val _refreshTrigger = MutableStateFlow(0)
-    private val _page = MutableStateFlow(0)
+    private val _crashes = MutableStateFlow<List<CrashReport>>(emptyList())
+    private val _isLoading = MutableStateFlow(true)
+    private val _isLoadingMore = MutableStateFlow(false)
+    private val _error = MutableStateFlow<String?>(null)
+    private val _loadMoreError = MutableStateFlow<String?>(null)
+    private val _nextCursor = MutableStateFlow<CrashPageCursor?>(null)
 
-    // Project/application context is applied at the repository boundary before
-    // the remaining interactive filters are evaluated in memory.
-    private val crashSource: Flow<CrashSourceState> = _refreshTrigger.flatMapLatest {
-        repository.getLatestCrashes(initialProjectId, initialAppId)
-            .map { crashes -> CrashSourceState(crashes = crashes) }
-            .onStart { emit(CrashSourceState(isLoading = true)) }
-            .catch { error ->
-                if (error is CancellationException) throw error
-                emit(
-                    CrashSourceState(
-                        error = error.message ?: "Crash reports could not be loaded."
-                    )
-                )
-            }
+    private var loadJob: Job? = null
+    private var loadGeneration = 0
+
+    private val pagingState = combine(
+        _isLoading,
+        _error,
+        _isLoadingMore,
+        _loadMoreError,
+        _nextCursor
+    ) { isLoading, error, isLoadingMore, loadMoreError, nextCursor ->
+        CrashPagingState(isLoading, error, isLoadingMore, loadMoreError, nextCursor)
     }
 
-    val uiState: StateFlow<CrashesUiState> = combine(crashSource, _filter, _page) { source, filter, page ->
-        val filtered = if (source.isLoading || source.error != null) {
+    val uiState: StateFlow<CrashesUiState> = combine(_crashes, _filter, pagingState) { crashes, filter, paging ->
+        val filtered = if (paging.error != null && crashes.isEmpty()) {
             emptyList()
         } else {
-            source.crashes.filter { crash ->
+            crashes.filter { crash ->
                 val matchProject = filter.projectId == null || crash.projectId == filter.projectId
                 val matchApp = filter.applicationId == null || crash.applicationId == filter.applicationId
                 val matchException = filter.exceptionType == null ||
@@ -101,19 +106,19 @@ class CrashesViewModel(
 
                 matchProject && matchApp && matchException && matchVersion &&
                     matchSeverity && matchOs && matchQuery
-            }.sortedByDescending { it.timestamp }
+            }.sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
         }
-        val visible = filtered.take((page + 1) * PAGE_SIZE)
 
         CrashesUiState(
-            crashes = source.crashes,
+            crashes = crashes,
             filteredCrashes = filtered,
-            visibleCrashes = visible,
+            visibleCrashes = filtered,
             filter = filter,
-            isLoading = source.isLoading,
-            error = source.error,
-            currentPage = page,
-            canLoadMore = visible.size < filtered.size
+            isLoading = paging.isLoading,
+            error = paging.error,
+            isLoadingMore = paging.isLoadingMore,
+            loadMoreError = paging.loadMoreError,
+            canLoadMore = paging.nextCursor != null
         )
     }.stateIn(
         viewModelScope,
@@ -121,8 +126,12 @@ class CrashesViewModel(
         CrashesUiState(filter = _filter.value)
     )
 
+    init {
+        refresh()
+    }
+
     fun updateSearchQuery(query: String) {
-        updateFilter { it.copy(searchQuery = query) }
+        _filter.update { it.copy(searchQuery = query) }
     }
 
     fun applyFilters(
@@ -131,7 +140,7 @@ class CrashesViewModel(
         severity: String?,
         osName: String
     ) {
-        updateFilter {
+        _filter.update {
             it.copy(
                 exceptionType = exceptionType.trim().takeIf { value -> value.isNotEmpty() },
                 appVersion = appVersion.trim().takeIf { value -> value.isNotEmpty() },
@@ -143,18 +152,71 @@ class CrashesViewModel(
     }
 
     fun refresh() {
-        _page.value = 0
-        _refreshTrigger.update { it + 1 }
+        loadPage(cursor = null, replace = true)
     }
 
     fun loadMore() {
-        if (uiState.value.canLoadMore) {
-            _page.update { it + 1 }
+        val cursor = _nextCursor.value ?: return
+        if (_isLoading.value || _isLoadingMore.value) return
+        loadPage(cursor = cursor, replace = false)
+    }
+
+    private fun loadPage(cursor: CrashPageCursor?, replace: Boolean) {
+        val generation = ++loadGeneration
+        loadJob?.cancel()
+        if (replace) {
+            _crashes.value = emptyList()
+            _nextCursor.value = null
+            _isLoading.value = true
+            _isLoadingMore.value = false
+            _error.value = null
+            _loadMoreError.value = null
+        } else {
+            _isLoadingMore.value = true
+            _loadMoreError.value = null
+        }
+
+        loadJob = viewModelScope.launch {
+            try {
+                val page = repository.getCrashPage(
+                    projectId = initialProjectId,
+                    applicationId = initialAppId,
+                    cursor = cursor,
+                    pageSize = PAGE_SIZE
+                )
+                if (generation != loadGeneration) return@launch
+
+                if (replace) {
+                    _crashes.value = page.crashes
+                } else {
+                    _crashes.update { existing ->
+                        (existing + page.crashes)
+                            .distinctBy { it.id }
+                            .sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
+                    }
+                }
+                _nextCursor.value = page.nextCursor
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (generation == loadGeneration) {
+                    if (replace) {
+                        _error.value = error.message ?: "Crash reports could not be loaded."
+                    } else {
+                        _loadMoreError.value = error.message ?: "More crash reports could not be loaded."
+                    }
+                }
+            } finally {
+                if (generation == loadGeneration) {
+                    _isLoading.value = false
+                    _isLoadingMore.value = false
+                }
+            }
         }
     }
 
     fun clearFilters() {
-        updateFilter {
+        _filter.update {
             it.copy(
                 exceptionType = null,
                 appVersion = null,
@@ -167,7 +229,7 @@ class CrashesViewModel(
     }
 
     fun clearSpecificFilter(key: String) {
-        updateFilter { current ->
+        _filter.update { current ->
             when (key) {
                 "exception" -> current.copy(exceptionType = null, filterTitle = null)
                 "version" -> current.copy(appVersion = null, filterTitle = null)
@@ -177,11 +239,6 @@ class CrashesViewModel(
                 else -> current
             }
         }
-    }
-
-    private fun updateFilter(transform: (CrashesFilterState) -> CrashesFilterState) {
-        _page.value = 0
-        _filter.update(transform)
     }
 
     private companion object {

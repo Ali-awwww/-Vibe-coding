@@ -54,6 +54,26 @@ interface CrashDao {
     @Query("SELECT * FROM crashes WHERE projectId = :projectId ORDER BY timestamp DESC")
     fun getCrashesByProject(projectId: String): Flow<List<CrashReport>>
 
+    @Query("""
+        SELECT * FROM crashes
+        WHERE projectId = :projectId
+          AND (:applicationId IS NULL OR applicationId = :applicationId)
+          AND (:cursorTimestamp IS NULL OR timestamp < :cursorTimestamp OR (timestamp = :cursorTimestamp AND id < :cursorId))
+        ORDER BY timestamp DESC, id DESC
+        LIMIT :pageSize
+    """)
+    suspend fun getCrashPage(projectId: String, applicationId: String?, cursorTimestamp: Long?, cursorId: String?, pageSize: Int): List<CrashReport>
+
+    @Query("""
+        SELECT * FROM crashes
+        WHERE projectId IN (:projectIds)
+          AND (:applicationId IS NULL OR applicationId = :applicationId)
+          AND (:cursorTimestamp IS NULL OR timestamp < :cursorTimestamp OR (timestamp = :cursorTimestamp AND id < :cursorId))
+        ORDER BY timestamp DESC, id DESC
+        LIMIT :pageSize
+    """)
+    suspend fun getCrashPageForProjects(projectIds: List<String>, applicationId: String?, cursorTimestamp: Long?, cursorId: String?, pageSize: Int): List<CrashReport>
+
     @Query("SELECT * FROM crashes WHERE id = :crashId")
     fun getCrashDetails(crashId: String): Flow<CrashReport?>
 

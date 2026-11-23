@@ -631,7 +631,7 @@
     <string name="crashes_filter_any">Any severity</string>
     <string name="crashes_filter_apply">Apply filters</string>
     <string name="crashes_filter_clear">Clear optional filters</string>
-    <string name="crashes_results_count">Showing %1$d of %2$d reports</string>
+    <string name="crashes_results_count">Showing %1$d matching of %2$d loaded reports</string>
     <string name="crashes_load_more">Load more</string>
     <string name="crashes_source_label">Source: %1$s</string>
     <string name="crashes_source_firebase_crashlytics">Firebase Crashlytics</string>
@@ -643,4 +643,5 @@
     <string name="crashes_unavailable">Unavailable</string>
     <string name="crashes_exception_unavailable">Exception type unavailable</string>
     <string name="crashes_message_unavailable">No message supplied</string>
+    <string name="crashes_loading_more">Loading more reports...</string>
 </resources>

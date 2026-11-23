@@ -216,7 +216,7 @@ fun CrashesScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = stringResource(R.string.crashes_results_count, uiState.visibleCrashes.size, uiState.filteredCrashes.size),
+                    text = stringResource(R.string.crashes_results_count, uiState.filteredCrashes.size, uiState.crashes.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -290,6 +290,14 @@ fun CrashesScreen(
                                 Text(stringResource(R.string.clear_filters))
                             }
                         }
+                        if (uiState.canLoadMore || uiState.loadMoreError != null) {
+                            Spacer(Modifier.height(12.dp))
+                            LoadMoreCrashesButton(
+                                isLoading = uiState.isLoadingMore,
+                                error = uiState.loadMoreError,
+                                onClick = { viewModel.loadMore() }
+                            )
+                        }
                     }
                 }
             } else {
@@ -306,14 +314,13 @@ fun CrashesScreen(
                             }
                         )
                     }
-                    if (uiState.canLoadMore) {
+                    if (uiState.canLoadMore || uiState.loadMoreError != null) {
                         item(key = "crashes_load_more") {
-                            FilledTonalButton(
-                                onClick = { viewModel.loadMore() },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(R.string.crashes_load_more))
-                            }
+                            LoadMoreCrashesButton(
+                                isLoading = uiState.isLoadingMore,
+                                error = uiState.loadMoreError,
+                                onClick = { viewModel.loadMore() }
+                            )
                         }
                     }
                 }
@@ -414,6 +421,46 @@ fun CrashesScreen(
                         Text(stringResource(R.string.crashes_filter_apply))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadMoreCrashesButton(
+    isLoading: Boolean,
+    error: String?,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        error?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+        }
+        FilledTonalButton(
+            onClick = onClick,
+            enabled = !isLoading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.crashes_loading_more))
+            } else {
+                Text(
+                    stringResource(
+                        if (error != null) R.string.crashes_retry
+                        else R.string.crashes_load_more
+                    )
+                )
             }
         }
     }

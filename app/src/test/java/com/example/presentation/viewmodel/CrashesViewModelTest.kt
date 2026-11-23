@@ -67,9 +67,10 @@ class CrashesViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("new"), viewModel.uiState.value.filteredCrashes.map { it.id })
-        assertEquals(1, repository.getLatestCrashesCalls)
-        assertEquals("p1", repository.lastLatestCrashProjectId)
-        assertEquals("a1", repository.lastLatestCrashApplicationId)
+        assertEquals(1, repository.getCrashPageCalls)
+        assertEquals("p1", repository.lastCrashPageProjectId)
+        assertEquals("a1", repository.lastCrashPageApplicationId)
+        assertNull(repository.lastCrashPageCursorId)
         viewModel.updateSearchQuery("not present")
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.filteredCrashes.isEmpty())
@@ -83,7 +84,7 @@ class CrashesViewModelTest {
 
     @Test
     fun loadFailureIsDistinctFromEmptyStateAndRetryResubscribes() = runTest {
-        repository.failNextLatestCrashesLoad = IllegalStateException("offline")
+        repository.failNextCrashPageLoad = IllegalStateException("offline")
         val viewModel = CrashesViewModel(repository = repository, initialProjectId = "p1")
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         advanceUntilIdle()
@@ -98,6 +99,7 @@ class CrashesViewModelTest {
 
         assertNull(viewModel.uiState.value.error)
         assertEquals(listOf("recovered"), viewModel.uiState.value.filteredCrashes.map { it.id })
+        assertEquals(2, repository.getCrashPageCalls)
     }
 
     @Test
@@ -132,7 +134,7 @@ class CrashesViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("match"), viewModel.uiState.value.filteredCrashes.map { it.id })
-        assertEquals(1, repository.getLatestCrashesCalls)
+        assertEquals(1, repository.getCrashPageCalls)
         viewModel.clearFilters()
         advanceUntilIdle()
         assertEquals("p1", viewModel.uiState.value.filter.projectId)
@@ -141,7 +143,7 @@ class CrashesViewModelTest {
     }
 
     @Test
-    fun paginationLoadsMoreAndSearchResetsTheVisiblePage() = runTest {
+    fun paginationLoadsRepositoryPagesAndSearchUsesLoadedRecords() = runTest {
         repository.crashes.value = (0 until 60).map { index ->
             CrashReport(
                 id = "crash-$index",
@@ -167,22 +169,57 @@ class CrashesViewModelTest {
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
-        assertEquals(60, viewModel.uiState.value.filteredCrashes.size)
+        assertEquals(25, viewModel.uiState.value.filteredCrashes.size)
         assertEquals(25, viewModel.uiState.value.visibleCrashes.size)
         assertTrue(viewModel.uiState.value.canLoadMore)
+        assertEquals(1, repository.getCrashPageCalls)
 
         viewModel.loadMore()
         advanceUntilIdle()
         assertEquals(50, viewModel.uiState.value.visibleCrashes.size)
+        assertTrue(viewModel.uiState.value.canLoadMore)
         viewModel.loadMore()
         advanceUntilIdle()
         assertEquals(60, viewModel.uiState.value.visibleCrashes.size)
         assertFalse(viewModel.uiState.value.canLoadMore)
+        assertEquals(3, repository.getCrashPageCalls)
+        assertEquals("crash-10", repository.lastCrashPageCursorId)
 
         viewModel.updateSearchQuery("Crash 59")
         advanceUntilIdle()
         assertEquals(listOf("crash-59"), viewModel.uiState.value.visibleCrashes.map { it.id })
-        assertEquals(0, viewModel.uiState.value.currentPage)
-        assertEquals(1, repository.getLatestCrashesCalls)
+        assertEquals(3, repository.getCrashPageCalls)
+    }
+
+    @Test
+    fun failedNextPageCanBeRetriedWithoutDroppingLoadedCrashes() = runTest {
+        repository.crashes.value = (0 until 25).map { index ->
+            CrashReport(
+                id = "page-$index",
+                projectId = "p1",
+                applicationId = "a1",
+                timestamp = index.toLong()
+            )
+        }
+        val viewModel = CrashesViewModel(repository = repository, initialProjectId = "p1", initialAppId = "a1")
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(25, viewModel.uiState.value.crashes.size)
+        assertTrue(viewModel.uiState.value.canLoadMore)
+
+        repository.failNextCrashPageLoad = IllegalStateException("page offline")
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        assertEquals(25, viewModel.uiState.value.crashes.size)
+        assertEquals("page offline", viewModel.uiState.value.loadMoreError)
+        assertTrue(viewModel.uiState.value.canLoadMore)
+
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.loadMoreError)
+        assertFalse(viewModel.uiState.value.canLoadMore)
+        assertEquals(25, viewModel.uiState.value.crashes.size)
     }
 }

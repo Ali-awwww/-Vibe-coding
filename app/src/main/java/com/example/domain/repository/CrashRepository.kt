@@ -2,6 +2,11 @@ package com.example.domain.repository
 
 import com.example.domain.model.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+
+data class CrashPageCursor(val timestamp: Long, val id: String, val documentPath: String? = null)
+
+data class CrashPage(val crashes: List<CrashReport>, val nextCursor: CrashPageCursor?)
 
 interface CrashRepository {
     fun getProjects(): Flow<List<Project>>
@@ -16,6 +21,16 @@ interface CrashRepository {
     suspend fun deleteApplication(applicationId: String)
     
     fun getLatestCrashes(projectId: String? = null, applicationId: String? = null): Flow<List<CrashReport>>
+
+    suspend fun getCrashPage(projectId: String?, applicationId: String?, cursor: CrashPageCursor?, pageSize: Int): CrashPage {
+        require(pageSize in 1..100) { "Crash page size must be between 1 and 100." }
+        val all = getLatestCrashes(projectId, applicationId).first()
+            .sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
+        val start = if (cursor == null) 0 else all.indexOfFirst { it.id == cursor.id }.let { if (it < 0) all.size else it + 1 }
+        val page = all.drop(start).take(pageSize)
+        val next = if (page.size == pageSize) page.last().let { CrashPageCursor(it.timestamp, it.id) } else null
+        return CrashPage(page, next)
+    }
     fun getAllCrashes(): Flow<List<CrashReport>>
     fun getCrashDetails(crashId: String): Flow<CrashReport?>
     suspend fun addCrash(crash: CrashReport)

@@ -7,6 +7,8 @@ import com.example.data.remote.*
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.CrashRepository
+import com.example.domain.repository.CrashPage
+import com.example.domain.repository.CrashPageCursor
 import com.example.util.OperationType
 import com.example.util.SecurityUtils
 import com.example.util.handleFirestoreError
@@ -21,6 +23,7 @@ import java.util.UUID
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.snapshots
 import com.google.firebase.firestore.toObjects
 import com.google.firebase.firestore.toObject
@@ -352,6 +355,62 @@ class CrashRepositoryImpl(
             }
         }
     }
+    override suspend fun getCrashPage(
+        projectId: String?,
+        applicationId: String?,
+        cursor: CrashPageCursor?,
+        pageSize: Int
+    ): CrashPage {
+        require(pageSize in 1..100) { "Crash page size must be between 1 and 100." }
+        val projectIds = currentUserProjectIds()
+        if (projectIds.isEmpty() || (projectId != null && projectId !in projectIds)) return CrashPage(emptyList(), null)
+
+        val fs = firestore
+        if (fs != null) {
+            val uid = requireUserId()
+            val collectionPath = if (projectId != null) "users/$uid/projects/$projectId/crashes" else "collectionGroup/crashes"
+            var query: Query = if (projectId != null) {
+                fs.collection("users").document(uid).collection("projects").document(projectId).collection("crashes")
+            } else {
+                fs.collectionGroup("crashes").whereEqualTo("userId", uid)
+            }
+            if (applicationId != null) query = query.whereEqualTo("applicationId", applicationId)
+            query = query.orderBy("timestamp", Query.Direction.DESCENDING)
+                .orderBy(FieldPath.documentId(), Query.Direction.DESCENDING)
+                .limit(pageSize.toLong())
+            if (cursor != null) {
+                val documentKey = if (projectId != null) cursor.id else cursor.documentPath ?: cursor.id
+                query = query.startAfter(cursor.timestamp, documentKey)
+            }
+            return try {
+                val snapshot = query.get().await()
+                val crashes = snapshot.documents.mapNotNull { it.toObject(CrashReport::class.java) }
+                    .filter { it.projectId in projectIds && (projectId == null || it.projectId == projectId) }
+                val nextCursor = if (snapshot.size() == pageSize) {
+                    snapshot.documents.lastOrNull()?.let { document ->
+                        val timestamp = document.getLong("timestamp") ?: document.toObject(CrashReport::class.java)?.timestamp ?: 0L
+                        CrashPageCursor(timestamp, document.id, document.reference.path)
+                    }
+                } else null
+                CrashPage(crashes, nextCursor)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                handleFirestoreError(error, OperationType.LIST, collectionPath)
+                throw error
+            }
+        }
+
+        val crashes = if (projectId != null) {
+            crashDao.getCrashPage(projectId, applicationId, cursor?.timestamp, cursor?.id, pageSize)
+                .filter { it.projectId in projectIds }
+        } else {
+            crashDao.getCrashPageForProjects(projectIds.toList(), applicationId, cursor?.timestamp, cursor?.id, pageSize)
+        }
+        val nextCursor = if (crashes.size == pageSize) crashes.last().let { CrashPageCursor(it.timestamp, it.id) } else null
+        return CrashPage(crashes, nextCursor)
+    }
+
     override fun getAllCrashes(): Flow<List<CrashReport>> = flow {
         val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds()

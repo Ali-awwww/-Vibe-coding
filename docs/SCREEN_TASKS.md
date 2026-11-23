@@ -3241,7 +3241,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Implementation**
 - The crash list now calls `getLatestCrashes(projectId, applicationId)` so route project/application scope is enforced by the repository query before presentation filters run.
 - Added an accessible filter sheet for exception type, app version, operating system and severity; search and filter changes reset the visible page without reopening the repository stream.
-- Added incremental 25-record display pages, preserving newest-first order. The repository currently supplies at most its latest 100 records per subscription; this UI paging does not claim cursor pagination beyond that window.
+- Added real 25-record repository pages. Firestore uses project/user-scoped queries with a stable document cursor; Room uses scoped keyset queries over timestamp and ID. Subsequent pages load on demand without the previous 100-record ceiling. Search and optional filters apply across loaded pages, and the load-more retry remains available when the current filtered subset is empty.
 - Crash cards now show the persisted `source` value (Firebase Crashlytics, Sentry, Bugsnag, webhook or custom). Null provenance and blank metadata are explicitly labeled unavailable rather than guessed.
 - English and Arabic labels cover the new filter, paging, source and missing-metadata states.
 
@@ -3249,9 +3249,9 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The CrashesViewModel tests assert the project/application query arguments, retry after a source error, route-scope preservation, incremental paging and search reset behavior.
 
 **Verification boundary**
-- The previously verified HEAD `5295f8f5a585ae1b5b8801455d82e7a24263bbae` had successful Android unit-test, lint and Debug/Release APK workflows. Those results do not validate this new revision; CI for this batch must be checked after push.
+- HEAD `c81aa7b7566e58881303976d184a80f521569160` passed the Android unit-test workflow after correcting the first compile failure (a missing Flow `map` import in the fake repository). Lint and APK jobs for that revision were still running when this change was prepared. CI for the cursor-paging revision must be checked after push.
 - The execution container still has no recorded local Gradle/Android SDK/ADB capability. No emulator screenshot, RTL/LTR rendered review or TalkBack validation is claimed.
-- The Crashes screen remains open. Cursor pagination beyond the repository's 100-record window and rendered device validation are still outstanding.
+- The Crashes screen remains open. Repository cursor paging is implemented; rendered device validation, RTL/LTR review and TalkBack validation remain outstanding.
 
 **Persistent continuity**
 - Next: validate this batch in CI, then continue the Crashes route audit for the 100-record boundary, source values from each supported intake path, and CrashDetail navigation/lifecycle. Keep the screen open until the design gate and device evidence are satisfied.
@@ -3272,3 +3272,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - CI for the change is pending. The Settings screen still needs rendered Arabic/English and accessibility review on an Android device.
 - A local-only Sandbox database remains a separate unimplemented capability; the app does not claim one exists.
 
+
+### Crash list cursor pagination — 2026-11-24
+
+- Replaced the 100-record list subscription path used by Crashes with repository pages of 25 records. Firestore is scoped to the authenticated user's project path or user-scoped collection group and uses a timestamp/document cursor; Room uses matching keyset queries.
+- Added a backward-compatible default page method to CrashRepository for existing implementations. The production repository overrides it with Firestore/Room paging.
+- The ViewModel requests later pages only on demand, deduplicates records, preserves loaded data after a page failure and retries the same cursor. Search and optional filters run across all pages already loaded.
+- Regression tests cover project/application scope, first-page retry, multiple cursors, filtering across loaded pages and later-page retry.
+- CI for this cursor-paging revision is pending. No emulator or rendered RTL/LTR evidence is claimed.

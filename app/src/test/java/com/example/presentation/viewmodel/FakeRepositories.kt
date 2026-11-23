@@ -3,6 +3,8 @@ package com.example.presentation.viewmodel
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.CrashRepository
+import com.example.domain.repository.CrashPage
+import com.example.domain.repository.CrashPageCursor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -47,11 +49,16 @@ class FakeCrashRepository : CrashRepository {
     var failNextProjectsLoad: Throwable? = null
     var failNextCrashesLoad: Throwable? = null
     var failNextLatestCrashesLoad: Throwable? = null
+    var failNextCrashPageLoad: Throwable? = null
     var failNextWrite: Throwable? = null
 
     var getAllApplicationsCalls = 0
     var getAllCrashesCalls = 0
     var getLatestCrashesCalls = 0
+    var getCrashPageCalls = 0
+    var lastCrashPageProjectId: String? = null
+    var lastCrashPageApplicationId: String? = null
+    var lastCrashPageCursorId: String? = null
     var lastLatestCrashProjectId: String? = null
     var lastLatestCrashApplicationId: String? = null
     var getAllIssuesCalls = 0
@@ -116,6 +123,41 @@ class FakeCrashRepository : CrashRepository {
                     (applicationId == null || crash.applicationId == applicationId)
             }.sortedByDescending { it.timestamp }.take(100)
         }
+    }
+
+    override suspend fun getCrashPage(
+        projectId: String?,
+        applicationId: String?,
+        cursor: CrashPageCursor?,
+        pageSize: Int
+    ): CrashPage {
+        getCrashPageCalls++
+        lastCrashPageProjectId = projectId
+        lastCrashPageApplicationId = applicationId
+        lastCrashPageCursorId = cursor?.id
+        val error = failNextCrashPageLoad
+        if (error != null) {
+            failNextCrashPageLoad = null
+            throw error
+        }
+        val matching = crashes.value.filter { crash ->
+            (projectId == null || crash.projectId == projectId) &&
+                (applicationId == null || crash.applicationId == applicationId)
+        }.sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
+        val startIndex = if (cursor == null) {
+            0
+        } else {
+            matching.indexOfFirst { it.id == cursor.id }.let { index ->
+                if (index < 0) matching.size else index + 1
+            }
+        }
+        val page = matching.drop(startIndex).take(pageSize)
+        val nextCursor = if (page.size == pageSize) {
+            page.last().let { CrashPageCursor(it.timestamp, it.id) }
+        } else {
+            null
+        }
+        return CrashPage(page, nextCursor)
     }
 
     override fun getAllCrashes(): Flow<List<CrashReport>> {
