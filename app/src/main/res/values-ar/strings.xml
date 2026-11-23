@@ -606,4 +606,20 @@
     <string name="debug_symbols_file_too_large">يتجاوز حجم ملف الربط الحد الأقصى البالغ 10 ميبيبايت.</string>
     <string name="debug_symbols_file_invalid_text">الملف المحدد ليس نصاً صالحاً بترميز UTF-8.</string>
     <string name="debug_symbols_file_read_failed">تعذرت قراءة الملف المحدد. تحقق من صلاحية الوصول ثم أعد المحاولة.</string>
+
+    <string name="crashes_back">رجوع</string>
+    <string name="crashes_search">البحث في الأعطال</string>
+    <string name="crashes_close_search">إغلاق البحث</string>
+    <string name="crashes_refresh">تحديث تقارير الأعطال</string>
+    <string name="crashes_load_error_title">تعذر تحميل تقارير الأعطال</string>
+    <string name="crashes_load_error_desc">تحقق من الاتصال وصلاحية الوصول إلى المشروع ثم أعد المحاولة. فشل التحميل لا يعني أن قائمة الأعطال فارغة.</string>
+    <string name="crashes_retry">إعادة المحاولة</string>
+    <string name="crashes_device_os">%1$s · %2$s</string>
+    <string name="crashes_version_value">الإصدار %1$s</string>
+    <string name="crashes_resolved">تم الحل</string>
+    <string name="crashes_severity_critical">حرج</string>
+    <string name="crashes_severity_high">مرتفع</string>
+    <string name="crashes_severity_medium">متوسط</string>
+    <string name="crashes_severity_low">منخفض</string>
+
 </resources>

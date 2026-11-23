@@ -3159,3 +3159,28 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Persistent continuity**
 - Re-check the newest CI runs after this commit, fix any compile/test/lint failures from their logs, and only then resume the first remaining screen criterion in this register. Do not mark Crashes, Integrations, Fix Assistant, or verification screens complete based on repository restoration alone.
+
+
+### Crashes screen — preserve project context and distinguish load errors — 2026-11-24
+
+**Confirmed defects**
+- The ViewModel emitted an error state when the crash repository failed, but the screen ignored that state and rendered the same check-mark empty state used for a successful zero-result query.
+- The screen had no retry/refresh action. Clearing filters also removed the route's project/application context, so a filter reset could broaden the query beyond the selected project/application.
+- Crash cards displayed a truncated internal user ID even though it was not needed for triage.
+
+**Implementation**
+- Reworked crash-list collection so repository failures remain explicit, each retry re-subscribes to the data flow, and the UI shows a localized error state rather than an empty-success message.
+- Added an explicit refresh action and retry button; switched to lifecycle-aware state collection.
+- Clearing optional filters now preserves the route's project/application scope. The ViewModel sorts visible crashes newest-first.
+- Removed the user ID from crash cards and localized severity, device/OS/version and resolved labels in English and Arabic. The route-specific filter title is included in the ViewModel identity key.
+
+**Regression coverage added**
+- Filter tests verify project/application scope, optional filter clearing, search, and newest-first ordering.
+- A repository failure test verifies that loading errors are not treated as empty results and that retry re-subscribes successfully.
+
+**Verification boundary**
+- The ViewModel tests and screen changes are committed together with this register entry. CI will execute the targeted and broader Gradle tasks; no test/build/emulator success is claimed before the workflow results are terminal.
+- Manual emulator validation, RTL/LTR screenshots, TalkBack review, and device lifecycle checks remain outstanding. The Crashes screen is not marked complete by this source/test batch.
+
+**Persistent continuity**
+- After CI, continue the Crashes route audit through source provenance, project/application filters, offline/permission states and CrashDetail navigation. Keep the screen open until all route criteria and device checks pass.

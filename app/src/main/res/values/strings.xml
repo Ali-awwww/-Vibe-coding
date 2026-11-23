@@ -606,4 +606,20 @@
     <string name="debug_symbols_file_too_large">The mapping file exceeds the 10 MiB limit.</string>
     <string name="debug_symbols_file_invalid_text">The selected file is not valid UTF-8 text.</string>
     <string name="debug_symbols_file_read_failed">The selected file could not be read. Check its access permission and try again.</string>
+
+    <string name="crashes_back">Back</string>
+    <string name="crashes_search">Search crashes</string>
+    <string name="crashes_close_search">Close search</string>
+    <string name="crashes_refresh">Refresh crash reports</string>
+    <string name="crashes_load_error_title">Could not load crash reports</string>
+    <string name="crashes_load_error_desc">Check your connection and project access, then retry. A loading failure is not an empty crash list.</string>
+    <string name="crashes_retry">Retry</string>
+    <string name="crashes_device_os">%1$s · %2$s</string>
+    <string name="crashes_version_value">v%1$s</string>
+    <string name="crashes_resolved">Resolved</string>
+    <string name="crashes_severity_critical">Critical</string>
+    <string name="crashes_severity_high">High</string>
+    <string name="crashes_severity_medium">Medium</string>
+    <string name="crashes_severity_low">Low</string>
+
 </resources>

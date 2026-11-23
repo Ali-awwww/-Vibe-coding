@@ -44,6 +44,7 @@ class FakeCrashRepository : CrashRepository {
     var notifications = MutableStateFlow<List<SystemNotification>>(emptyList())
 
     var failNextProjectsLoad: Throwable? = null
+    var failNextCrashesLoad: Throwable? = null
     var failNextWrite: Throwable? = null
 
     var getAllApplicationsCalls = 0
@@ -100,6 +101,11 @@ class FakeCrashRepository : CrashRepository {
 
     override fun getAllCrashes(): Flow<List<CrashReport>> {
         getAllCrashesCalls++
+        val error = failNextCrashesLoad
+        if (error != null) {
+            failNextCrashesLoad = null
+            return flow { throw error }
+        }
         return crashes
     }
 

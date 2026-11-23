@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.R
 import com.example.di.DependencyProvider
@@ -43,7 +44,7 @@ fun CrashesScreen(
 ) {
     val context = LocalContext.current
     val viewModel: CrashesViewModel = viewModel(
-        key = "crashes_${projectId}_${applicationId}_${exceptionType}_${appVersion}_${severity}_${osName}"
+        key = "crashes_${projectId}_${applicationId}_${exceptionType}_${appVersion}_${severity}_${osName}_${filterTitle}"
     ) {
         CrashesViewModel(
             repository = DependencyProvider.provideCrashRepository(context),
@@ -57,7 +58,7 @@ fun CrashesScreen(
         )
     }
 
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var searchVisible by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -91,14 +92,17 @@ fun CrashesScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.crashes_back))
                     }
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.refresh() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.crashes_refresh))
+                    }
                     IconButton(onClick = { searchVisible = !searchVisible }) {
                         Icon(
                             if (searchVisible) Icons.Default.Close else Icons.Default.Search,
-                            contentDescription = "Search"
+                            contentDescription = stringResource(if (searchVisible) R.string.crashes_close_search else R.string.crashes_search)
                         )
                     }
                 }
@@ -161,7 +165,7 @@ fun CrashesScreen(
                                 FilterChip(
                                     selected = true,
                                     onClick = { viewModel.clearSpecificFilter("severity") },
-                                    label = { Text(sev) },
+                                    label = { Text(severityLabel(sev)) },
                                     trailingIcon = { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp)) }
                                 )
                             }
@@ -206,6 +210,30 @@ fun CrashesScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
+                }
+            } else if (uiState.error != null) {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.CloudOff, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp))
+                        Text(stringResource(R.string.crashes_load_error_title),
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center)
+                        Text(stringResource(R.string.crashes_load_error_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                        FilledTonalButton(onClick = { viewModel.refresh() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.crashes_retry))
+                        }
+                    }
                 }
             } else if (uiState.filteredCrashes.isEmpty()) {
                 Box(
@@ -306,7 +334,7 @@ fun DetailedCrashCard(
                         shape = MaterialTheme.shapes.extraSmall
                     ) {
                         Text(
-                            text = crash.severity.name,
+                            text = severityLabel(crash.severity.name),
                             style = MaterialTheme.typography.labelSmall,
                             color = badgeText,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -351,7 +379,7 @@ fun DetailedCrashCard(
                 ) {
                     // Device & OS
                     Text(
-                        text = "${crash.deviceModel} • ${crash.osVersion}",
+                        text = stringResource(R.string.crashes_device_os, crash.deviceModel, crash.osVersion),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -361,7 +389,7 @@ fun DetailedCrashCard(
                         shape = MaterialTheme.shapes.extraSmall
                     ) {
                         Text(
-                            text = "v${crash.appVersion}",
+                            text = stringResource(R.string.crashes_version_value, crash.appVersion),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -369,14 +397,24 @@ fun DetailedCrashCard(
                     }
                 }
 
-                if (crash.userId.isNotBlank()) {
+                if (crash.isResolved) {
                     Text(
-                        text = "User: ${crash.userId.take(8)}",
+                        text = stringResource(R.string.crashes_resolved),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
         }
     }
+}
+
+
+@Composable
+private fun severityLabel(value: String): String = when (value.uppercase(Locale.ROOT)) {
+    "CRITICAL" -> stringResource(R.string.crashes_severity_critical)
+    "HIGH" -> stringResource(R.string.crashes_severity_high)
+    "MEDIUM" -> stringResource(R.string.crashes_severity_medium)
+    "LOW" -> stringResource(R.string.crashes_severity_low)
+    else -> value
 }
