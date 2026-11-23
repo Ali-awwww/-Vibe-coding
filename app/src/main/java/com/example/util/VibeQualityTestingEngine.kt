@@ -57,8 +57,8 @@ object VibeQualityTestingEngine {
     }
 
     /**
-     * Executes real comprehensive testing and static quality audit on workspace files.
-     * Does not simulate or fake results; analyzes actual source code.
+     * Performs static source/configuration checks only. It does not invoke a compiler,
+     * test runner, emulator, or runtime environment.
      */
     fun executeIntelligentAudit(
         workspace: Workspace,
@@ -172,13 +172,13 @@ object VibeQualityTestingEngine {
 
         val summaryMessage = when (readiness) {
             ProductionReadiness.READY ->
-                "تم اجتياز جميع الفحوصات واختبارات الجودة بنجاح ($passedTests/${testResults.size}). المشروع جاهز للإنتاج."
+                "اجتازت الفحوصات الساكنة جميعها ($passedTests/${testResults.size}). لم يُشغّل مترجم أو مشغّل اختبارات فعلي؛ لا تثبت هذه النتيجة الجاهزية للإنتاج."
             ProductionReadiness.NEEDS_REVIEW ->
-                "نجحت جميع الاختبارات ($passedTests/${testResults.size}) ولكن تم اكتشاف $warnings تحذير/ملاحظة يوصى بمراجعتها."
+                "لم تسجل الفحوصات الساكنة أخطاء حرجة ($passedTests/${testResults.size})، لكن تم اكتشاف $warnings تحذير/ملاحظة تحتاج مراجعة. لم يُنفذ بناء أو اختبار فعلي."
             ProductionReadiness.NOT_READY ->
-                "فشل $failedTests اختبار ووجد $confirmedErrors خطأ برمجي مؤكد. التطبيق غير جاهز للإنتاج ويتطلب الإصلاح."
+                "فشل $failedTests فحصاً ساكناً ووجد $confirmedErrors خطأً مؤكداً؛ المشروع يحتاج إصلاحاً قبل متابعة التحقق."
             ProductionReadiness.UNTESTED ->
-                "لم يتم إجراء الاختبارات بعد."
+                "لم تُنتج الفحوصات الساكنة أي نتائج بعد."
         }
 
         return QualityAuditReport(
@@ -679,19 +679,19 @@ object VibeQualityTestingEngine {
 
         val testFiles = files.filter {
             it.name.contains(".test.") || it.name.contains(".spec.") ||
-            it.name.endsWith("Test.kt") || it.name.endsWith("_test.dart")
+                it.name.endsWith("Test.kt") || it.name.endsWith("_test.dart")
         }
 
         if (testFiles.isEmpty()) {
             tests.add(
                 TestCaseResult(
                     id = UUID.randomUUID().toString(),
-                    suiteName = "اختبارات الوحدات البرمجية (Unit Tests)",
-                    name = "فحص وجود ملفات اختبارات آلية",
+                    suiteName = "فحص ملفات الاختبار الساكن",
+                    name = "لم يتم العثور على ملفات اختبارات آلية",
                     type = TestType.UNIT_TEST,
                     status = TestStatus.SKIPPED,
-                    errorMessage = "لا توجد ملفات اختبارات مكتوبة (*.test.ts أو *_test.dart).",
-                    suggestedFix = "أضف اختبارات وحدات تغطي الدوال الحساسة ومنطق العمليات."
+                    errorMessage = "لم يتم العثور على ملفات اختبار معروفة؛ لم يتم تشغيل أي اختبار.",
+                    suggestedFix = "أضف اختبارات وحدات ثم شغّل مشغّل الاختبارات الفعلي للتحقق منها."
                 )
             )
             findings.add(
@@ -701,43 +701,28 @@ object VibeQualityTestingEngine {
                     severity = IssueSeverity.INFO,
                     filePath = "tests/",
                     line = 1,
-                    title = "غياب اختبارات الوحدات (Unit Tests Coverage)",
-                    description = "المشروع لا يحتوي على اختبارات وحدات آلية لتأكيد صحة منطق العمليات عند التعديل.",
-                    recommendation = "أنشئ جناح اختبارات باستخدام Vitest أو Jest لضمان استقرار الشفرة."
+                    title = "غياب ملفات اختبارات الوحدات",
+                    description = "لم يعثر الفحص الساكن على ملفات اختبارات معروفة.",
+                    recommendation = "أضف جناح اختبارات وشغّله عبر بيئة التنفيذ المناسبة."
                 )
             )
         } else {
             for (testFile in testFiles) {
-                val hasFailingAssert = testFile.content.contains("assert(false)") ||
-                        testFile.content.contains("expect(true).toBe(false)")
-
-                if (hasFailingAssert) {
-                    tests.add(
-                        TestCaseResult(
-                            id = UUID.randomUUID().toString(),
-                            suiteName = "اختبارات الوحدات (${testFile.name})",
-                            name = "تشغيل سيناريوهات الفحص",
-                            type = TestType.UNIT_TEST,
-                            status = TestStatus.FAILED,
-                            targetFile = testFile.path,
-                            errorMessage = "فشل التحقق في تأكيد شروط الاختبار (Assertion Failure)",
-                            suggestedFix = "راجع القيم المتوقعة في الاختبار وتأكد من مطابقتها لمخرجات الدالة."
-                        )
+                val declaredTestCount = Regex("""\b(?:it|test)\s*\(""")
+                    .findAll(testFile.content)
+                    .count()
+                tests.add(
+                    TestCaseResult(
+                        id = UUID.randomUUID().toString(),
+                        suiteName = "فحص ملفات الاختبار الساكن (${testFile.name})",
+                        name = "تم العثور على ملف اختبار؛ لم يتم تشغيله",
+                        type = TestType.UNIT_TEST,
+                        status = TestStatus.SKIPPED,
+                        targetFile = testFile.path,
+                        errorMessage = "تم العثور على $declaredTestCount تعريفات اختبار محتملة، لكن لم يتم تنفيذ الملف أو تقييم تأكيداته.",
+                        suggestedFix = "شغّل مشغّل الاختبارات الفعلي لهذا المشروع وسجّل نتيجته."
                     )
-                } else {
-                    val count = (testFile.content.split("it(").size - 1).coerceAtLeast(1)
-                    tests.add(
-                        TestCaseResult(
-                            id = UUID.randomUUID().toString(),
-                            suiteName = "اختبارات الوحدات (${testFile.name})",
-                            name = "تشغيل $count سيناريوهات بنجاح",
-                            type = TestType.UNIT_TEST,
-                            status = TestStatus.PASSED,
-                            targetFile = testFile.path,
-                            durationMs = 28
-                        )
-                    )
-                }
+                )
             }
         }
 
