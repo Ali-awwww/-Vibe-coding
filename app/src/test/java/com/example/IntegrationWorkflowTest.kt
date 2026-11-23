@@ -293,6 +293,9 @@ class IntegrationWorkflowTest {
     fun testANRDetection_notificationAndEventLogging() = runBlocking {
         val project = Project(id = "proj-200", name = "Media Player App", description = "ANR Test", ownerId = "usr-dev")
         repository.addProject(project)
+        repository.addApplication(
+            Application(id = "app-media", projectId = "proj-200", name = "Media Player", packageName = "com.example.media")
+        )
 
         val anrCrash = CrashReport(
             id = "anr-1",
@@ -317,6 +320,9 @@ class IntegrationWorkflowTest {
     fun testFixVerification_doesNotPersistSimulatedSuccessWithoutARealRunner() = runBlocking {
         val project = Project(id = "proj-300", name = "Banking App", description = "Fix Verification", ownerId = "usr-dev")
         repository.addProject(project)
+        repository.addApplication(
+            Application(id = "app-bank", projectId = "proj-300", name = "Banking App", packageName = "com.bank.app")
+        )
 
         val crash = CrashReport(
             id = "crash-bank-1",

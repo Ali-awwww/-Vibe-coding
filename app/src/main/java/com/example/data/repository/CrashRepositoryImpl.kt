@@ -353,14 +353,10 @@ class CrashRepositoryImpl(
         }
     }
     override fun getAllCrashes(): Flow<List<CrashReport>> = flow {
+        val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds()
-        if (projectIds.isEmpty()) {
-            emit(emptyList())
-            return@flow
-        }
         val fs = firestore
         if (fs != null) {
-            val uid = requireUserId()
             emitAll(
                 fs.collectionGroup("crashes")
                     .whereEqualTo("userId", uid)
@@ -1570,10 +1566,10 @@ class CrashRepositoryImpl(
                 fs.collection("users").document(uid).collection("notifications")
                     .orderBy("timestamp", Query.Direction.DESCENDING)
                     .snapshots()
-                    .map { snapshot -> snapshot.toObjects(SystemNotification::class.java).filter { it.projectId in projectIds } }
+                    .map { snapshot -> snapshot.toObjects(SystemNotification::class.java).filter { it.projectId.isBlank() || it.projectId in projectIds } }
             )
         } else {
-            emitAll(crashDao.getNotifications().map { notifications -> notifications.filter { it.projectId in projectIds } })
+            emitAll(crashDao.getNotifications().map { notifications -> notifications.filter { it.projectId.isBlank() || it.projectId in projectIds } })
         }
     }
     override fun getNotificationsForProject(projectId: String): Flow<List<SystemNotification>> = flow {
@@ -1598,11 +1594,11 @@ class CrashRepositoryImpl(
     override fun getUnreadNotificationCount(): Flow<Int> =
         getNotifications().map { notifications -> notifications.count { !it.isRead } }
     override suspend fun addNotification(notification: SystemNotification) {
+        val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds()
-        if (notification.projectId !in projectIds) {
+        if (notification.projectId.isNotBlank() && notification.projectId !in projectIds) {
             throw SecurityException("Cannot create a notification for a project outside the active account.")
         }
-        val uid = requireUserId()
         val id = if (notification.id.isEmpty()) UUID.randomUUID().toString() else notification.id
         val scopedNotification = notification.copy(id = id)
         firestore?.collection("users")?.document(uid)?.collection("notifications")?.document(id)
@@ -1619,13 +1615,12 @@ class CrashRepositoryImpl(
         crashDao.insertNotification(scopedNotification)
     }
     override suspend fun markNotificationAsRead(id: String) {
+        val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds()
-        if (projectIds.isEmpty()) return
         val visibleNotification = getNotifications().first().firstOrNull { it.id == id }
         if (firestore != null && visibleNotification == null) {
             throw SecurityException("Notification does not belong to the active account.")
         }
-        val uid = requireUserId()
         firestore?.collection("users")?.document(uid)?.collection("notifications")?.document(id)
             ?.let { ref ->
                 try {
@@ -1637,18 +1632,21 @@ class CrashRepositoryImpl(
                     throw e
                 }
             }
-        crashDao.markNotificationAsReadForProjects(id, projectIds.toList())
+        if (visibleNotification?.projectId.isNullOrBlank()) {
+            crashDao.markNotificationAsRead(id)
+        } else {
+            crashDao.markNotificationAsReadForProjectsOrGlobal(id, projectIds.toList())
+        }
     }
     override suspend fun markAllNotificationsAsRead() {
+        val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds().toList()
-        if (projectIds.isEmpty()) return
-        val uid = requireUserId()
         firestore?.let { fs ->
             val collectionPath = "users/$uid/notifications"
             try {
                 val unread = fs.collection("users").document(uid).collection("notifications")
                     .whereEqualTo("isRead", false).get().await()
-                val scopedDocuments = unread.documents.filter { it.getString("projectId") in projectIds }
+                val scopedDocuments = unread.documents.filter { it.getString("projectId").isNullOrBlank() || it.getString("projectId") in projectIds }
                 if (scopedDocuments.isNotEmpty()) {
                     val batch = fs.batch()
                     scopedDocuments.forEach { batch.update(it.reference, "isRead", true) }
@@ -1661,17 +1659,16 @@ class CrashRepositoryImpl(
                 throw e
             }
         }
-        crashDao.markAllNotificationsAsReadForProjects(projectIds)
+        crashDao.markAllNotificationsAsReadForProjectsOrGlobal(projectIds)
     }
     override suspend fun clearNotifications() {
+        val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds().toList()
-        if (projectIds.isEmpty()) return
-        val uid = requireUserId()
         firestore?.let { fs ->
             val collectionPath = "users/$uid/notifications"
             try {
                 val all = fs.collection("users").document(uid).collection("notifications").get().await()
-                val scopedDocuments = all.documents.filter { it.getString("projectId") in projectIds }
+                val scopedDocuments = all.documents.filter { it.getString("projectId").isNullOrBlank() || it.getString("projectId") in projectIds }
                 if (scopedDocuments.isNotEmpty()) {
                     val batch = fs.batch()
                     scopedDocuments.forEach { batch.delete(it.reference) }
@@ -1684,7 +1681,7 @@ class CrashRepositoryImpl(
                 throw e
             }
         }
-        crashDao.clearNotificationsForProjects(projectIds)
+        crashDao.clearNotificationsForProjectsOrGlobal(projectIds)
     }
     private fun truncateText(text: String, maxLength: Int): String {
         if (text.length <= maxLength) return text

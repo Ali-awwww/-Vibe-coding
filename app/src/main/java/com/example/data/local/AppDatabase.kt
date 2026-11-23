@@ -280,17 +280,26 @@ interface CrashDao {
     @Query("UPDATE notifications SET isRead = 1 WHERE id = :id AND projectId IN (:projectIds)")
     suspend fun markNotificationAsReadForProjects(id: String, projectIds: List<String>)
 
+    @Query("UPDATE notifications SET isRead = 1 WHERE id = :id AND (projectId = '' OR projectId IN (:projectIds))")
+    suspend fun markNotificationAsReadForProjectsOrGlobal(id: String, projectIds: List<String>)
+
     @Query("UPDATE notifications SET isRead = 1")
     suspend fun markAllNotificationsAsRead()
 
     @Query("UPDATE notifications SET isRead = 1 WHERE projectId IN (:projectIds)")
     suspend fun markAllNotificationsAsReadForProjects(projectIds: List<String>)
 
+    @Query("UPDATE notifications SET isRead = 1 WHERE projectId = '' OR projectId IN (:projectIds)")
+    suspend fun markAllNotificationsAsReadForProjectsOrGlobal(projectIds: List<String>)
+
     @Query("DELETE FROM notifications")
     suspend fun clearNotifications()
 
     @Query("DELETE FROM notifications WHERE projectId IN (:projectIds)")
     suspend fun clearNotificationsForProjects(projectIds: List<String>)
+
+    @Query("DELETE FROM notifications WHERE projectId = '' OR projectId IN (:projectIds)")
+    suspend fun clearNotificationsForProjectsOrGlobal(projectIds: List<String>)
 }
 
 @Dao
