@@ -722,7 +722,7 @@ class CrashRepositoryImpl(
         val encryptedConfig = SecurityUtils.encryptSecret(integration.configJson)
 
         val newIntegration = (if (integration.id.isEmpty()) integration.copy(id = UUID.randomUUID().toString()) else integration)
-            .copy(webhookSecret = secret, configJson = encryptedConfig, status = IntegrationStatus.DISCONNECTED, lastSyncedAt = null)
+            .copy(webhookSecret = SecurityUtils.encryptSecret(secret), configJson = encryptedConfig, status = IntegrationStatus.DISCONNECTED, lastSyncedAt = null)
 
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(integration.projectId)
             ?.collection("integrations")?.document(newIntegration.id)?.set(newIntegration)?.await()
@@ -765,9 +765,10 @@ class CrashRepositoryImpl(
             ?: throw IllegalArgumentException("لم يتم العثور على التكامل")
 
         if (integration.projectId != projectId) throw SecurityException("Integration is outside the selected project.")
-        if (integration.webhookSecret.isBlank() || signatureHeader.isNullOrBlank()) return@runCatchingCancellable false
-        if (integration.webhookSecret.isNotBlank() && signatureHeader != null) {
-            val valid = SecurityUtils.verifyWebhookSignature(payload, integration.webhookSecret, signatureHeader)
+        val webhookSecret = SecurityUtils.decryptSecret(integration.webhookSecret)
+        if (webhookSecret.isBlank() || signatureHeader.isNullOrBlank()) return@runCatchingCancellable false
+        if (webhookSecret.isNotBlank() && signatureHeader != null) {
+            val valid = SecurityUtils.verifyWebhookSignature(payload, webhookSecret, signatureHeader)
             if (!valid) {
                 crashDao.insertAuditLog(
                     AuditLog(
