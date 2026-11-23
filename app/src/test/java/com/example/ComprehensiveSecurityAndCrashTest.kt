@@ -267,6 +267,58 @@ class ComprehensiveSecurityAndCrashTest {
         crashRepository.clearNotifications()
         assertTrue(dao.getNotificationsForProject("local_project_a").first().isEmpty())
         assertEquals(1, dao.getNotificationsForProject("local_project_b").first().size)
+
+        // Writes and secondary repository surfaces must enforce the same owner boundary.
+        val foreignCrashWrite = runCatching {
+            crashRepository.addCrash(
+                CrashReport(
+                    id = "foreign_crash_write",
+                    projectId = "local_project_b",
+                    exceptionType = "SecurityException",
+                    message = "must not be stored"
+                )
+            )
+        }
+        assertTrue(foreignCrashWrite.isFailure)
+
+        val foreignIssueWrite = runCatching {
+            crashRepository.addIssue(Issue(id = "foreign_issue_write", projectId = "local_project_b", title = "must not be stored"))
+        }
+        assertTrue(foreignIssueWrite.isFailure)
+
+        crashRepository.updateCrashStatus("local_crash_b", true)
+        assertFalse(dao.getCrashDetails("local_crash_b").first()?.isResolved ?: true)
+        assertTrue(crashRepository.getProjectMembers("local_project_b").first().isEmpty())
+        assertTrue(crashRepository.getAuditLogsForProject("local_project_b").first().isEmpty())
+        assertTrue(crashRepository.getFixSuggestions("local_crash_b").first().isEmpty())
+
+        val syntheticInvite = crashRepository.addProjectMember(
+            "local_project_a", "not-registered@example.com", Role.DEVELOPER, userA
+        )
+        assertTrue(syntheticInvite.isFailure)
+
+        dao.insertVerification(
+            CrashVerificationRecord(id = "owned_verification", projectId = "local_project_a", crashId = "local_crash_a")
+        )
+        dao.insertVerification(
+            CrashVerificationRecord(id = "foreign_verification", projectId = "local_project_b", crashId = "local_crash_b")
+        )
+        assertEquals(
+            setOf("owned_verification"),
+            crashRepository.getAllVerifications().first().map { it.id }.toSet()
+        )
+
+        val forgedVerification = runCatching {
+            crashRepository.addVerificationRecord(
+                CrashVerificationRecord(
+                    id = "forged_verification",
+                    projectId = "local_project_a",
+                    crashId = "local_crash_a",
+                    status = VerificationStatus.FIX_VERIFIED_IN_TEST
+                )
+            )
+        }
+        assertTrue(forgedVerification.isFailure)
     }
 
 
