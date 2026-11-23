@@ -169,7 +169,11 @@ dependencies {
 }
 
 tasks.withType<Test> {
-    timeout.set(Duration.ofMinutes(2))
+    timeout.set(Duration.ofMinutes(5))
+    // Robolectric fetches android-all directly (outside Gradle's dependency resolver).
+    // Use the canonical Maven Central host to avoid repo1's intermittent 429 responses.
+    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+    systemProperty("robolectric.dependency.repo.id", "central")
     val localRobolectricDir = file("/home/appuser/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7")
     if (localRobolectricDir.exists()) {
         systemProperty("robolectric.offline", "true")

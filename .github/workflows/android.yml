@@ -1,4 +1,4 @@
-name: Android CI/CD Build & Test
+name: Android Unit Tests
 
 on:
   push:
@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build & Test Android App
+  unit-tests:
+    name: Android Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -25,33 +25,13 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Configure Unified Debug Signing
-        env:
-          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
-        run: |
-          python3 - <<'PY'
-          import base64, os, pathlib
-          ks_path = pathlib.Path("debug.keystore")
-          b64_secret = os.environ.get("ANDROID_DEBUG_KEYSTORE_BASE64", "").strip()
-          if b64_secret:
-              ks_path.write_bytes(base64.b64decode(b64_secret))
-          elif pathlib.Path("debug.keystore.base64").exists():
-              ks_path.write_bytes(base64.b64decode(pathlib.Path("debug.keystore.base64").read_text().strip()))
-          PY
-
       - name: Run Unit Tests
         run: gradle testDebugUnitTest --no-daemon
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon
-
-      - name: Upload Debug APK Artifact
+      - name: Upload Unit Test Reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
-
-      - name: Clean Up Debug Keystore
-        if: always()
-        run: rm -f "debug.keystore"
+          name: unit-test-reports
+          path: app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore

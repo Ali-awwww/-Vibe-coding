@@ -3211,3 +3211,19 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Tightened the local-only mark-read path: an unknown notification ID is rejected before any Room update, just as it is in the Firestore-backed path. This prevents a caller from changing a foreign project's notification by guessing its local ID.
 - Account-level notifications remain visible only through the authenticated user's notification collection and the local query that combines blank project IDs with the user's owned project IDs.
 - The full Android unit-test and APK workflows for this follow-up are pending; no verification status is inferred from queued or in-progress jobs.
+
+
+### CI reliability — avoid duplicate Robolectric downloads — 2026-11-24
+
+**Confirmed CI failure**
+- The Build APK workflow was running the full unit-test suite in parallel with the Android CI test workflow. Robolectric's MavenArtifactFetcher then received HTTP 429 responses from repo1.maven.org while fetching android-all-instrumented POM/checksum artifacts; this produced dozens of unrelated test failures before assertions ran.
+- The failure was external artifact throttling, not a reason to weaken or skip the tests.
+
+**CI changes**
+- Configured Robolectric's test dependency resolver to use the canonical Maven Central host (repo.maven.apache.org) and increased the test-task timeout from two to five minutes.
+- Split responsibilities: Android Unit Tests runs the unit suite once and always uploads JUnit reports; Build APK now only builds and uploads Debug/Release APK artifacts; Code Quality remains responsible for lint.
+- This removes the redundant concurrent test suite while preserving test, lint, Debug APK and Release APK coverage.
+
+**Verification boundary**
+- The workflow and Gradle configuration changes are committed on main. The first CI run using the new host and non-duplicated workflow layout is pending; no success is claimed until it completes.
+- No external service deployment, release tag, production secret, or Supabase change was made.
