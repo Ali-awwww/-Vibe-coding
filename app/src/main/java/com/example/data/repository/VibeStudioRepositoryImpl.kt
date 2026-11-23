@@ -843,7 +843,7 @@ class VibeStudioRepositoryImpl(
         }
 
         if (hasSyntaxError) {
-            logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "فشل البناء لوجود أخطاء في الكود المصدر.", LogType.ERROR))
+            logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "فشل فحص توازن الأقواس الساكن لوجود أقواس غير متطابقة.", LogType.ERROR))
         } else {
             logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "اكتمل فحص توازن الأقواس في ${files.size} ملفاً. لم يتم تجميع التطبيق فعلياً.", LogType.INFO))
         }
