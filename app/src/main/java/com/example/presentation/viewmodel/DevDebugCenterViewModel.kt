@@ -180,7 +180,7 @@ class DevDebugCenterViewModel(
             _state.update { it.copy(isLoading = true, error = null) }
             val result = vibeStudioRepository.setupWorkspaceMonitoring(workspace.id)
             result.onSuccess { profile ->
-                refreshCurrentWorkspace(feedback = "تم إعداد ملف المراقبة بنجاح وربط SDK للمشروع: ${profile.targetPlatform}")
+                refreshCurrentWorkspace(feedback = "تم توليد مقتطف SDK فقط؛ لم يتم تثبيت SDK أو تفعيل المراقبة أو الاتصال بجهاز.")
             }.onFailure { err ->
                 _state.update { it.copy(isLoading = false, error = "فشل إعداد المراقبة: ${err.message}") }
             }
@@ -200,26 +200,24 @@ class DevDebugCenterViewModel(
         }
     }
 
-    fun simulateOrReportCrash(
+    fun simulateCrash(
         exceptionType: String,
         message: String,
         stackTrace: String
     ) {
         val workspace = _state.value.selectedWorkspace ?: return
-        val activeSessionId = _state.value.activeRunContext?.testSessionId
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
-            val result = vibeStudioRepository.ingestSimulatedOrRuntimeCrash(
+            val result = vibeStudioRepository.recordSimulatedCrash(
                 workspaceId = workspace.id,
-                testSessionId = activeSessionId,
                 exceptionType = exceptionType,
                 message = message,
                 stackTrace = stackTrace
             )
             result.onSuccess { crash ->
-                refreshCurrentWorkspace(feedback = "تم التقاط عطل حرج بنجاح: ${crash.exceptionType} (${crash.id.take(8)})")
+                refreshCurrentWorkspace(feedback = "تم إنشاء سجل محاكاة محلي: ${crash.exceptionType} (${crash.id.take(8)}). لم يُرسل أي telemetry إلى خدمة خارجية.")
             }.onFailure { err ->
-                _state.update { it.copy(isLoading = false, error = "فشل تسجيل العطل: ${err.message}") }
+                _state.update { it.copy(isLoading = false, error = "فشل إنشاء سجل المحاكاة: ${err.message}") }
             }
         }
     }
@@ -229,7 +227,7 @@ class DevDebugCenterViewModel(
             _state.update { it.copy(isLoading = true, error = null) }
             val result = vibeStudioRepository.diagnoseCrashAndGenerateFix(crashId)
             result.onSuccess { (_, fix) ->
-                refreshCurrentWorkspace(feedback = "تم تحليل العطل جذرياً وتوليد اقتراح إصلاح في ${fix.filePath}")
+                refreshCurrentWorkspace(feedback = "تم إنشاء تحليل محلي أولي ومقترح إصلاح في ${fix.filePath}")
             }.onFailure { err ->
                 _state.update { it.copy(isLoading = false, error = "فشل التشخيص: ${err.message}") }
             }
