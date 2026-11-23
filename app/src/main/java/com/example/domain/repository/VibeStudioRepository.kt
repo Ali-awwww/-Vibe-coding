@@ -156,9 +156,8 @@ interface VibeStudioRepository {
     suspend fun setupWorkspaceMonitoring(workspaceId: String): Result<WorkspaceMonitoringProfile>
     suspend fun getWorkspaceMonitoringProfile(workspaceId: String): WorkspaceMonitoringProfile?
     suspend fun startTrackedTestSession(workspaceId: String, buildId: String? = null): Result<TestSession>
-    suspend fun ingestSimulatedOrRuntimeCrash(
+    suspend fun recordSimulatedCrash(
         workspaceId: String,
-        testSessionId: String?,
         exceptionType: String,
         message: String,
         stackTrace: String
