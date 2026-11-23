@@ -99,6 +99,47 @@ class CrashesViewModelTest {
         assertNull(viewModel.uiState.value.error)
         assertEquals(listOf("recovered"), viewModel.uiState.value.filteredCrashes.map { it.id })
     }
+
+    @Test
+    fun applyFiltersUpdatesTheScopedCrashResults() = runTest {
+        repository.crashes.value = listOf(
+            CrashReport(
+                id = "match", projectId = "p1", applicationId = "a1",
+                exceptionType = "NullPointerException", appVersion = "2.0",
+                severity = Severity.HIGH, osVersion = "Android 14"
+            ),
+            CrashReport(
+                id = "wrong-severity", projectId = "p1", applicationId = "a1",
+                exceptionType = "NullPointerException", appVersion = "2.0",
+                severity = Severity.MEDIUM, osVersion = "Android 14"
+            ),
+            CrashReport(
+                id = "wrong-version", projectId = "p1", applicationId = "a1",
+                exceptionType = "NullPointerException", appVersion = "1.0",
+                severity = Severity.HIGH, osVersion = "Android 14"
+            ),
+            CrashReport(
+                id = "wrong-os", projectId = "p1", applicationId = "a1",
+                exceptionType = "NullPointerException", appVersion = "2.0",
+                severity = Severity.HIGH, osVersion = "iOS"
+            )
+        )
+        val viewModel = CrashesViewModel(repository = repository, initialProjectId = "p1", initialAppId = "a1")
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.applyFilters("NullPointerException", "2.0", "HIGH", "Android")
+        advanceUntilIdle()
+
+        assertEquals(listOf("match"), viewModel.uiState.value.filteredCrashes.map { it.id })
+        assertEquals(1, repository.getLatestCrashesCalls)
+        viewModel.clearFilters()
+        advanceUntilIdle()
+        assertEquals("p1", viewModel.uiState.value.filter.projectId)
+        assertEquals("a1", viewModel.uiState.value.filter.applicationId)
+        assertEquals(4, viewModel.uiState.value.filteredCrashes.size)
+    }
+
     @Test
     fun paginationLoadsMoreAndSearchResetsTheVisiblePage() = runTest {
         repository.crashes.value = (0 until 60).map { index ->

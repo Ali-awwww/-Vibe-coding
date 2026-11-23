@@ -614,7 +614,7 @@
     <string name="crashes_load_error_title">تعذر تحميل تقارير الأعطال</string>
     <string name="crashes_load_error_desc">تحقق من الاتصال وصلاحية الوصول إلى المشروع ثم أعد المحاولة. فشل التحميل لا يعني أن قائمة الأعطال فارغة.</string>
     <string name="crashes_retry">إعادة المحاولة</string>
-    <string name="crashes_device_os">%1$s · %2$s</string>
+    <string name="crashes_device_os">الجهاز: %1$s · النظام: %2$s</string>
     <string name="crashes_version_value">الإصدار %1$s</string>
     <string name="crashes_resolved">تم الحل</string>
     <string name="crashes_severity_critical">حرج</string>

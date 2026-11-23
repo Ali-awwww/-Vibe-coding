@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 class FakeAuthRepository(initialUser: UserAccount? = null) : AuthRepository {
     val userFlow = MutableStateFlow(initialUser)

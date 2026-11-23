@@ -614,8 +614,8 @@
     <string name="crashes_load_error_title">Could not load crash reports</string>
     <string name="crashes_load_error_desc">Check your connection and project access, then retry. A loading failure is not an empty crash list.</string>
     <string name="crashes_retry">Retry</string>
-    <string name="crashes_device_os">%1$s · %2$s</string>
-    <string name="crashes_version_value">v%1$s</string>
+    <string name="crashes_device_os">Device: %1$s · OS: %2$s</string>
+    <string name="crashes_version_value">Version %1$s</string>
     <string name="crashes_resolved">Resolved</string>
     <string name="crashes_severity_critical">Critical</string>
     <string name="crashes_severity_high">High</string>
