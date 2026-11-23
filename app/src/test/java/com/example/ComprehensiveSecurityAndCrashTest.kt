@@ -196,6 +196,81 @@ class ComprehensiveSecurityAndCrashTest {
     }
 
     @Test
+    fun `local cached data and notification mutations stay within active user projects`() = runTest(testDispatcher) {
+        val userA = "local_user_a"
+        val userB = "local_user_b"
+
+        activeUserId = userA
+        crashRepository.addProject(Project(id = "local_project_a", name = "A", ownerId = userA))
+        activeUserId = userB
+        crashRepository.addProject(Project(id = "local_project_b", name = "B", ownerId = userB))
+
+        val dao = database.crashDao()
+        dao.insertCrash(
+            CrashReport(
+                id = "local_crash_a",
+                projectId = "local_project_a",
+                applicationId = "local_app_a",
+                userId = userA,
+                exceptionType = "IllegalStateException",
+                message = "owned crash",
+                stackTrace = "at A.kt:1"
+            )
+        )
+        dao.insertCrash(
+            CrashReport(
+                id = "local_crash_b",
+                projectId = "local_project_b",
+                applicationId = "local_app_b",
+                userId = userB,
+                exceptionType = "IllegalArgumentException",
+                message = "foreign crash",
+                stackTrace = "at B.kt:1"
+            )
+        )
+        dao.insertIssue(Issue(id = "local_issue_a", projectId = "local_project_a", title = "Owned issue"))
+        dao.insertIssue(Issue(id = "local_issue_b", projectId = "local_project_b", title = "Foreign issue"))
+        dao.insertNotification(
+            SystemNotification(id = "local_notification_a", projectId = "local_project_a", title = "Owned", message = "A")
+        )
+        dao.insertNotification(
+            SystemNotification(id = "local_notification_b", projectId = "local_project_b", title = "Foreign", message = "B")
+        )
+
+        activeUserId = userA
+
+        assertEquals(setOf("local_crash_a"), crashRepository.getAllCrashes().first().map { it.id }.toSet())
+        assertEquals(setOf("local_issue_a"), crashRepository.getAllIssues().first().map { it.id }.toSet())
+        assertEquals(setOf("local_notification_a"), crashRepository.getNotifications().first().map { it.id }.toSet())
+        assertEquals(1, crashRepository.getUnreadNotificationCount().first())
+
+        assertTrue(crashRepository.getLatestCrashes("local_project_b").first().isEmpty())
+        assertNull(crashRepository.getCrashDetails("local_crash_b").first())
+        assertTrue(crashRepository.getIssues("local_project_b").first().isEmpty())
+        assertNull(crashRepository.getIssueDetails("local_issue_b").first())
+        assertTrue(crashRepository.getNotificationsForProject("local_project_b").first().isEmpty())
+
+        val foreignNotificationWrite = runCatching {
+            crashRepository.addNotification(
+                SystemNotification(id = "foreign_write", projectId = "local_project_b", title = "Foreign", message = "B")
+            )
+        }
+        assertTrue(foreignNotificationWrite.isFailure)
+
+        crashRepository.markNotificationAsRead("local_notification_b")
+        assertFalse(dao.getNotificationsForProject("local_project_b").first().single().isRead)
+
+        crashRepository.markAllNotificationsAsRead()
+        assertTrue(dao.getNotificationsForProject("local_project_a").first().single().isRead)
+        assertFalse(dao.getNotificationsForProject("local_project_b").first().single().isRead)
+
+        crashRepository.clearNotifications()
+        assertTrue(dao.getNotificationsForProject("local_project_a").first().isEmpty())
+        assertEquals(1, dao.getNotificationsForProject("local_project_b").first().size)
+    }
+
+
+    @Test
     fun `test crash lifecycle from creation to resolution`() = runTest(testDispatcher) {
         val userId = "dev_1"
         val projectId = "proj_123"
