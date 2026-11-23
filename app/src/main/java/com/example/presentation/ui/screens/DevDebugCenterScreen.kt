@@ -723,22 +723,26 @@ fun ActiveIncidentDetails(
         incident.verificationRecord?.let { vr ->
             Spacer(modifier = Modifier.height(10.dp))
             Surface(
-                color = if (vr.status == VerificationStatus.FIX_VERIFIED_IN_TEST) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                color = verificationStatusBackground(vr.status),
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        if (vr.status == VerificationStatus.FIX_VERIFIED_IN_TEST) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                        when (vr.status) {
+                            VerificationStatus.FIX_VERIFIED_IN_TEST -> Icons.Default.CheckCircle
+                            VerificationStatus.TEST_FAILED, VerificationStatus.CRASH_REPRODUCED -> Icons.Default.Cancel
+                            VerificationStatus.DIFFERENT_CRASH_DETECTED, VerificationStatus.INCONCLUSIVE -> Icons.Default.Info
+                        },
                         contentDescription = null,
-                        tint = if (vr.status == VerificationStatus.FIX_VERIFIED_IN_TEST) Color(0xFF2E7D32) else Color(0xFFD32F2F),
+                        tint = verificationStatusForeground(vr.status),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = vr.comparisonSummary,
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = if (vr.status == VerificationStatus.FIX_VERIFIED_IN_TEST) Color(0xFF2E7D32) else Color(0xFFD32F2F)
+                        color = verificationStatusForeground(vr.status)
                     )
                 }
             }
@@ -825,6 +829,26 @@ fun ActiveIncidentDetails(
     }
 }
 
+private fun verificationStatusBackground(status: VerificationStatus): Color = when (status) {
+    VerificationStatus.FIX_VERIFIED_IN_TEST -> Color(0xFFE8F5E9)
+    VerificationStatus.TEST_FAILED, VerificationStatus.CRASH_REPRODUCED -> Color(0xFFFFEBEE)
+    VerificationStatus.DIFFERENT_CRASH_DETECTED, VerificationStatus.INCONCLUSIVE -> Color(0xFFFFF8E1)
+}
+
+private fun verificationStatusForeground(status: VerificationStatus): Color = when (status) {
+    VerificationStatus.FIX_VERIFIED_IN_TEST -> Color(0xFF2E7D32)
+    VerificationStatus.TEST_FAILED, VerificationStatus.CRASH_REPRODUCED -> Color(0xFFD32F2F)
+    VerificationStatus.DIFFERENT_CRASH_DETECTED, VerificationStatus.INCONCLUSIVE -> Color(0xFF8D6E00)
+}
+
+private fun verificationStatusLabel(status: VerificationStatus): String = when (status) {
+    VerificationStatus.FIX_VERIFIED_IN_TEST -> "ناجح ومؤكد"
+    VerificationStatus.TEST_FAILED -> "فشلت الاختبارات الفعلية"
+    VerificationStatus.CRASH_REPRODUCED -> "أُعيد إنتاج العطل"
+    VerificationStatus.DIFFERENT_CRASH_DETECTED -> "عطل مختلف"
+    VerificationStatus.INCONCLUSIVE -> "غير حاسم؛ لا توجد أدلة تنفيذ"
+}
+
 @Composable
 fun VerificationHistoryCard(verifications: List<CrashVerificationRecord>) {
     Card(
@@ -857,17 +881,17 @@ fun VerificationHistoryCard(verifications: List<CrashVerificationRecord>) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Build ${v.buildId.take(14)}",
+                                text = if (v.buildId.startsWith("unverified-")) "Attempt ${v.buildId.take(14)}" else "Build ${v.buildId.take(14)}",
                                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                             )
                             Surface(
-                                color = if (v.status == VerificationStatus.FIX_VERIFIED_IN_TEST) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                                color = verificationStatusBackground(v.status),
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
-                                    text = if (v.status == VerificationStatus.FIX_VERIFIED_IN_TEST) "ناجح ومؤكد" else "فاشل / غير حاسم",
+                                    text = verificationStatusLabel(v.status),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (v.status == VerificationStatus.FIX_VERIFIED_IN_TEST) Color(0xFF2E7D32) else Color(0xFFD32F2F),
+                                    color = verificationStatusForeground(v.status),
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
