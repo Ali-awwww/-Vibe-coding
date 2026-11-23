@@ -190,9 +190,17 @@ data class TestExecutionResult(
     val totalTests: Int = 0,
     val passed: Int = 0,
     val failed: Int = 0,
-    val isSuccess: Boolean = true,
+    val isSuccess: Boolean = false,
+    /**
+     * True only when a real build and test runner completed for the same workspace revision.
+     * Static source audits must leave this false.
+     */
+    val executionVerified: Boolean = false,
     val outputLogs: List<String> = emptyList(),
-    val durationMs: Long = 0
+    val durationMs: Long = 0,
+    val staticChecksTotal: Int = 0,
+    val staticChecksPassed: Int = 0,
+    val staticChecksFailed: Int = 0
 )
 
 data class ExecutionSummary(
@@ -599,11 +607,11 @@ enum class TestType(val titleAr: String, val titleEn: String) {
     SYNTAX_CHECK("فحص بناء الجمل والتركيب", "Syntax Checks"),
     TYPE_CHECK("فحص الأنواع وتطابق الاستيراد", "Type & Import Checking"),
     LINTING("فحص معايير التنسيق والأنماط", "Linting & Style Guidelines"),
-    UNIT_TEST("اختبارات الوحدات البرمجية", "Unit Tests"),
+    UNIT_TEST("فحص ملفات الاختبار", "Test File Audit"),
     INTEGRATION_TEST("اختبارات التكامل وتدفق البيانات", "Integration Tests"),
-    BUILD_TEST("فحص تجميع الحزم والبناء", "Build & Bundle Tests"),
-    API_CONTRACT_TEST("فحص واجهات البرمجة ومسارات API", "API Contract Tests"),
-    UI_RENDER_TEST("فحص واجهات العرض والتجاوب", "UI & Responsive Tests")
+    BUILD_TEST("فحص إعدادات البناء ونقطة الدخول", "Build Configuration Check"),
+    API_CONTRACT_TEST("فحص عقود API ساكناً", "Static API Contract Checks"),
+    UI_RENDER_TEST("فحص بنية الواجهة والتجاوب", "Static UI & Responsive Checks")
 }
 
 enum class TestStatus {
@@ -650,7 +658,7 @@ data class QualityFinding(
 )
 
 enum class ProductionReadiness(val labelAr: String, val labelEn: String) {
-    READY("جاهز للإنتاج", "Production Ready"),
+    READY("اجتازت الفحوصات الساكنة", "Static Checks Passed"),
     NEEDS_REVIEW("يحتاج مراجعة وتحسينات", "Needs Review"),
     NOT_READY("غير جاهز - توجد أخطاء حرجة", "Not Ready"),
     UNTESTED("لم يتم الفحص بعد", "Untested")
@@ -700,7 +708,7 @@ data class AutoDebugState(
 
 enum class TestingTab(val titleAr: String, val titleEn: String) {
     OVERVIEW("نظرة عامة", "Overview"),
-    TESTS("الاختبارات", "Tests"),
+    TESTS("الفحوصات الساكنة", "Static Checks"),
     FINDINGS("الجودة والأمان", "Findings"),
     CRASH_INTELLIGENCE("تكامل الأعطال", "Crash Intelligence"),
     AUTO_DEBUG("التصحيح الذاتي", "Auto Debug")
