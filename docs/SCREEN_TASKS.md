@@ -3131,3 +3131,31 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Persistent continuity**
 - Dashboard's main local-cache exposure path is now scoped at the repository boundary. Continue auditing remaining project-owned reads/mutations in `CrashRepositoryImpl` and related repositories, then run the two-account regression and broader suite in CI.
 - Do not treat repository filtering as proof of RLS correctness; production RLS remains read-only and requires independent evidence. Continue other screen tasks while build/device validation is unavailable.
+
+
+### CrashRepository restoration and sync hardening — 2026-11-24
+
+**Confirmed regression**
+- The earlier CrashRepositoryImpl refactor removed approximately 1,039 lines of existing repository behavior while leaving its domain contract and several screens dependent on those operations. CI then exposed unresolved currentUserProjectIds references and, after restoration, a mismatched coroutine result label.
+
+**Implementation**
+- Restored the deleted crash, issue, integration, team-member, audit, Sentry/Bugsnag sync, GitHub fix-assistant, and verification repository operations from the last complete implementation while retaining the newer account-scoped read paths.
+- Added a single owner-boundary helper for project mutations and applied project ownership checks to crash ingestion/status changes, issue writes, integrations, membership management, audit writes, repository mappings, fix generation/PR creation, and verification records.
+- Crash deduplication now reads only crashes visible to the active account. Issue writes validate the selected application against the owned project.
+- Member invitations now resolve an existing registered user by email. They no longer create synthetic user IDs; ownership cannot be granted or removed through member-role operations.
+- Webhook signing secrets are encrypted at rest. Missing signatures and missing secrets are rejected; HMAC validation uses the decrypted secret.
+- New integrations remain DISCONNECTED. Sentry/Bugsnag sync persists imported issues and crashes to the active account's Firestore project and Room cache, and only changes an integration to CONNECTED after the provider API calls and persistence succeed. Unreadable credentials fail the sync rather than returning success.
+- Crash retention purge remains explicitly unsupported until a transactional cloud/local deletion path exists. Automated fix verification and non-inconclusive verification records remain fail-closed without a real Android runner.
+
+**Regression coverage added**
+- Two-account tests now cover foreign-project crash and issue writes, status mutation isolation, member/audit/fix/verification reads, synthetic member invitation rejection, and forged verification rejection.
+- Additional checks cover unsigned webhook rejection, unsupported retention purge, and the absence of simulated verification success.
+
+**Verification boundary**
+- Code changes are recorded through 71aa613b5becd61c7e54441729f04c5e9965e603; test and register update are being committed together.
+- Earlier CI runs exposed and then isolated two concrete compile defects: the restored repository initially lacked the project-ID helper; the next revision had an incorrect return@runCatching label after moving to runCatchingCancellable. Both were corrected in later commits.
+- The current Android lint, unit-test, and APK workflow runs for the corrected source are still IN PROGRESS at this register update. No build, lint, unit-test, APK, or emulator success is claimed until those runs reach a terminal successful state.
+- The local execution container still has no Gradle/Android SDK/ADB evidence available. No Supabase production schema, RLS, Auth, Storage, or data was changed.
+
+**Persistent continuity**
+- Re-check the newest CI runs after this commit, fix any compile/test/lint failures from their logs, and only then resume the first remaining screen criterion in this register. Do not mark Crashes, Integrations, Fix Assistant, or verification screens complete based on repository restoration alone.

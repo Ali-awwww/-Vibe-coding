@@ -319,6 +319,36 @@ class ComprehensiveSecurityAndCrashTest {
             )
         }
         assertTrue(forgedVerification.isFailure)
+
+        dao.insertIntegration(
+            Integration(
+                id = "owned_webhook",
+                projectId = "local_project_a",
+                type = IntegrationType.WEBHOOK,
+                webhookSecret = "test-signing-secret"
+            )
+        )
+        val unsignedWebhook = crashRepository.validateWebhook(
+            projectId = "local_project_a",
+            integrationId = "owned_webhook",
+            payload = """{"event":"test"}""",
+            signatureHeader = null
+        )
+        assertTrue(unsignedWebhook.isSuccess)
+        assertFalse(unsignedWebhook.getOrThrow())
+
+        val purgeWithoutTransactionalPath = crashRepository.purgeOldCrashes("local_project_a", userA)
+        assertTrue(purgeWithoutTransactionalPath.isFailure)
+
+        val simulatedVerification = crashRepository.verifyFix(
+            crashId = "local_crash_a",
+            fixSuggestionId = null,
+            newVersion = "2.0",
+            buildId = "not-a-real-build",
+            scenarioName = "not-executed",
+            simulatedOutcome = VerificationStatus.FIX_VERIFIED_IN_TEST
+        )
+        assertTrue(simulatedVerification.isFailure)
     }
 
 
