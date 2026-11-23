@@ -608,7 +608,7 @@ enum class TestType(val titleAr: String, val titleEn: String) {
     TYPE_CHECK("فحص الأنواع وتطابق الاستيراد", "Type & Import Checking"),
     LINTING("فحص معايير التنسيق والأنماط", "Linting & Style Guidelines"),
     UNIT_TEST("فحص ملفات الاختبار", "Test File Audit"),
-    INTEGRATION_TEST("اختبارات التكامل وتدفق البيانات", "Integration Tests"),
+    INTEGRATION_TEST("فحص سجلات التشغيل", "Runtime Log Check"),
     BUILD_TEST("فحص إعدادات البناء ونقطة الدخول", "Build Configuration Check"),
     API_CONTRACT_TEST("فحص عقود API ساكناً", "Static API Contract Checks"),
     UI_RENDER_TEST("فحص بنية الواجهة والتجاوب", "Static UI & Responsive Checks")
