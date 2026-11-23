@@ -3204,3 +3204,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Persistent continuity**
 - Inspect the next CI report. Fix remaining failures at the source or fixture boundary without weakening owner checks; then resume the Crashes screen and its CrashDetail navigation criteria.
+
+
+### Notification read isolation follow-up — 2026-11-24
+
+- Tightened the local-only mark-read path: an unknown notification ID is rejected before any Room update, just as it is in the Firestore-backed path. This prevents a caller from changing a foreign project's notification by guessing its local ID.
+- Account-level notifications remain visible only through the authenticated user's notification collection and the local query that combines blank project IDs with the user's owned project IDs.
+- The full Android unit-test and APK workflows for this follow-up are pending; no verification status is inferred from queued or in-progress jobs.

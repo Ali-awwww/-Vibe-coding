@@ -1614,7 +1614,7 @@ class CrashRepositoryImpl(
         val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds()
         val visibleNotification = getNotifications().first().firstOrNull { it.id == id }
-        if (firestore != null && visibleNotification == null) {
+        if (visibleNotification == null) {
             throw SecurityException("Notification does not belong to the active account.")
         }
         firestore?.collection("users")?.document(uid)?.collection("notifications")?.document(id)
