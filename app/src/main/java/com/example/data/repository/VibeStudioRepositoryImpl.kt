@@ -1920,35 +1920,6 @@ class VibeStudioRepositoryImpl(
     override suspend fun setupWorkspaceMonitoring(workspaceId: String): Result<WorkspaceMonitoringProfile> = runCatching {
         val workspace = vibeStudioDao.getWorkspaceById(workspaceId)
             ?: throw IllegalArgumentException("Workspace not found: $workspaceId")
-        
-        val projectId = workspace.id
-        val applicationId = workspace.id
-
-        crashDao?.let { dao ->
-            if (dao.getProjectById(projectId) == null) {
-                dao.insertProject(
-                    Project(
-                        id = projectId,
-                        name = workspace.name,
-                        description = "Auto-monitored workspace from AI Vibe Studio (${workspace.techStack})",
-                        ownerId = workspace.ownerId,
-                        createdAt = System.currentTimeMillis()
-                    )
-                )
-            }
-            if (dao.getApplicationById(applicationId) == null) {
-                dao.insertApplication(
-                    Application(
-                        id = applicationId,
-                        projectId = projectId,
-                        name = workspace.name,
-                        platform = workspace.techStack,
-                        sdkSetupStatus = SdkSetupStatus.CONFIGURED,
-                        agentConnectionStatus = AgentConnectionStatus.ONLINE
-                    )
-                )
-            }
-        }
 
         val snippet = UnifiedDevDebugEngine.generateSdkIntegrationSnippet(
             workspaceId = workspace.id,
@@ -1958,21 +1929,21 @@ class VibeStudioRepositoryImpl(
 
         val profile = WorkspaceMonitoringProfile(
             workspaceId = workspace.id,
-            projectId = projectId,
-            applicationId = applicationId,
+            projectId = "",
+            applicationId = "",
             techStack = workspace.techStack,
             targetPlatform = workspace.techStack,
             sdkSnippet = snippet,
-            isSdkConfigured = true,
-            buildSettingsSummary = "Target: ${workspace.techStack} | Monitored by Crash Intelligence Engine"
+            isSdkConfigured = false,
+            buildSettingsSummary = "SDK snippet generated only. SDK is not installed and no Android Agent connection has been verified."
         )
 
         addBuildLog(
             BuildLog(
                 id = UUID.randomUUID().toString(),
                 workspaceId = workspaceId,
-                message = "[Crash Intelligence] تم تفعيل المراقبة وربط المشروع مع محرك الكشف عن الأعطال بنجاح.",
-                type = LogType.SUCCESS
+                message = "[Monitoring] SDK snippet generated only; no SDK installation, monitoring activation, or agent connection was verified.",
+                type = LogType.INFO
             )
         )
 
@@ -1988,58 +1959,70 @@ class VibeStudioRepositoryImpl(
         )
         return WorkspaceMonitoringProfile(
             workspaceId = workspace.id,
-            projectId = workspace.id,
-            applicationId = workspace.id,
+            projectId = "",
+            applicationId = "",
             techStack = workspace.techStack,
             targetPlatform = workspace.techStack,
             sdkSnippet = snippet,
-            isSdkConfigured = true,
-            buildSettingsSummary = "Target: ${workspace.techStack} | Monitored by Crash Intelligence Engine"
+            isSdkConfigured = false,
+            buildSettingsSummary = "SDK snippet generated only. SDK is not installed and no Android Agent connection has been verified."
         )
     }
 
     override suspend fun startTrackedTestSession(workspaceId: String, buildId: String?): Result<TestSession> = runCatching {
         val workspace = vibeStudioDao.getWorkspaceById(workspaceId)
             ?: throw IllegalArgumentException("Workspace not found: $workspaceId")
-        
-        val repoState = getGitRepositoryState(workspaceId).getOrNull()
-        val commitSha = repoState?.recentCommits?.firstOrNull()?.id ?: "head-local-${System.currentTimeMillis().toString().takeLast(6)}"
-        val actualBuildId = buildId ?: "build-${UUID.randomUUID().toString().take(8)}"
-        val sessionId = UUID.randomUUID().toString()
+        val reason = "Live testing is unavailable: no verified Android Agent or isolated process runner is connected. No test session was created."
+        addBuildLog(
+            BuildLog(
+                id = UUID.randomUUID().toString(),
+                workspaceId = workspace.id,
+                message = "[Live Testing] $reason",
+                type = LogType.WARNING
+            )
+        )
+        throw UnsupportedOperationException(reason)
+    }
 
-        val session = TestSession(
-            id = sessionId,
+    override suspend fun recordSimulatedCrash(
+        workspaceId: String,
+        exceptionType: String,
+        message: String,
+        stackTrace: String
+    ): Result<CrashReport> = runCatching {
+        val workspace = vibeStudioDao.getWorkspaceById(workspaceId)
+            ?: throw IllegalArgumentException("Workspace not found: $workspaceId")
+
+        val crashId = UUID.randomUUID().toString()
+        val simulatedBuildId = "simulated-${System.currentTimeMillis().toString().takeLast(6)}"
+
+        val crashReport = CrashReport(
+            id = crashId,
             projectId = workspace.id,
             applicationId = workspace.id,
-            buildId = actualBuildId,
-            version = actualBuildId,
-            deviceName = "AI Vibe Studio Sandbox [${workspace.techStack}]",
-            os = workspace.techStack,
-            startTime = System.currentTimeMillis(),
-            status = TestSessionStatus.APP_RUNNING
+            exceptionType = exceptionType,
+            message = "[SIMULATED] $message",
+            stackTrace = stackTrace,
+            timestamp = System.currentTimeMillis(),
+            appVersion = simulatedBuildId,
+            osVersion = workspace.techStack,
+            deviceModel = "Vibe Studio Simulated Sandbox",
+            severity = Severity.CRITICAL,
+            isResolved = false
         )
 
-        crashDao?.insertTestSession(session)
-
-        val event = TestEvent(
-            id = UUID.randomUUID().toString(),
-            sessionId = sessionId,
-            type = TestEventType.APP_START,
-            details = "بدء جلسة اختبار تتبعية للبناء $actualBuildId عند الالتزام ${commitSha.take(7)}",
-            timestamp = System.currentTimeMillis()
-        )
-        crashDao?.insertTestEvent(event)
+        crashDao?.insertCrash(crashReport)
 
         addBuildLog(
             BuildLog(
                 id = UUID.randomUUID().toString(),
                 workspaceId = workspaceId,
-                message = "[Live Testing] بدأت جلسة الاختبار التتبعية $sessionId (Build: $actualBuildId, Commit: ${commitSha.take(7)})",
-                type = LogType.INFO
+                message = "[SIMULATION] Local-only crash record created: $exceptionType ($message). No remote telemetry was sent.",
+                type = LogType.WARNING
             )
         )
 
-        session
+        crashReport
     }
 
     override suspend fun ingestSimulatedOrRuntimeCrash(
@@ -2291,7 +2274,10 @@ class VibeStudioRepositoryImpl(
 
         // Get latest active test session
         val sessions = crashDao?.getTestSessions(workspaceId)?.first() ?: emptyList()
-        val activeSession = sessions.firstOrNull()
+        val activeSession = sessions.firstOrNull {
+            it.status == TestSessionStatus.APP_RUNNING &&
+                !it.deviceName.startsWith("AI Vibe Studio Sandbox", ignoreCase = true)
+        }
         val activeRunContext = activeSession?.let { s ->
             val events = crashDao?.getTestEvents(s.id)?.first() ?: emptyList()
             ActiveTestRunContext(
