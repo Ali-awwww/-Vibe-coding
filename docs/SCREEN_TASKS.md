@@ -3037,3 +3037,35 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Regression-test determinism — 2026-11-24
 - The account-switch test now waits for the first account's workspace emission before switching identities, eliminating a scheduling race in the test itself. The flow operator is explicitly opted in to its coroutine API.
 - CI remains the authoritative Android/JUnit verification; no test pass is claimed from the source update alone.
+
+
+### False-positive build/test verification — 2026-11-24
+
+**Confirmed defects**
+- `VibeQualityTestingEngine.auditUnitTests` inspected test-file names and assertion text, then marked inferred cases as passed without executing them.
+- `runWorkspaceBuild` only compared opening and closing brace counts but emitted a successful compilation message. `runWorkspaceTests` only wrapped the static audit and exposed its checks as executed tests.
+- `UnifiedDevDebugEngine.evaluateVerificationOutcome` could mark a fix verified when the result was merely a static audit (including an empty result), and did not require the fix to belong to the selected crash or to have been applied.
+
+**Implementation**
+- Added explicit `TestExecutionResult.executionVerified` evidence, defaulting to false; actual test counts default to zero and static-audit counts are stored separately.
+- Static test-file discovery now reports `SKIPPED` and never claims test cases ran. Readiness labels, audit summaries, terminal-agent output, orchestration memory, and the Vibe Testing panel now identify static checks and state that they do not prove a build or runtime test.
+- Workspace build logs now describe the brace-balance preflight only; they no longer claim compilation. The terminal sandbox still blocks process commands until a verified isolated runner is connected.
+- Closed-loop verification now requires a matching, applied fix plus a non-empty, fully passing result explicitly marked as real execution. Mismatched or unapplied fixes are rejected before verification side effects. Without execution evidence the incident remains `INCONCLUSIVE`, not `VERIFIED`.
+- Auto-debug completion and DevDebugCenter feedback no longer report success from static checks alone.
+
+**Regression coverage added**
+- Static audit results cannot verify a fix; an empty execution result cannot verify a fix.
+- Retest rejects an unapplied fix and a fix belonging to another crash without creating verification records.
+- Static test-file inventory remains `SKIPPED`; workspace build/test methods explicitly report that no runtime execution occurred.
+- The end-to-end local flow now expects `INCONCLUSIVE` and `FIX_APPLIED` until a real build/test runner supplies evidence.
+
+**Verification boundary**
+- Source commits for this batch span `f98d1bf005417cc3b5070680ed9a3fab851eae15` through `3f8fdbdfec5eb6e28387f1ebefb7b7c06b8cf697`; current code HEAD before this register update: `3f8fdbdfec5eb6e28387f1ebefb7b7c06b8cf697`.
+- Tests were added but **not executed**. The available container has Java, but no Gradle executable, Android SDK/`ANDROID_HOME`, or ADB; the repository could not be cloned into the container because network access was unavailable.
+- The push workflows were inspected: `.github/workflows/android.yml`, `build-apk.yml`, and `code_quality.yml` trigger on pushes to `main` (the APK workflow triggers on all branches). The latest commit's combined status returned no status contexts, and the connected workflow-run query returned no runs; this does not establish success or failure. No Gradle test, lint, APK build, emulator, or device result is claimed.
+- No Supabase production schema, policy, auth, or data was changed. No screen is marked complete by this batch.
+
+**Persistent continuity**
+- Last area worked: DevDebugCenter / Vibe Studio — integrity of build, test, and closed-loop verification evidence.
+- Confirmed blocker: `WorkspaceSandboxEngine.executeSandboxCommand` returns `PROCESS_EXECUTION_UNAVAILABLE` for `gradle`, `npm`, `python`, `flutter`, `node`, and `adb`; no verified isolated process runner is connected.
+- Exact next step: connect or implement a verified isolated process runner, then run the actual workspace build and test commands against one immutable workspace revision and set `executionVerified=true` only from their real exit/results. Until then, keep closed-loop outcomes `INCONCLUSIVE`; in parallel continue the next independent screen task and return to device RTL/LTR and backend authorization evidence before closing DevDebugCenter.
