@@ -2025,67 +2025,6 @@ class VibeStudioRepositoryImpl(
         crashReport
     }
 
-    override suspend fun ingestSimulatedOrRuntimeCrash(
-        workspaceId: String,
-        testSessionId: String?,
-        exceptionType: String,
-        message: String,
-        stackTrace: String
-    ): Result<CrashReport> = runCatching {
-        val workspace = vibeStudioDao.getWorkspaceById(workspaceId)
-            ?: throw IllegalArgumentException("Workspace not found: $workspaceId")
-
-        val crashId = UUID.randomUUID().toString()
-        val buildId = "build-runtime-${System.currentTimeMillis().toString().takeLast(6)}"
-
-        val crashReport = CrashReport(
-            id = crashId,
-            projectId = workspace.id,
-            applicationId = workspace.id,
-            exceptionType = exceptionType,
-            message = message,
-            stackTrace = stackTrace,
-            timestamp = System.currentTimeMillis(),
-            appVersion = buildId,
-            osVersion = workspace.techStack,
-            deviceModel = "Vibe Studio Execution Sandbox",
-            severity = Severity.CRITICAL,
-            isResolved = false
-        )
-
-        crashDao?.insertCrash(crashReport)
-        crashRepository?.addCrash(crashReport)
-
-        if (!testSessionId.isNullOrBlank()) {
-            crashDao?.updateTestSessionStatus(
-                sessionId = testSessionId,
-                status = TestSessionStatus.CRASH_DETECTED,
-                endTime = System.currentTimeMillis(),
-                crashId = crashId
-            )
-
-            val crashEvent = TestEvent(
-                id = UUID.randomUUID().toString(),
-                sessionId = testSessionId,
-                type = TestEventType.CRASH,
-                details = "تم التقاط عطل حرج: $exceptionType - $message",
-                timestamp = System.currentTimeMillis()
-            )
-            crashDao?.insertTestEvent(crashEvent)
-        }
-
-        addBuildLog(
-            BuildLog(
-                id = UUID.randomUUID().toString(),
-                workspaceId = workspaceId,
-                message = "[Crash Intelligence] عطل جديد مسجل: $exceptionType ($message)",
-                type = LogType.ERROR
-            )
-        )
-
-        crashReport
-    }
-
     override suspend fun diagnoseCrashAndGenerateFix(crashId: String): Result<Pair<AIDiagnosis, FixSuggestion>> = runCatching {
         val crash = crashDao?.getAllCrashes()?.first()?.find { it.id == crashId }
             ?: crashRepository?.getCrashDetails(crashId)?.first()
