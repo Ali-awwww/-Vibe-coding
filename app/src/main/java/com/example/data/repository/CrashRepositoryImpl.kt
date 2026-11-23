@@ -495,6 +495,7 @@ class CrashRepositoryImpl(
                     throw e
                 } catch (e: Exception) {
                     handleFirestoreError(e, OperationType.WRITE, issueRef.path)
+                    throw e
                 }
             }
         }
@@ -524,7 +525,7 @@ class CrashRepositoryImpl(
 
         // 5. System Notifications: Alert developers on critical crashes or ANRs
         if (isAnr) {
-            crashDao.insertNotification(
+            addNotification(
                 SystemNotification(
                     id = UUID.randomUUID().toString(),
                     projectId = newCrash.projectId,
@@ -535,7 +536,7 @@ class CrashRepositoryImpl(
                 )
             )
         } else if (newCrash.severity == Severity.CRITICAL || newCrash.severity == Severity.HIGH) {
-            crashDao.insertNotification(
+            addNotification(
                 SystemNotification(
                     id = UUID.randomUUID().toString(),
                     projectId = newCrash.projectId,
@@ -764,7 +765,7 @@ class CrashRepositoryImpl(
             ?: throw IllegalArgumentException("لم يتم العثور على التكامل")
 
         if (integration.projectId != projectId) throw SecurityException("Integration is outside the selected project.")
-        if (integration.webhookSecret.isNotBlank() && signatureHeader.isNullOrBlank()) return@runCatchingCancellable false
+        if (integration.webhookSecret.isBlank() || signatureHeader.isNullOrBlank()) return@runCatchingCancellable false
         if (integration.webhookSecret.isNotBlank() && signatureHeader != null) {
             val valid = SecurityUtils.verifyWebhookSignature(payload, integration.webhookSecret, signatureHeader)
             if (!valid) {
@@ -1333,7 +1334,7 @@ class CrashRepositoryImpl(
         val filePath = searchResults.firstOrNull() ?: throw IllegalStateException("لم يتم العثور على الملف $fileName في المستودع.")
         
         val originalCode = githubRepository.fetchFileContent(
-            userId = authorizedCrash.userId,
+            userId = uid,
             owner = mapping.repoOwner,
             repo = mapping.repoName,
             path = filePath,
