@@ -3184,3 +3184,23 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Persistent continuity**
 - After CI, continue the Crashes route audit through source provenance, project/application filters, offline/permission states and CrashDetail navigation. Keep the screen open until all route criteria and device checks pass.
+
+
+### Repository regression follow-up — project applications and account-level notifications — 2026-11-24
+
+**CI evidence**
+- The full unit suite on commit 06bbcf4812914d0f0b2b3ad0ec90d257a9f0ce91 compiled, then completed 401 tests with three failures. The XML report identified two crash fixtures that supplied an application ID without creating that application in the project, and a notification-tray test that intentionally uses account-level notifications with an empty project ID.
+- These were fixture/contract mismatches introduced by the new owner and application boundary, not a reason to remove project isolation.
+
+**Corrections**
+- Updated the ANR and fix-verification fixtures to create the applications they claim produced their crashes. Crash ingestion continues to reject an application ID that is not part of the owned project.
+- Restored account-level notification behavior without weakening project isolation: blank-project notifications are stored only under the authenticated user's notification collection; project notifications still require an owned project.
+- Notification list, mark-read, mark-all-read and clear operations now include account-level records plus only the active user's owned-project records. Room DAO operations use explicit scoped queries rather than clearing or marking all users' rows.
+- The notification list can now load account-level alerts even when the user has no projects.
+
+**Verification boundary**
+- The source, Room query and fixture corrections are committed on main. CI for the new revision is pending; no pass is claimed until the full test and APK workflows finish.
+- The new CrashesViewModel tests are included in the same revision series but have not yet been observed passing in CI.
+
+**Persistent continuity**
+- Inspect the next CI report. Fix remaining failures at the source or fixture boundary without weakening owner checks; then resume the Crashes screen and its CrashDetail navigation criteria.

@@ -1554,14 +1554,10 @@ class CrashRepositoryImpl(
 
     // Notifications Implementation
     override fun getNotifications(): Flow<List<SystemNotification>> = flow {
+        val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds()
-        if (projectIds.isEmpty()) {
-            emit(emptyList())
-            return@flow
-        }
         val fs = firestore
         if (fs != null) {
-            val uid = requireUserId()
             emitAll(
                 fs.collection("users").document(uid).collection("notifications")
                     .orderBy("timestamp", Query.Direction.DESCENDING)
