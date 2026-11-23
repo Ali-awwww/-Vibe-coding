@@ -612,6 +612,7 @@ private fun crashSourceLabel(source: IntegrationType?): String = when (source) {
     IntegrationType.BUGSNAG -> stringResource(R.string.crashes_source_bugsnag)
     IntegrationType.WEBHOOK -> stringResource(R.string.crashes_source_webhook)
     IntegrationType.CUSTOM -> stringResource(R.string.crashes_source_custom)
+    IntegrationType.INTERNAL_QA -> stringResource(R.string.crashes_source_internal_qa)
     null -> stringResource(R.string.crashes_source_unavailable)
 }
 

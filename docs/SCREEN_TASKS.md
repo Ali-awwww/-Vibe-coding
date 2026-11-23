@@ -3239,17 +3239,17 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Crashes screen — source provenance, scoped filters and incremental paging — 2026-11-24
 
 **Implementation**
-- The crash list now calls `getLatestCrashes(projectId, applicationId)` so route project/application scope is enforced by the repository query before presentation filters run.
-- Added an accessible filter sheet for exception type, app version, operating system and severity; search and filter changes reset the visible page without reopening the repository stream.
+- The crash list calls `getCrashPage(projectId, applicationId, cursor, pageSize)`; the production repository enforces route project/application scope before returning each page.
+- Added an accessible filter sheet for exception type, app version, operating system and severity. Search and filter changes apply to every page already loaded; loading another page continues from the repository cursor without re-fetching prior pages.
 - Added real 25-record repository pages. Firestore uses project/user-scoped queries with a stable document cursor; Room uses scoped keyset queries over timestamp and ID. Subsequent pages load on demand without the previous 100-record ceiling. Search and optional filters apply across loaded pages, and the load-more retry remains available when the current filtered subset is empty.
-- Crash cards now show the persisted `source` value (Firebase Crashlytics, Sentry, Bugsnag, webhook or custom). Null provenance and blank metadata are explicitly labeled unavailable rather than guessed.
+- Crash cards show the persisted `source` value (Sentry, Bugsnag, webhook, custom or internal QA). Null provenance and blank metadata are explicitly labeled unavailable rather than guessed. Firebase Crashlytics remains an unavailable sync path and is not claimed as connected.
 - English and Arabic labels cover the new filter, paging, source and missing-metadata states.
 
 **Regression coverage added**
-- The CrashesViewModel tests assert the project/application query arguments, retry after a source error, route-scope preservation, incremental paging and search reset behavior.
+- The CrashesViewModel tests assert the project/application page arguments, retry after a source error, route-scope preservation, multiple cursor pages, filtering across loaded pages and later-page retry.
 
 **Verification boundary**
-- HEAD `c81aa7b7566e58881303976d184a80f521569160` passed the Android unit-test workflow after correcting the first compile failure (a missing Flow `map` import in the fake repository). Lint and APK jobs for that revision were still running when this change was prepared. CI for the cursor-paging revision must be checked after push.
+- HEAD `360856e9d6ae2a6433f8e12df3a0a19194e4cd29` passed unit tests, lint/quality checks and Debug/Release APK builds; both APK artifacts were uploaded. The first cursor-paging build failed because route IDs were not retained as ViewModel properties; that compile error was corrected in HEAD `25fd9275ecf006cb44bf5db9dfe753f4b33a138f`. CI for the corrected cursor implementation is still required.
 - The execution container still has no recorded local Gradle/Android SDK/ADB capability. No emulator screenshot, RTL/LTR rendered review or TalkBack validation is claimed.
 - The Crashes screen remains open. Repository cursor paging is implemented; rendered device validation, RTL/LTR review and TalkBack validation remain outstanding.
 
@@ -3269,7 +3269,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Verification boundary**
 - Source search showed Settings was the only production caller of `SeedData`; this commit removes that caller and the utility.
-- CI for the change is pending. The Settings screen still needs rendered Arabic/English and accessibility review on an Android device.
+- The Settings removal commit passed unit tests, lint/quality checks and Debug/Release APK builds; both APK artifacts were uploaded. The Settings screen still needs rendered Arabic/English and accessibility review on an Android device.
 - A local-only Sandbox database remains a separate unimplemented capability; the app does not claim one exists.
 
 
@@ -3279,4 +3279,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added a backward-compatible default page method to CrashRepository for existing implementations. The production repository overrides it with Firestore/Room paging.
 - The ViewModel requests later pages only on demand, deduplicates records, preserves loaded data after a page failure and retries the same cursor. Search and optional filters run across all pages already loaded.
 - Regression tests cover project/application scope, first-page retry, multiple cursors, filtering across loaded pages and later-page retry.
-- The first CI run for the cursor-paging revision failed at Kotlin compilation because the constructor's route IDs were not retained as properties for the page loader. The IDs are now private constructor properties; a new CI run must validate the correction and any downstream Room/Firestore issues. No emulator or rendered RTL/LTR evidence is claimed.
+- The first CI run for the cursor-paging revision failed at Kotlin compilation because the constructor's route IDs were not retained as properties for the page loader. They are now private constructor properties. The next CI run must validate this correction and downstream Room/Firestore paging. No emulator or rendered RTL/LTR evidence is claimed.
+
+### Crash source provenance correction — 2026-11-24
+
+- The workspace quality-test engine was creating internal QA failure reports but labelling them `FIREBASE_CRASHLYTICS`. No Firebase Crashlytics ingestion path exists; repository sync explicitly rejects that integration pending a backend proxy.
+- Added `INTERNAL_QA` to the source enum and changed generated workspace test-failure reports to use it. Crash cards now display a distinct localized Internal QA source label instead of falsely attributing these records to Firebase.
+- Added a regression test asserting that generated quality-test failures retain `INTERNAL_QA` provenance.
+- Cursor-paging CI is still pending after the route-ID compile correction. No device screenshots or rendered RTL/LTR evidence are claimed.

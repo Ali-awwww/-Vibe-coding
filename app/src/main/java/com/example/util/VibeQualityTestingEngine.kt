@@ -990,7 +990,7 @@ object VibeQualityTestingEngine {
             isResolved = false,
             severity = Severity.CRITICAL,
             userId = workspace.ownerId,
-            source = IntegrationType.FIREBASE_CRASHLYTICS
+            source = IntegrationType.INTERNAL_QA
         )
     }
 

@@ -275,7 +275,7 @@ data class Integration(
 )
 
 enum class IntegrationType {
-    FIREBASE_CRASHLYTICS, SENTRY, BUGSNAG, WEBHOOK, CUSTOM
+    FIREBASE_CRASHLYTICS, SENTRY, BUGSNAG, WEBHOOK, CUSTOM, INTERNAL_QA
 }
 
 enum class IntegrationStatus {

@@ -644,4 +644,5 @@
     <string name="crashes_exception_unavailable">نوع الاستثناء غير متاح</string>
     <string name="crashes_message_unavailable">لم يتم توفير رسالة</string>
     <string name="crashes_loading_more">جارٍ تحميل المزيد من التقارير...</string>
+    <string name="crashes_source_internal_qa">اختبار الجودة الداخلي</string>
 </resources>

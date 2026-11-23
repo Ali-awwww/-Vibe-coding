@@ -644,4 +644,5 @@
     <string name="crashes_exception_unavailable">Exception type unavailable</string>
     <string name="crashes_message_unavailable">No message supplied</string>
     <string name="crashes_loading_more">Loading more reports...</string>
+    <string name="crashes_source_internal_qa">Internal QA</string>
 </resources>
