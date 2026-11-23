@@ -122,76 +122,52 @@ class UnifiedClosedLoopTest {
 
     @Test
     fun testWorkspaceMonitoringProfileGeneration() = runTest {
-        val profileResult = repository.setupWorkspaceMonitoring(testWorkspaceId)
-        assertTrue(profileResult.isSuccess)
-        val profile = profileResult.getOrThrow()
+        val profile = repository.setupWorkspaceMonitoring(testWorkspaceId).getOrThrow()
 
         assertEquals(testWorkspaceId, profile.workspaceId)
-        assertEquals(testWorkspaceId, profile.projectId)
-        assertTrue(profile.isSdkConfigured)
+        assertEquals("", profile.projectId)
+        assertEquals("", profile.applicationId)
+        assertFalse(profile.isSdkConfigured)
         assertTrue(profile.sdkSnippet.contains("CrashIntelligence.init"))
+        assertTrue(profile.buildSettingsSummary.contains("not installed"))
 
-        // Check project & application created in database
-        val project = crashDao.getProjectById(testWorkspaceId)
-        assertNotNull(project)
-        assertEquals("E-Commerce Mobile", project?.name)
+        assertNull(crashDao.getProjectById(testWorkspaceId))
+        assertNull(crashDao.getApplicationById(testWorkspaceId))
 
-        val app = crashDao.getApplicationById(testWorkspaceId)
-        assertNotNull(app)
-        assertEquals(SdkSetupStatus.CONFIGURED, app?.sdkSetupStatus)
+        val reloadedProfile = repository.getWorkspaceMonitoringProfile(testWorkspaceId)
+        assertNotNull(reloadedProfile)
+        assertFalse(reloadedProfile!!.isSdkConfigured)
     }
-
     @Test
-    fun testStartTrackedTestSessionWithBuildIdAndCommit() = runTest {
-        repository.initGitRepository(testWorkspaceId)
-
+    fun testStartTrackedTestSessionFailsWithoutAgent() = runTest {
         val sessionResult = repository.startTrackedTestSession(testWorkspaceId, "build-101-alpha")
-        assertTrue(sessionResult.isSuccess)
-        val session = sessionResult.getOrThrow()
 
-        assertEquals("build-101-alpha", session.buildId)
-        assertEquals(TestSessionStatus.APP_RUNNING, session.status)
-        assertEquals(testWorkspaceId, session.projectId)
-
-        // Check test event was created
-        val events = crashDao.getTestEvents(session.id).first()
-        assertTrue(events.isNotEmpty())
-        assertEquals(TestEventType.APP_START, events.first().type)
+        assertTrue(sessionResult.isFailure)
+        assertTrue(sessionResult.exceptionOrNull()?.message?.contains("no verified Android Agent") == true)
+        assertTrue(crashDao.getTestSessions(testWorkspaceId).first().isEmpty())
     }
-
     @Test
-    fun testCrashIngestionAndSessionLinkage() = runTest {
-        val session = repository.startTrackedTestSession(testWorkspaceId, "build-102").getOrThrow()
-
+    fun testSimulatedCrashIsLocalAndClearlyMarked() = runTest {
         val stackTrace = """
             java.lang.NullPointerException: Attempt to invoke virtual method on a null object reference
                 at com.example.MainActivity.onCreate(MainActivity.kt:6)
                 at com.example.App.start(App.kt:18)
         """.trimIndent()
 
-        val crashResult = repository.ingestSimulatedOrRuntimeCrash(
+        val crash = repository.recordSimulatedCrash(
             workspaceId = testWorkspaceId,
-            testSessionId = session.id,
             exceptionType = "java.lang.NullPointerException",
             message = "Attempt to invoke virtual method on a null object reference",
             stackTrace = stackTrace
-        )
+        ).getOrThrow()
 
-        assertTrue(crashResult.isSuccess)
-        val crash = crashResult.getOrThrow()
         assertFalse(crash.isResolved)
         assertEquals("java.lang.NullPointerException", crash.exceptionType)
-
-        // Verify test session status transitioned to CRASH_DETECTED
-        val updatedSession = crashDao.getTestSessionById(session.id).first()
-        assertEquals(TestSessionStatus.CRASH_DETECTED, updatedSession?.status)
-        assertEquals(crash.id, updatedSession?.crashId)
-
-        // Verify event logged
-        val events = crashDao.getTestEvents(session.id).first()
-        assertTrue(events.any { it.type == TestEventType.CRASH })
+        assertTrue(crash.message.startsWith("[SIMULATED]"))
+        assertTrue(crash.appVersion.startsWith("simulated-"))
+        assertEquals("Vibe Studio Simulated Sandbox", crash.deviceModel)
+        assertTrue(crashDao.getCrashesByProject(testWorkspaceId).first().any { it.id == crash.id })
     }
-
     @Test
     fun testAIDiagnosisAndCulpritSourceMatching() = runTest {
         val stackTrace = """
@@ -199,9 +175,8 @@ class UnifiedClosedLoopTest {
                 at com.example.MainActivity.onCreate(app/src/main/java/com/example/MainActivity.kt:6)
         """.trimIndent()
 
-        val crash = repository.ingestSimulatedOrRuntimeCrash(
+        val crash = repository.recordSimulatedCrash(
             workspaceId = testWorkspaceId,
-            testSessionId = null,
             exceptionType = "java.lang.NullPointerException",
             message = "null pointer in getUserProfile",
             stackTrace = stackTrace
@@ -222,9 +197,8 @@ class UnifiedClosedLoopTest {
         repository.initGitRepository(testWorkspaceId)
 
         val stackTrace = "java.lang.NullPointerException at com.example.MainActivity.onCreate(app/src/main/java/com/example/MainActivity.kt:6)"
-        val crash = repository.ingestSimulatedOrRuntimeCrash(
+        val crash = repository.recordSimulatedCrash(
             workspaceId = testWorkspaceId,
-            testSessionId = null,
             exceptionType = "java.lang.NullPointerException",
             message = "null user",
             stackTrace = stackTrace
@@ -256,9 +230,8 @@ class UnifiedClosedLoopTest {
     @Test
     fun testClosedLoopVerificationStrictAccuracyPolicy() = runTest {
         val stackTrace = "java.lang.NullPointerException at com.example.MainActivity.kt:6"
-        val crash = repository.ingestSimulatedOrRuntimeCrash(
+        val crash = repository.recordSimulatedCrash(
             workspaceId = testWorkspaceId,
-            testSessionId = null,
             exceptionType = "java.lang.NullPointerException",
             message = "null pointer",
             stackTrace = stackTrace
@@ -345,9 +318,8 @@ class UnifiedClosedLoopTest {
 
     @Test
     fun testRetestRejectsUnappliedFixBeforeAnyVerificationMutation() = runTest {
-        val crash = repository.ingestSimulatedOrRuntimeCrash(
+        val crash = repository.recordSimulatedCrash(
             workspaceId = testWorkspaceId,
-            testSessionId = null,
             exceptionType = "IllegalStateException",
             message = "unapplied fix",
             stackTrace = "at com.example.MainActivity.onCreate(MainActivity.kt:1)"
@@ -363,16 +335,14 @@ class UnifiedClosedLoopTest {
     @Test
     fun testRetestRejectsFixBelongingToAnotherCrash() = runTest {
         repository.initGitRepository(testWorkspaceId)
-        val firstCrash = repository.ingestSimulatedOrRuntimeCrash(
+        val firstCrash = repository.recordSimulatedCrash(
             workspaceId = testWorkspaceId,
-            testSessionId = null,
             exceptionType = "IllegalArgumentException",
             message = "first crash",
             stackTrace = "at com.example.MainActivity.onCreate(MainActivity.kt:1)"
         ).getOrThrow()
-        val secondCrash = repository.ingestSimulatedOrRuntimeCrash(
+        val secondCrash = repository.recordSimulatedCrash(
             workspaceId = testWorkspaceId,
-            testSessionId = null,
             exceptionType = "IllegalStateException",
             message = "second crash",
             stackTrace = "at com.example.MainActivity.onCreate(MainActivity.kt:2)"
@@ -421,45 +391,61 @@ class UnifiedClosedLoopTest {
     }
 
     @Test
-    fun testFullEndToEndDevelopmentAndCrashIntelligenceLoop() = runTest {
-        // Step 1: Monitoring profile
+    fun testLegacySandboxSessionIsNotExposedAsLive() = runTest {
+        crashDao.insertTestSession(
+            TestSession(
+                id = "legacy-sandbox-session",
+                projectId = testWorkspaceId,
+                applicationId = testWorkspaceId,
+                buildId = "build-fake",
+                version = "build-fake",
+                deviceName = "AI Vibe Studio Sandbox [Android (Kotlin)]",
+                os = "Android (Kotlin)",
+                status = TestSessionStatus.APP_RUNNING
+            )
+        )
+
+        val state = repository.getDevDebugState(testWorkspaceId).getOrThrow()
+
+        assertNull(state.activeRunContext)
+    }
+
+    @Test
+    fun testLocalSimulatedCrashFlowRemainsUnverifiedWithoutAgentAndRuntimeRunner() = runTest {
+        // SDK setup only generates a snippet; it does not configure a device.
         val profile = repository.setupWorkspaceMonitoring(testWorkspaceId).getOrThrow()
-        assertTrue(profile.isSdkConfigured)
+        assertFalse(profile.isSdkConfigured)
 
-        // Step 2: Tracked test session
-        val session = repository.startTrackedTestSession(testWorkspaceId, "build-init-v1").getOrThrow()
-        assertEquals(TestSessionStatus.APP_RUNNING, session.status)
+        // No synthetic live test session is created without a connected Android Agent.
+        val sessionResult = repository.startTrackedTestSession(testWorkspaceId, "build-init-v1")
+        assertTrue(sessionResult.isFailure)
+        assertTrue(crashDao.getTestSessions(testWorkspaceId).first().isEmpty())
 
-        // Step 3: Real crash occurs and is ingested
-        val stackTrace = "java.lang.NullPointerException: null obj at MainActivity.kt:6"
-        val crash = repository.ingestSimulatedOrRuntimeCrash(
+        // The explicit crash action creates a local simulation, not runtime telemetry.
+        val crash = repository.recordSimulatedCrash(
             workspaceId = testWorkspaceId,
-            testSessionId = session.id,
             exceptionType = "NullPointerException",
             message = "null obj in UserService",
-            stackTrace = stackTrace
+            stackTrace = "java.lang.NullPointerException: null obj at MainActivity.kt:6"
         ).getOrThrow()
+        assertTrue(crash.message.startsWith("[SIMULATED]"))
 
-        // Step 4: AI Diagnosis and Fix generation
         val (diagnosis, fix) = repository.diagnoseCrashAndGenerateFix(crash.id).getOrThrow()
         assertNotNull(diagnosis)
         assertNotNull(fix)
 
-        // Step 5: Apply patch to workspace
         repository.initGitRepository(testWorkspaceId)
         val commit = repository.applyClosedLoopFix(fix.id).getOrThrow()
         assertNotNull(commit.id)
 
-        // Step 6: Retest and Verify
         val outcome = repository.retestAndVerifyClosedLoop(crash.id, fix.id).getOrThrow()
-        assertNotNull(outcome)
         assertFalse(outcome.isFixed)
         assertEquals(VerificationStatus.INCONCLUSIVE, outcome.status)
         assertFalse(outcome.verificationRecord.environmentValid)
 
-        // Step 7: The applied fix is visible, but the incident remains unverified.
         val state = repository.getDevDebugState(testWorkspaceId).getOrThrow()
         assertEquals(1, state.incidents.size)
         assertEquals(IncidentStatus.FIX_APPLIED, state.incidents.first().status)
+        assertNull(state.activeRunContext)
     }
 }
