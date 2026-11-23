@@ -67,9 +67,10 @@ fun DebugSymbolsScreen(projectId: String, navController: NavController, viewMode
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            val loadFailed = uiState.errorResId == R.string.debug_symbols_load_failed
-            if (uiState.errorResId != null && (!loadFailed || uiState.files.isNotEmpty())) {
-                Text(stringResource(uiState.errorResId), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            val currentErrorResId = uiState.errorResId
+            val loadFailed = currentErrorResId == R.string.debug_symbols_load_failed
+            if (currentErrorResId != null && (!loadFailed || uiState.files.isNotEmpty())) {
+                Text(stringResource(currentErrorResId), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             if (uiState.isLoading) {
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -309,7 +310,7 @@ fun UploadSymbolDialog(
                 selectedFile?.let { file ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(file.fileName, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.debug_symbols_selected_file, file.fileName), fontWeight = FontWeight.SemiBold)
                             Text(
                                 stringResource(R.string.debug_symbols_file_size, file.byteSize),
                                 style = MaterialTheme.typography.bodySmall,

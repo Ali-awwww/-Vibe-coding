@@ -3007,3 +3007,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: DebugSymbols — real local document selection and bounded, strict text ingestion are implemented in source with regression tests.
 - Exact next step: inspect the three push-triggered workflows for this commit to terminal status; fix compiler, resource, unit-test or lint failures from their logs. Keep device/RTL and remote artifact-storage gates open. Then continue the next executable screen task without claiming DebugSymbols complete.
+
+
+### Source-review correction — 2026-11-24
+- Captured the delegated Compose error resource in a stable local value before passing it to stringResource, avoiding the smart-cast failure previously observed in this screen family.
+- The selected document label now uses the localized resource rather than rendering an unlabeled filename. CI for the file-picker slice remains pending.
