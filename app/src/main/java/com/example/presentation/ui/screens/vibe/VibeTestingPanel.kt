@@ -146,7 +146,7 @@ private fun TestingPanelHeader(
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "محرك الاختبارات الذكي وضمان الجودة",
+                    text = "محرك الفحوصات الساكنة وضمان الجودة",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -398,12 +398,20 @@ private fun TestsTabContent(
 ) {
     if (report == null || report.testResults.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("لا توجد اختبارات مسجلة بعد. اضغط 'تشغيل الفحوصات' للبدء.")
+            Text("لا توجد نتائج فحص ساكن مسجلة بعد. اضغط 'تشغيل الفحوصات' للبدء.")
         }
         return
     }
 
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Text(
+                text = "تنبيه: النتائج أدناه فحوصات ساكنة لملفات المشروع. لم يُشغّل مترجم أو مشغّل اختبارات فعلي؛ حالات PASS لا تثبت نجاح البناء أو التشغيل.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+            )
+        }
         items(report.testResults) { test ->
             TestCaseItemCard(
                 test = test,
@@ -1001,7 +1009,7 @@ private fun EmptyTestingState(onRunTests: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "محرك الاختبارات وضمان الجودة جاهز للفحص",
+                text = "محرك الفحوصات الساكنة وضمان الجودة جاهز للفحص",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
