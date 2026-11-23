@@ -3227,3 +3227,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Verification boundary**
 - The workflow and Gradle configuration changes are committed on main. The first CI run using the new host and non-duplicated workflow layout is pending; no success is claimed until it completes.
 - No external service deployment, release tag, production secret, or Supabase change was made.
+
+
+### Notification isolation regression assertion — 2026-11-24
+
+- The first full suite after restoring global notification support exposed one expected fail-closed behavior in the two-account regression: marking another project's notification read now throws a SecurityException instead of silently doing nothing.
+- Updated the regression to assert that rejection and verify the foreign notification remains unread. This preserves the stronger authorization contract; no repository access check was relaxed.
+- The next full CI run will validate this test adjustment alongside the Robolectric repository/duplicate-workflow fix.

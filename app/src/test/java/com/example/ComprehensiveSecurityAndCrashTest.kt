@@ -257,7 +257,10 @@ class ComprehensiveSecurityAndCrashTest {
         }
         assertTrue(foreignNotificationWrite.isFailure)
 
-        crashRepository.markNotificationAsRead("local_notification_b")
+        val foreignNotificationRead = runCatching {
+            crashRepository.markNotificationAsRead("local_notification_b")
+        }
+        assertTrue(foreignNotificationRead.isFailure)
         assertFalse(dao.getNotificationsForProject("local_project_b").first().single().isRead)
 
         crashRepository.markAllNotificationsAsRead()
