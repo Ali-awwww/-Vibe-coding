@@ -3069,3 +3069,37 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Last area worked: DevDebugCenter / Vibe Studio — integrity of build, test, and closed-loop verification evidence.
 - Confirmed blocker: `WorkspaceSandboxEngine.executeSandboxCommand` returns `PROCESS_EXECUTION_UNAVAILABLE` for `gradle`, `npm`, `python`, `flutter`, `node`, and `adb`; no verified isolated process runner is connected.
 - Exact next step: connect or implement a verified isolated process runner, then run the actual workspace build and test commands against one immutable workspace revision and set `executionVerified=true` only from their real exit/results. Until then, keep closed-loop outcomes `INCONCLUSIVE`; in parallel continue the next independent screen task and return to device RTL/LTR and backend authorization evidence before closing DevDebugCenter.
+
+
+### DevDebugCenter: fail-closed SDK and live-session behavior — 2026-11-24
+
+**Confirmed defects**
+- Monitoring setup created local `Project`/`Application` rows and marked the SDK `CONFIGURED` and agent `ONLINE` without installing an SDK or connecting an Android Agent.
+- `startTrackedTestSession` fabricated an `APP_RUNNING` session and an `APP_START` event for an in-memory “AI Vibe Studio Sandbox”, which the UI presented as a live device session.
+- The crash dialog could create a sandbox record that was forwarded through `CrashRepository` as if it were telemetry, and it could attach that simulated crash to a purported live session.
+- The UI colored `INCONCLUSIVE` verification red and described it as failed, conflating missing execution evidence with an observed test failure.
+
+**Implementation**
+- Monitoring profile generation now returns an SDK snippet only, leaves `isSdkConfigured=false`, uses empty project/application IDs, and does not create project/application rows or claim the agent is online.
+- Live session creation fails closed with an explicit unavailable reason and creates no session or event. The state loader excludes legacy “AI Vibe Studio Sandbox” records from active live-session context.
+- Replaced the ambiguous runtime/simulation intake API with `recordSimulatedCrash`. It writes a clearly marked local-only `[SIMULATED]` record, labels the device/build as simulated, and does not send it to remote crash telemetry.
+- The UI disables live-session start until a verified Android Agent and isolated runner exist; it explains why, labels SDK snippets as uninstalled, and explicitly identifies local crash simulations.
+- Diagnosis copy now describes the current deterministic local analysis as preliminary rather than claiming an external AI diagnosis. Verification history differentiates verified, failed, different-crash, and inconclusive outcomes; inconclusive is amber and uses “Attempt” rather than “Build” for unverified IDs.
+
+**Regression coverage added/updated**
+- Monitoring profile generation does not create project/application rows or claim SDK configuration.
+- Live-session creation fails without an Agent and creates no fake session.
+- Simulated crashes are visibly local/simulated.
+- Legacy sandbox sessions are not surfaced as live.
+- The local crash/fix flow remains `INCONCLUSIVE` until real build/test evidence exists.
+
+**Verification boundary**
+- Code changes span `af36f3337ba08f8e80a1ed261283bb44e13dbd2d` through `f5af10ab9353e8390cba4fd1979ad329e9e302b7`; code HEAD before this register update: `f5af10ab9353e8390cba4fd1979ad329e9e302b7`.
+- Source-level consistency checks passed for interface/implementation parity, no simulated telemetry forwarding, no fake SDK/project creation, no fake live session, disabled UI action, and explicit simulation labeling. These checks are not Kotlin compilation or runtime tests.
+- Gradle unit tests, lint, APK build, emulator, and device tests remain **not run**: no Gradle executable, Android SDK/`ANDROID_HOME`, or ADB is available in the execution container.
+- The latest commit has no combined status contexts, and the connected workflow-run query returned no runs. Push workflows are configured, but no CI success is claimed.
+- No Supabase production changes were made. DevDebugCenter is **not complete**: real SDK installation/authorization, Android Agent transport, process execution, and device validation remain outstanding.
+
+**Persistent continuity**
+- DevDebugCenter now fails closed instead of manufacturing monitoring, sessions, or runtime evidence.
+- Exact next step: implement the authenticated Android Agent/SDK handshake and isolated process runner, then persist a real session only after handshake success and run a real build/test command against the same workspace revision. Until then, keep SDK/session status unavailable and verification `INCONCLUSIVE`; continue other independent screens rather than waiting on this integration.
