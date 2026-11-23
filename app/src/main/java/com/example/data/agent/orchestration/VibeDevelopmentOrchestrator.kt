@@ -134,16 +134,28 @@ class VibeDevelopmentOrchestrator(
         }
 
         // 10. Testing & 11. Execution
-        updateStatus(team, qa, "تنفيذ الاختبارات الآلية (Testing)...", onUpdate, execution) {
+        updateStatus(team, qa, "إجراء فحوصات ساكنة؛ لا يتم تشغيل مشغّل اختبارات فعلي في هذا المسار...", onUpdate, execution) {
             val testResult = vibeRepository.runWorkspaceTests(workspaceId).getOrThrow()
-            execution = execution.copy(sharedMemory = sharedContextStore.updateMemory(execution, qa, "Tests: ${testResult.passed}/${testResult.totalTests} passed.", MemoryType.FACT))
+            val evidenceSummary = if (testResult.executionVerified) {
+                "Executed tests: ${testResult.passed}/${testResult.totalTests} passed."
+            } else {
+                "Static checks only: ${testResult.staticChecksPassed}/${testResult.staticChecksTotal} passed; runtime tests were not executed."
+            }
+            execution = execution.copy(sharedMemory = sharedContextStore.updateMemory(execution, qa, evidenceSummary, MemoryType.FACT))
             onUpdate(execution)
         }
 
         // 12. Live Preview
-        updateStatus(team, leader, "تجهيز المعاينة الحية (Live Preview)...", onUpdate, execution) {
-            vibeRepository.runWorkspaceBuild(workspaceId)
-            delay(1000)
+        updateStatus(team, leader, "فحص ساكن قبل المعاينة؛ لا يتم تشغيل خادم حي في هذا المسار...", onUpdate, execution) {
+            vibeRepository.runWorkspaceBuild(workspaceId).getOrThrow()
+            execution = execution.copy(
+                sharedMemory = sharedContextStore.updateMemory(
+                    execution,
+                    leader,
+                    "Static source preflight only; no compiler, package build, or live preview server was executed.",
+                    MemoryType.FACT
+                )
+            )
             onUpdate(execution)
         }
 
