@@ -168,7 +168,7 @@ class VibeDevelopmentOrchestrator(
             error = null
         )
         onUpdate(execution)
-        teamRepository.updateMemberStatus(team.id, leader.id, MemberStatus.COMPLETED, "Project completed successfully.")
+        teamRepository.updateMemberStatus(team.id, leader.id, MemberStatus.COMPLETED, "Workflow completed; static checks only. Runtime build/tests and live preview remain unverified.")
     }
 
     private suspend fun updateStatus(
