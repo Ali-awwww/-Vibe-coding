@@ -776,7 +776,7 @@ class CrashRepositoryImpl(
                         details = "Invalid HMAC signature received for integration ${integration.name}"
                     )
                 )
-                return@runCatching false
+                return@runCatchingCancellable false
             }
         }
         true
