@@ -257,10 +257,17 @@ class DevDebugCenterViewModel(
             _state.update { it.copy(isVerifying = true, error = null) }
             val result = vibeStudioRepository.retestAndVerifyClosedLoop(crashId, fixId)
             result.onSuccess { outcome ->
-                val fb = if (outcome.isFixed) {
-                    "تم التحقق بنجاح! اجتازت الاختبارات في البناء الجديد (${outcome.newBuildId}) وأُغلِق العطل"
-                } else {
-                    "فشل التحقق: الاختبارات لم تجتز أو أعيد إنتاج العطل"
+                val fb = when (outcome.status) {
+                    VerificationStatus.FIX_VERIFIED_IN_TEST ->
+                        "تم إثبات الإصلاح بعد تنفيذ الاختبارات الفعلية في البناء (${outcome.newBuildId})."
+                    VerificationStatus.TEST_FAILED ->
+                        "فشلت الاختبارات الفعلية؛ لم يتم إثبات الإصلاح."
+                    VerificationStatus.CRASH_REPRODUCED ->
+                        "أُعيد إنتاج العطل في التحقق؛ الإصلاح غير ناجح."
+                    VerificationStatus.DIFFERENT_CRASH_DETECTED ->
+                        "ظهر عطل مختلف أثناء التحقق؛ يلزم تحليل منفصل."
+                    VerificationStatus.INCONCLUSIVE ->
+                        "لم يتم إثبات الإصلاح: لا تتوفر نتيجة بناء واختبارات فعلية مكتملة."
                 }
                 refreshCurrentWorkspace(feedback = fb)
             }.onFailure { err ->
