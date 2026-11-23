@@ -101,7 +101,7 @@ object VibeQualityTestingEngine {
         val deadCodeFindings = auditDeadCodeAndDependencies(codeFiles)
         findings.addAll(deadCodeFindings)
 
-        // 6. Unit & Integration Tests (Actual test files check)
+        // 6. Test-file inventory only; no test code is executed.
         if (applicableSuites.contains(TestType.UNIT_TEST)) {
             val unitResults = auditUnitTests(codeFiles)
             testResults.addAll(unitResults.first)
@@ -748,7 +748,7 @@ object VibeQualityTestingEngine {
             tests.add(
                 TestCaseResult(
                     id = UUID.randomUUID().toString(),
-                    suiteName = "فحص جاهزية البناء وتجميع الحزم (Build Verification)",
+                    suiteName = "فحص إعدادات البناء ونقطة الدخول (Static Configuration)",
                     name = "التحقق من نقطة الدخول الرئيسية للتطبيق (Entry Point)",
                     type = TestType.BUILD_TEST,
                     status = TestStatus.PASSED,
@@ -759,7 +759,7 @@ object VibeQualityTestingEngine {
             tests.add(
                 TestCaseResult(
                     id = UUID.randomUUID().toString(),
-                    suiteName = "فحص جاهزية البناء وتجميع الحزم (Build Verification)",
+                    suiteName = "فحص إعدادات البناء ونقطة الدخول (Static Configuration)",
                     name = "التحقق من نقطة الدخول الرئيسية للتطبيق (Entry Point)",
                     type = TestType.BUILD_TEST,
                     status = TestStatus.FAILED,
