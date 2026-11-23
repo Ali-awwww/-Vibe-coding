@@ -299,6 +299,11 @@ class CrashRepositoryImpl(
 
     // Crashes Operations & PII Scrubbing
     override fun getLatestCrashes(projectId: String?, applicationId: String?): Flow<List<CrashReport>> = flow {
+        val projectIds = currentUserProjectIds()
+        if (projectIds.isEmpty() || (projectId != null && projectId !in projectIds)) {
+            emit(emptyList())
+            return@flow
+        }
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -324,7 +329,7 @@ class CrashRepositoryImpl(
                         .orderBy("timestamp", Query.Direction.DESCENDING)
                         .limit(100)
                         .snapshots()
-                        .map { it.toObjects(CrashReport::class.java) }
+                        .map { snapshot -> snapshot.toObjects(CrashReport::class.java).filter { it.projectId in projectIds } }
                         .catch { e ->
                             handleFirestoreError(e, OperationType.LIST, "collectionGroup/crashes")
                             throw e
@@ -351,6 +356,11 @@ class CrashRepositoryImpl(
     }
 
     override fun getAllCrashes(): Flow<List<CrashReport>> = flow {
+        val projectIds = currentUserProjectIds()
+        if (projectIds.isEmpty()) {
+            emit(emptyList())
+            return@flow
+        }
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -358,7 +368,7 @@ class CrashRepositoryImpl(
                 fs.collectionGroup("crashes")
                     .whereEqualTo("userId", uid)
                     .snapshots()
-                    .map { it.toObjects(CrashReport::class.java) }
+                    .map { snapshot -> snapshot.toObjects(CrashReport::class.java).filter { it.projectId in projectIds } }
                     .catch { e ->
                         handleFirestoreError(e, OperationType.LIST, "collectionGroup/crashes")
                         throw e
@@ -372,6 +382,11 @@ class CrashRepositoryImpl(
     }
 
     override fun getCrashDetails(crashId: String): Flow<CrashReport?> = flow {
+        val projectIds = currentUserProjectIds()
+        if (projectIds.isEmpty()) {
+            emit(null)
+            return@flow
+        }
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -380,7 +395,7 @@ class CrashRepositoryImpl(
                     .whereEqualTo("userId", uid)
                     .whereEqualTo("id", crashId)
                     .snapshots()
-                    .map { it.toObjects(CrashReport::class.java).firstOrNull() }
+                    .map { snapshot -> snapshot.toObjects(CrashReport::class.java).firstOrNull { it.projectId in projectIds } }
                     .catch { e ->
                         handleFirestoreError(e, OperationType.GET, "collectionGroup/crashes/$crashId")
                         throw e
@@ -419,6 +434,11 @@ class CrashRepositoryImpl(
     }
 
     override fun getAllIssues(): Flow<List<Issue>> = flow {
+        val projectIds = currentUserProjectIds()
+        if (projectIds.isEmpty()) {
+            emit(emptyList())
+            return@flow
+        }
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -426,7 +446,7 @@ class CrashRepositoryImpl(
                 fs.collectionGroup("issues")
                     .whereEqualTo("ownerId", uid)
                     .snapshots()
-                    .map { it.toObjects(Issue::class.java) }
+                    .map { snapshot -> snapshot.toObjects(Issue::class.java).filter { it.projectId in projectIds } }
                     .catch { e ->
                         handleFirestoreError(e, OperationType.LIST, "collectionGroup/issues")
                         throw e
@@ -440,6 +460,11 @@ class CrashRepositoryImpl(
     }
 
     override fun getIssueDetails(issueId: String): Flow<Issue?> = flow {
+        val projectIds = currentUserProjectIds()
+        if (projectIds.isEmpty()) {
+            emit(null)
+            return@flow
+        }
         val fs = firestore
         if (fs != null) {
             val uid = requireUserId()
@@ -448,7 +473,7 @@ class CrashRepositoryImpl(
                     .whereEqualTo("ownerId", uid)
                     .whereEqualTo("id", issueId)
                     .snapshots()
-                    .map { it.toObjects(Issue::class.java).firstOrNull() }
+                    .map { snapshot -> snapshot.toObjects(Issue::class.java).firstOrNull { it.projectId in projectIds } }
                     .catch { e ->
                         handleFirestoreError(e, OperationType.GET, "collectionGroup/issues/$issueId")
                         throw e
