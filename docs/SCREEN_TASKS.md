@@ -3255,3 +3255,20 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Persistent continuity**
 - Next: validate this batch in CI, then continue the Crashes route audit for the 100-record boundary, source values from each supported intake path, and CrashDetail navigation/lifecycle. Keep the screen open until the design gate and device evidence are satisfied.
+
+
+### Production data safety — disable the non-isolated demo seeder — 2026-11-24
+
+**Confirmed issue**
+- Settings described its sample-data importer as an isolated Sandbox, but it called `SeedData.seed` with the normal `provideCrashRepository`. That repository writes through the active account's Firestore path when Firestore is configured; the seed routine creates a fixed demo project and inserts fabricated crash records. The confirmation dialog did not make the storage isolated.
+
+**Fix**
+- Removed the live-repository seed action and its confirmation flow from Settings. The screen now states that sample loading is disabled until a separate local-only database exists.
+- Removed the unused production-source `SeedData.kt` utility so it cannot be called accidentally from another production screen.
+- No production records, Supabase objects, Firebase data, keys or policies were modified by this fix.
+
+**Verification boundary**
+- Source search showed Settings was the only production caller of `SeedData`; this commit removes that caller and the utility.
+- CI for the change is pending. The Settings screen still needs rendered Arabic/English and accessibility review on an Android device.
+- A local-only Sandbox database remains a separate unimplemented capability; the app does not claim one exists.
+

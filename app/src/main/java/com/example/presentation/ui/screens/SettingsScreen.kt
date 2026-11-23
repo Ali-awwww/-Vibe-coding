@@ -22,11 +22,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import com.example.di.DependencyProvider
-import com.example.util.SeedData
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,12 +31,8 @@ fun SettingsScreen(
     onSignOut: () -> Unit,
     navController: NavController
 ) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val currentUser by viewModel.currentUser.collectAsState()
     var showSignOutDialog by remember { mutableStateOf(false) }
-    var showSandboxDialog by remember { mutableStateOf(false) }
-    var sandboxLoadedMessage by remember { mutableStateOf<String?>(null) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
@@ -200,25 +192,11 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "تتيح لك البيئة المعزولة فحص وتحليل سيناريوهات الانهيارات الكاملة وحلول الذكاء الاصطناعي دون التأثير على مشروعاتك الفعلية.",
+                        "تحميل بيانات الاختبار معطّل حالياً؛ لم تُجهّز قاعدة بيانات محلية منفصلة عن حسابك. لن تُدرج سجلات تجريبية في مشاريعك أو قاعدة بياناتك الفعلية.",
+                        modifier = Modifier.fillMaxWidth().testTag("settings_sandbox_disabled"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
-                    sandboxLoadedMessage?.let { msg ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                msg,
-                                modifier = Modifier.padding(8.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
 
                     Button(
                         onClick = { navController.navigate(com.example.presentation.navigation.Screen.ProductQualityCenter) },
@@ -229,14 +207,6 @@ fun SettingsScreen(
                         Text("مركز جودة المنتج وبوابة الاعتماد (Release Gate)")
                     }
 
-                    OutlinedButton(
-                        onClick = { showSandboxDialog = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Science, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("تحميل مشروع تجريبي معزول للمعاينة")
-                    }
                 }
             }
 
@@ -253,37 +223,6 @@ fun SettingsScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("تسجيل الخروج الآمن")
             }
-        }
-
-        if (showSandboxDialog) {
-            AlertDialog(
-                onDismissRequest = { showSandboxDialog = false },
-                title = { Text("تحميل بيانات المعاينة التجريبية") },
-                text = {
-                    Text("سيتم إنشاء مشروع معزول وتطبيقات اختبار لتمكين فحص سيناريو الانهيارات وذكاء الإصلاح. هل ترغب في المتابعة؟")
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                SeedData.seed(
-                                    DependencyProvider.provideCrashRepository(context),
-                                    DependencyProvider.provideSymbolicationRepository(context)
-                                )
-                                sandboxLoadedMessage = "تم تجهيز المشروع التجريبي المعزول بنجاح."
-                                showSandboxDialog = false
-                            }
-                        }
-                    ) {
-                        Text("تأكيد التحميل")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showSandboxDialog = false }) {
-                        Text("إلغاء")
-                    }
-                }
-            )
         }
 
         // Sign out confirm dialog
