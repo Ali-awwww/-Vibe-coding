@@ -828,9 +828,9 @@ class VibeStudioRepositoryImpl(
         val files = vibeStudioDao.getAllFilesSync(workspaceId).filter { !it.isFolder }
 
         val logs = mutableListOf<BuildLog>()
-        logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "بدء عملية فحص وبناء المشروع (${workspace.techStack})...", LogType.INFO))
+        logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "بدء فحص ساكن لملفات المشروع (${workspace.techStack})؛ لم يتم تشغيل مترجم أو أداة بناء فعلية.", LogType.INFO))
 
-        // Check for basic syntax anomalies
+        // Static brace-balance check only; this is not a compiler invocation.
         var hasSyntaxError = false
         for (file in files) {
             val content = file.content
@@ -845,12 +845,7 @@ class VibeStudioRepositoryImpl(
         if (hasSyntaxError) {
             logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "فشل البناء لوجود أخطاء في الكود المصدر.", LogType.ERROR))
         } else {
-            // Environment Readiness Simulation
-            if (workspace.techStack.contains("React") || workspace.techStack.contains("Flutter")) {
-                logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "تنبيه: بيئة التشغيل المحلية (${workspace.techStack}) غير مفعلة تماماً. يرجى التأكد من توصيل Local Agent.", LogType.WARNING))
-            }
-            logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "تحليل شجرة الاعتماديات ومطابقة المكونات... مكتمل.", LogType.INFO))
-            logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "تم تجميع ${files.size} ملفات بنجاح دون أخطاء.", LogType.SUCCESS))
+            logs.add(BuildLog(UUID.randomUUID().toString(), workspaceId, "اكتمل فحص توازن الأقواس في ${files.size} ملفاً. لم يتم تجميع التطبيق فعلياً.", LogType.INFO))
         }
 
         logs.forEach { vibeStudioDao.insertBuildLog(it) }
@@ -861,20 +856,30 @@ class VibeStudioRepositoryImpl(
         val auditReport = runIntelligentQualityAudit(workspaceId).getOrThrow()
         val outputLogs = mutableListOf<String>()
 
-        outputLogs.add("تشغيل محرك الاختبارات الذكي (${auditReport.techStack})...")
-        for (test in auditReport.testResults) {
-            val statusTag = if (test.status == TestStatus.PASSED) "PASS" else if (test.status == TestStatus.SKIPPED) "SKIP" else "FAIL"
-            outputLogs.add("[$statusTag] ${test.suiteName} > ${test.name}" + (test.errorMessage?.let { " - $it" } ?: ""))
+        outputLogs.add("لم يتم تشغيل مترجم أو مشغّل اختبارات فعلي في هذا المسار.")
+        outputLogs.add("النتائج التالية فحوصات ساكنة فقط، ولا تثبت نجاح البناء أو الاختبارات.")
+        for (check in auditReport.testResults) {
+            val statusTag = when (check.status) {
+                TestStatus.PASSED -> "STATIC PASS"
+                TestStatus.SKIPPED -> "NOT RUN"
+                TestStatus.FAILED -> "STATIC FAIL"
+                TestStatus.RUNNING -> "RUNNING"
+            }
+            outputLogs.add("[$statusTag] ${check.suiteName} > ${check.name}" + (check.errorMessage?.let { " - $it" } ?: ""))
         }
-        outputLogs.add("مستوى الجاهزية: ${auditReport.readiness.labelAr} | إجمالي الفحوصات: ${auditReport.totalTests}")
+        outputLogs.add("ملخص الفحوصات الساكنة: ${auditReport.passedTests}/${auditReport.totalTests} اجتازت الفحص؛ ${auditReport.failedTests} فشل ساكن.")
 
         TestExecutionResult(
-            totalTests = auditReport.totalTests,
-            passed = auditReport.passedTests,
-            failed = auditReport.failedTests,
-            isSuccess = auditReport.failedTests == 0 && auditReport.confirmedErrorsCount == 0,
+            totalTests = 0,
+            passed = 0,
+            failed = 0,
+            isSuccess = false,
+            executionVerified = false,
             outputLogs = outputLogs,
-            durationMs = auditReport.durationMs
+            durationMs = auditReport.durationMs,
+            staticChecksTotal = auditReport.totalTests,
+            staticChecksPassed = auditReport.passedTests,
+            staticChecksFailed = auditReport.failedTests
         )
     }
 
@@ -2183,6 +2188,12 @@ class VibeStudioRepositoryImpl(
 
         val fix = crashDao.getFixSuggestionById(fixId)
             ?: throw IllegalArgumentException("Fix not found: $fixId")
+        require(fix.crashId == crash.id) {
+            "Fix suggestion does not belong to the selected crash."
+        }
+        require(fix.status == FixStatus.APPLIED) {
+            "Apply the fix before running verification."
+        }
 
         val workspaceId = crash.projectId
 
@@ -2191,12 +2202,12 @@ class VibeStudioRepositoryImpl(
 
         // 1. Run Workspace Build
         val buildResult = runWorkspaceBuild(workspaceId).getOrThrow()
-        val isBuildSuccessful = buildResult.none { it.type == LogType.ERROR }
+        val staticPreflightPassed = buildResult.none { it.type == LogType.ERROR }
 
-        // 2. Run Workspace Tests
+        // 2. This currently returns static audit results, not executed tests.
         val testResult = runWorkspaceTests(workspaceId).getOrNull()
 
-        val newBuildId = "build-verified-${UUID.randomUUID().toString().take(6)}"
+        val newBuildId = "unverified-${UUID.randomUUID().toString().take(6)}"
 
         // 3. Strict Verification Outcome
         val outcome = UnifiedDevDebugEngine.evaluateVerificationOutcome(
@@ -2204,7 +2215,7 @@ class VibeStudioRepositoryImpl(
             fixSuggestion = fix,
             previousBuildId = crash.appVersion,
             newBuildId = newBuildId,
-            testResult = if (isBuildSuccessful) testResult else null
+            testResult = if (staticPreflightPassed) testResult else null
         )
 
         // 4. Record Verification
