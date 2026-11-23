@@ -213,17 +213,14 @@ class CrashRepositoryImpl(
 
     // Application Operations
     override fun getApplications(projectId: String): Flow<List<Application>> = flow {
-        val uid = requireProjectUserId()
-        if (getProjectById(projectId) == null) {
-            throw SecurityException("The selected project is not available to the active account.")
-        }
-        supabaseProjectDataSource?.let {
-            emit(it.getApplications(projectId))
+        val projectIds = currentUserProjectIds()
+        if (projectId !in projectIds) {
+            emit(emptyList())
             return@flow
         }
-
         val fs = firestore
         if (fs != null) {
+            val uid = requireProjectUserId()
             emitAll(
                 fs.collection("users").document(uid).collection("projects").document(projectId)
                     .collection("applications")
@@ -311,7 +308,6 @@ class CrashRepositoryImpl(
                     .collection("crashes")
                     .orderBy("timestamp", Query.Direction.DESCENDING)
                     .limit(100)
-                
                 val filteredQuery = if (applicationId != null) query.whereEqualTo("applicationId", applicationId) else query
                 emitAll(
                     filteredQuery.snapshots()
@@ -336,10 +332,20 @@ class CrashRepositoryImpl(
                 )
             }
         } else {
-            if (projectId != null) {
-                emitAll(crashDao.getCrashesByProject(projectId))
+            val projectIds = currentUserProjectIds()
+            if (projectId != null && projectId !in projectIds) {
+                emit(emptyList())
+            } else if (projectIds.isEmpty()) {
+                emit(emptyList())
             } else {
-                emitAll(crashDao.getLatestCrashes())
+                val source = if (projectId != null) crashDao.getCrashesByProject(projectId) else crashDao.getAllCrashes()
+                emitAll(
+                    source.map { crashes ->
+                        crashes.filter {
+                            it.projectId in projectIds && (applicationId == null || it.applicationId == applicationId)
+                        }.sortedByDescending { it.timestamp }.take(100)
+                    }
+                )
             }
         }
     }
