@@ -61,7 +61,12 @@ class AgentToolAdapterImpl(
                 }
                 "run_tests" -> {
                     val result = vibeRepository.runWorkspaceTests(workspaceId).getOrThrow()
-                    "Tests: ${result.passed}/${result.totalTests} passed. Success: ${result.isSuccess}\nLogs:\n${result.outputLogs.joinToString("\n")}"
+                    val summary = if (result.executionVerified) {
+                        "Executed tests: ${result.passed}/${result.totalTests} passed. Success: ${result.isSuccess}"
+                    } else {
+                        "Runtime tests were not executed. Static checks: ${result.staticChecksPassed}/${result.staticChecksTotal} passed; ${result.staticChecksFailed} failed. This is not evidence of build or test success."
+                    }
+                    "$summary\nLogs:\n${result.outputLogs.joinToString("\n")}"
                 }
                 "get_build_logs" -> {
                     val logs = vibeRepository.getBuildLogs(workspaceId).firstOrNull() ?: emptyList()
