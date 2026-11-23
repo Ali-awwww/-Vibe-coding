@@ -622,4 +622,25 @@
     <string name="crashes_severity_medium">متوسط</string>
     <string name="crashes_severity_low">منخفض</string>
 
+    <string name="crashes_filter">تصفية تقارير الأعطال</string>
+    <string name="crashes_filter_title">تصفية التقارير</string>
+    <string name="crashes_filter_exception">نوع الاستثناء</string>
+    <string name="crashes_filter_version">إصدار التطبيق</string>
+    <string name="crashes_filter_os">نظام التشغيل</string>
+    <string name="crashes_filter_severity">مستوى الخطورة</string>
+    <string name="crashes_filter_any">كل المستويات</string>
+    <string name="crashes_filter_apply">تطبيق</string>
+    <string name="crashes_filter_clear">مسح عوامل التصفية الاختيارية</string>
+    <string name="crashes_results_count">عرض %1$d من أصل %2$d تقرير</string>
+    <string name="crashes_load_more">تحميل المزيد</string>
+    <string name="crashes_source_label">المصدر: %1$s</string>
+    <string name="crashes_source_firebase_crashlytics">Firebase Crashlytics</string>
+    <string name="crashes_source_sentry">Sentry</string>
+    <string name="crashes_source_bugsnag">Bugsnag</string>
+    <string name="crashes_source_webhook">Webhook</string>
+    <string name="crashes_source_custom">مصدر مخصص</string>
+    <string name="crashes_source_unavailable">المصدر غير متاح</string>
+    <string name="crashes_unavailable">غير متاح</string>
+    <string name="crashes_exception_unavailable">نوع الاستثناء غير متاح</string>
+    <string name="crashes_message_unavailable">لم يتم توفير رسالة</string>
 </resources>

@@ -45,10 +45,14 @@ class FakeCrashRepository : CrashRepository {
 
     var failNextProjectsLoad: Throwable? = null
     var failNextCrashesLoad: Throwable? = null
+    var failNextLatestCrashesLoad: Throwable? = null
     var failNextWrite: Throwable? = null
 
     var getAllApplicationsCalls = 0
     var getAllCrashesCalls = 0
+    var getLatestCrashesCalls = 0
+    var lastLatestCrashProjectId: String? = null
+    var lastLatestCrashApplicationId: String? = null
     var getAllIssuesCalls = 0
     var getProjectsForUserCalls = 0
 
@@ -96,8 +100,22 @@ class FakeCrashRepository : CrashRepository {
         applications.value = applications.value.filterNot { it.id == applicationId }
     }
 
-    override fun getLatestCrashes(projectId: String?, applicationId: String?): Flow<List<CrashReport>> =
-        flowOf(crashes.value)
+    override fun getLatestCrashes(projectId: String?, applicationId: String?): Flow<List<CrashReport>> {
+        getLatestCrashesCalls++
+        lastLatestCrashProjectId = projectId
+        lastLatestCrashApplicationId = applicationId
+        val error = failNextLatestCrashesLoad
+        if (error != null) {
+            failNextLatestCrashesLoad = null
+            return flow { throw error }
+        }
+        return crashes.map { records ->
+            records.filter { crash ->
+                (projectId == null || crash.projectId == projectId) &&
+                    (applicationId == null || crash.applicationId == applicationId)
+            }.sortedByDescending { it.timestamp }.take(100)
+        }
+    }
 
     override fun getAllCrashes(): Flow<List<CrashReport>> {
         getAllCrashesCalls++

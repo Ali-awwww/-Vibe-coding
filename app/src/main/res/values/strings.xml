@@ -622,4 +622,25 @@
     <string name="crashes_severity_medium">Medium</string>
     <string name="crashes_severity_low">Low</string>
 
+    <string name="crashes_filter">Filter crash reports</string>
+    <string name="crashes_filter_title">Filter reports</string>
+    <string name="crashes_filter_exception">Exception type</string>
+    <string name="crashes_filter_version">App version</string>
+    <string name="crashes_filter_os">Operating system</string>
+    <string name="crashes_filter_severity">Severity</string>
+    <string name="crashes_filter_any">Any severity</string>
+    <string name="crashes_filter_apply">Apply filters</string>
+    <string name="crashes_filter_clear">Clear optional filters</string>
+    <string name="crashes_results_count">Showing %1$d of %2$d reports</string>
+    <string name="crashes_load_more">Load more</string>
+    <string name="crashes_source_label">Source: %1$s</string>
+    <string name="crashes_source_firebase_crashlytics">Firebase Crashlytics</string>
+    <string name="crashes_source_sentry">Sentry</string>
+    <string name="crashes_source_bugsnag">Bugsnag</string>
+    <string name="crashes_source_webhook">Webhook</string>
+    <string name="crashes_source_custom">Custom source</string>
+    <string name="crashes_source_unavailable">Source unavailable</string>
+    <string name="crashes_unavailable">Unavailable</string>
+    <string name="crashes_exception_unavailable">Exception type unavailable</string>
+    <string name="crashes_message_unavailable">No message supplied</string>
 </resources>

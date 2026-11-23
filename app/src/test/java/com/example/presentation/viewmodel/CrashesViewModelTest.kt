@@ -67,6 +67,9 @@ class CrashesViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("new"), viewModel.uiState.value.filteredCrashes.map { it.id })
+        assertEquals(1, repository.getLatestCrashesCalls)
+        assertEquals("p1", repository.lastLatestCrashProjectId)
+        assertEquals("a1", repository.lastLatestCrashApplicationId)
         viewModel.updateSearchQuery("not present")
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.filteredCrashes.isEmpty())
@@ -80,7 +83,7 @@ class CrashesViewModelTest {
 
     @Test
     fun loadFailureIsDistinctFromEmptyStateAndRetryResubscribes() = runTest {
-        repository.failNextCrashesLoad = IllegalStateException("offline")
+        repository.failNextLatestCrashesLoad = IllegalStateException("offline")
         val viewModel = CrashesViewModel(repository = repository, initialProjectId = "p1")
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         advanceUntilIdle()
@@ -95,5 +98,50 @@ class CrashesViewModelTest {
 
         assertNull(viewModel.uiState.value.error)
         assertEquals(listOf("recovered"), viewModel.uiState.value.filteredCrashes.map { it.id })
+    }
+    @Test
+    fun paginationLoadsMoreAndSearchResetsTheVisiblePage() = runTest {
+        repository.crashes.value = (0 until 60).map { index ->
+            CrashReport(
+                id = "crash-$index",
+                projectId = "p1",
+                applicationId = "a1",
+                exceptionType = "IllegalStateException",
+                message = "Crash $index",
+                timestamp = index.toLong()
+            )
+        } + CrashReport(
+            id = "foreign",
+            projectId = "p2",
+            applicationId = "a2",
+            message = "Crash 1000",
+            timestamp = 1_000L
+        )
+
+        val viewModel = CrashesViewModel(
+            repository = repository,
+            initialProjectId = "p1",
+            initialAppId = "a1"
+        )
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(60, viewModel.uiState.value.filteredCrashes.size)
+        assertEquals(25, viewModel.uiState.value.visibleCrashes.size)
+        assertTrue(viewModel.uiState.value.canLoadMore)
+
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertEquals(50, viewModel.uiState.value.visibleCrashes.size)
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertEquals(60, viewModel.uiState.value.visibleCrashes.size)
+        assertFalse(viewModel.uiState.value.canLoadMore)
+
+        viewModel.updateSearchQuery("Crash 59")
+        advanceUntilIdle()
+        assertEquals(listOf("crash-59"), viewModel.uiState.value.visibleCrashes.map { it.id })
+        assertEquals(0, viewModel.uiState.value.currentPage)
+        assertEquals(1, repository.getLatestCrashesCalls)
     }
 }

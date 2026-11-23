@@ -3234,3 +3234,24 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The first full suite after restoring global notification support exposed one expected fail-closed behavior in the two-account regression: marking another project's notification read now throws a SecurityException instead of silently doing nothing.
 - Updated the regression to assert that rejection and verify the foreign notification remains unread. This preserves the stronger authorization contract; no repository access check was relaxed.
 - The next full CI run will validate this test adjustment alongside the Robolectric repository/duplicate-workflow fix.
+
+
+### Crashes screen — source provenance, scoped filters and incremental paging — 2026-11-24
+
+**Implementation**
+- The crash list now calls `getLatestCrashes(projectId, applicationId)` so route project/application scope is enforced by the repository query before presentation filters run.
+- Added an accessible filter sheet for exception type, app version, operating system and severity; search and filter changes reset the visible page without reopening the repository stream.
+- Added incremental 25-record display pages, preserving newest-first order. The repository currently supplies at most its latest 100 records per subscription; this UI paging does not claim cursor pagination beyond that window.
+- Crash cards now show the persisted `source` value (Firebase Crashlytics, Sentry, Bugsnag, webhook or custom). Null provenance and blank metadata are explicitly labeled unavailable rather than guessed.
+- English and Arabic labels cover the new filter, paging, source and missing-metadata states.
+
+**Regression coverage added**
+- The CrashesViewModel tests assert the project/application query arguments, retry after a source error, route-scope preservation, incremental paging and search reset behavior.
+
+**Verification boundary**
+- The previously verified HEAD `5295f8f5a585ae1b5b8801455d82e7a24263bbae` had successful Android unit-test, lint and Debug/Release APK workflows. Those results do not validate this new revision; CI for this batch must be checked after push.
+- The execution container still has no recorded local Gradle/Android SDK/ADB capability. No emulator screenshot, RTL/LTR rendered review or TalkBack validation is claimed.
+- The Crashes screen remains open. Cursor pagination beyond the repository's 100-record window and rendered device validation are still outstanding.
+
+**Persistent continuity**
+- Next: validate this batch in CI, then continue the Crashes route audit for the 100-record boundary, source values from each supported intake path, and CrashDetail navigation/lifecycle. Keep the screen open until the design gate and device evidence are satisfied.

@@ -5,11 +5,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +26,7 @@ import androidx.navigation.NavController
 import com.example.R
 import com.example.di.DependencyProvider
 import com.example.domain.model.CrashReport
+import com.example.domain.model.IntegrationType
 import com.example.domain.model.Severity
 import com.example.presentation.navigation.Screen
 import com.example.presentation.viewmodel.CrashesViewModel
@@ -59,7 +63,8 @@ fun CrashesScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var searchVisible by remember { mutableStateOf(false) }
+    var searchVisible by rememberSaveable { mutableStateOf(false) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -96,6 +101,9 @@ fun CrashesScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showFilters = true }) {
+                        Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.crashes_filter))
+                    }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.crashes_refresh))
                     }
@@ -180,6 +188,16 @@ fun CrashesScreen(
                                 )
                             }
                         }
+                        uiState.filter.searchQuery.takeIf { it.isNotBlank() }?.let { query ->
+                            item {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { viewModel.clearSpecificFilter("search") },
+                                    label = { Text(query) },
+                                    trailingIcon = { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp)) }
+                                )
+                            }
+                        }
                         item {
                             TextButton(onClick = { viewModel.clearFilters() }) {
                                 Text(stringResource(R.string.clear_all))
@@ -198,7 +216,7 @@ fun CrashesScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${stringResource(R.string.reports_count)}: ${uiState.filteredCrashes.size}",
+                    text = stringResource(R.string.crashes_results_count, uiState.visibleCrashes.size, uiState.filteredCrashes.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -280,13 +298,120 @@ fun CrashesScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(uiState.filteredCrashes, key = { it.id }) { crash ->
+                    items(uiState.visibleCrashes, key = { it.id }) { crash ->
                         DetailedCrashCard(
                             crash = crash,
                             onClick = {
                                 navController.navigate(Screen.CrashDetail(crash.id))
                             }
                         )
+                    }
+                    if (uiState.canLoadMore) {
+                        item(key = "crashes_load_more") {
+                            FilledTonalButton(
+                                onClick = { viewModel.loadMore() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.crashes_load_more))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showFilters) {
+        var exceptionType by rememberSaveable(uiState.filter.exceptionType) {
+            mutableStateOf(uiState.filter.exceptionType.orEmpty())
+        }
+        var appVersion by rememberSaveable(uiState.filter.appVersion) {
+            mutableStateOf(uiState.filter.appVersion.orEmpty())
+        }
+        var osName by rememberSaveable(uiState.filter.osName) {
+            mutableStateOf(uiState.filter.osName.orEmpty())
+        }
+        var severity by rememberSaveable(uiState.filter.severity) {
+            mutableStateOf(uiState.filter.severity)
+        }
+        val severityOptions = listOf("ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW")
+
+        ModalBottomSheet(onDismissRequest = { showFilters = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    stringResource(R.string.crashes_filter_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                OutlinedTextField(
+                    value = exceptionType,
+                    onValueChange = { exceptionType = it },
+                    label = { Text(stringResource(R.string.crashes_filter_exception)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = appVersion,
+                    onValueChange = { appVersion = it },
+                    label = { Text(stringResource(R.string.crashes_filter_version)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = osName,
+                    onValueChange = { osName = it },
+                    label = { Text(stringResource(R.string.crashes_filter_os)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    stringResource(R.string.crashes_filter_severity),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(severityOptions) { option ->
+                        val selected = if (option == "ALL") severity == null else severity == option
+                        FilterChip(
+                            selected = selected,
+                            onClick = { severity = option.takeUnless { it == "ALL" } },
+                            label = {
+                                Text(
+                                    if (option == "ALL") stringResource(R.string.crashes_filter_any)
+                                    else severityLabel(option)
+                                )
+                            }
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TextButton(
+                        onClick = {
+                            viewModel.clearFilters()
+                            showFilters = false
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(stringResource(R.string.crashes_filter_clear))
+                    }
+                    Button(
+                        onClick = {
+                            viewModel.applyFilters(exceptionType, appVersion, severity, osName)
+                            showFilters = false
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(stringResource(R.string.crashes_filter_apply))
                     }
                 }
             }
@@ -301,7 +426,18 @@ fun DetailedCrashCard(
     onClick: () -> Unit
 ) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
-    val formattedDate = remember(crash.timestamp) { dateFormat.format(Date(crash.timestamp)) }
+    val formattedDate = remember(crash.timestamp) {
+        crash.timestamp.takeIf { it > 0L }?.let { dateFormat.format(Date(it)) }
+    }
+    val timestampLabel = formattedDate ?: stringResource(R.string.crashes_unavailable)
+    val exceptionLabel = crash.exceptionType.takeIf { it.isNotBlank() }
+        ?: stringResource(R.string.crashes_exception_unavailable)
+    val deviceLabel = crash.deviceModel.takeIf { it.isNotBlank() }
+        ?: stringResource(R.string.crashes_unavailable)
+    val osLabel = crash.osVersion.takeIf { it.isNotBlank() }
+        ?: stringResource(R.string.crashes_unavailable)
+    val versionLabel = crash.appVersion.takeIf { it.isNotBlank() }
+        ?: stringResource(R.string.crashes_unavailable)
 
     Card(
         onClick = onClick,
@@ -343,7 +479,7 @@ fun DetailedCrashCard(
                     }
 
                     Text(
-                        text = crash.exceptionType,
+                        text = exceptionLabel,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -351,18 +487,30 @@ fun DetailedCrashCard(
                 }
 
                 Text(
-                    text = formattedDate,
+                    text = timestampLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            if (crash.message.isNotBlank()) {
+            Text(
+                text = crash.message.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.crashes_message_unavailable),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                color = if (crash.message.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface
+            )
+
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
                 Text(
-                    text = crash.message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = stringResource(R.string.crashes_source_label, crashSourceLabel(crash.source)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
 
@@ -379,7 +527,7 @@ fun DetailedCrashCard(
                 ) {
                     // Device & OS
                     Text(
-                        text = stringResource(R.string.crashes_device_os, crash.deviceModel, crash.osVersion),
+                        text = stringResource(R.string.crashes_device_os, deviceLabel, osLabel),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -389,7 +537,7 @@ fun DetailedCrashCard(
                         shape = MaterialTheme.shapes.extraSmall
                     ) {
                         Text(
-                            text = stringResource(R.string.crashes_version_value, crash.appVersion),
+                            text = stringResource(R.string.crashes_version_value, versionLabel),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -409,6 +557,16 @@ fun DetailedCrashCard(
     }
 }
 
+
+@Composable
+private fun crashSourceLabel(source: IntegrationType?): String = when (source) {
+    IntegrationType.FIREBASE_CRASHLYTICS -> stringResource(R.string.crashes_source_firebase_crashlytics)
+    IntegrationType.SENTRY -> stringResource(R.string.crashes_source_sentry)
+    IntegrationType.BUGSNAG -> stringResource(R.string.crashes_source_bugsnag)
+    IntegrationType.WEBHOOK -> stringResource(R.string.crashes_source_webhook)
+    IntegrationType.CUSTOM -> stringResource(R.string.crashes_source_custom)
+    null -> stringResource(R.string.crashes_source_unavailable)
+}
 
 @Composable
 private fun severityLabel(value: String): String = when (value.uppercase(Locale.ROOT)) {
