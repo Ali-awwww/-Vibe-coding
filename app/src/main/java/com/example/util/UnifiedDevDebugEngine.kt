@@ -248,22 +248,31 @@ object UnifiedDevDebugEngine {
         newBuildId: String,
         testResult: TestExecutionResult?
     ): ClosedLoopVerificationOutcome {
-        val isTestSuccess = testResult != null && testResult.isSuccess && testResult.failed == 0
+        val fixMatchesCrash = fixSuggestion.crashId == crashReport.id
+        val fixWasApplied = fixSuggestion.status == FixStatus.APPLIED
+        val fixCanBeVerified = fixMatchesCrash && fixWasApplied
+        val verifiedResult = testResult?.takeIf { it.executionVerified }
+        val isTestSuccess = fixCanBeVerified &&
+            verifiedResult != null &&
+            verifiedResult.isSuccess &&
+            verifiedResult.totalTests > 0 &&
+            verifiedResult.passed == verifiedResult.totalTests &&
+            verifiedResult.failed == 0
 
         val (status, comparisonSummary) = if (isTestSuccess) {
             Pair(
                 VerificationStatus.FIX_VERIFIED_IN_TEST,
                 "تم التحقق بنجاح من الإصلاح في البناء $newBuildId. اجتازت جميع الاختبارات (${testResult?.passed ?: 0}/${testResult?.totalTests ?: 0}) ولم يُعاد إنتاج العطل."
             )
-        } else if (testResult != null && testResult.failed > 0) {
+        } else if (fixCanBeVerified && verifiedResult != null && verifiedResult.failed > 0) {
             Pair(
                 VerificationStatus.TEST_FAILED,
-                "فشلت الاختبارات المرتبطة بالإصلاح في البناء $newBuildId (${testResult.failed} اختبار فاشل). ما زال الكود بحاجة لتعديل."
+                "فشلت الاختبارات الفعلية المرتبطة بالإصلاح في البناء $newBuildId (${verifiedResult.failed} اختبار فاشل). ما زال الكود بحاجة لتعديل."
             )
         } else {
             Pair(
                 VerificationStatus.INCONCLUSIVE,
-                "لم تكتمل الاختبارات التلقائية بشكل حاسم. الحالة غير مؤكدة حتى الآن وفقاً لسياسة الدقة."
+                "لم تتوفر أدلة بناء واختبارات فعلية مكتملة لإثبات الإصلاح؛ الحالة غير مؤكدة."
             )
         }
 
@@ -280,10 +289,10 @@ object UnifiedDevDebugEngine {
             status = status,
             comparisonSummary = comparisonSummary,
             oldStackTrace = crashReport.stackTrace,
-            newStackTrace = if (isTestSuccess) null else "Tests reported failure",
+            newStackTrace = if (verifiedResult != null && verifiedResult.failed > 0) "Executed tests reported failure" else null,
             crashExceptionType = crashReport.exceptionType,
             crashMessage = crashReport.message,
-            environmentValid = true
+            environmentValid = verifiedResult != null
         )
 
         return ClosedLoopVerificationOutcome(
