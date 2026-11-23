@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.model.CrashReport
 import com.example.domain.repository.CrashRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 
 data class CrashesFilterState(
@@ -26,6 +27,7 @@ data class CrashesUiState(
     val error: String? = null
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class CrashesViewModel(
     private val repository: CrashRepository,
     initialProjectId: String? = null,
