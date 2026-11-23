@@ -3012,3 +3012,23 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Source-review correction — 2026-11-24
 - Captured the delegated Compose error resource in a stable local value before passing it to stringResource, avoiding the smart-cast failure previously observed in this screen family.
 - The selected document label now uses the localized resource rather than rendering an unlabeled filename. CI for the file-picker slice remains pending.
+
+
+## 2026-11-24 — DevDebugCenter: prevent cross-account workspace state leakage
+
+### Confirmed defect
+- DevDebugCenterViewModel collected currentUser with a nested getWorkspaces(userId).collect. The first workspace flow never completed, so a later sign-out/account switch was not observed and the previous user's workspace list/state could remain visible.
+- Route initialization and tab selection called getDevDebugState with an arbitrary workspace ID without first checking that the ID belonged to the authenticated user's workspace feed.
+
+### Implementation
+- Replaced the nested collectors with a flatMapLatest account-scoped workspace feed. Switching accounts cancels the previous subscription and clears selected workspace state before loading the new account's list.
+- Workspace details are now loaded only when the requested ID is present in the current authenticated user's emitted workspace list. An invalid or cross-account route ID produces an unavailable state instead of querying its details.
+- Added regression coverage for cancellation on account switch and blank identities never triggering a workspace lookup.
+
+### Verification boundary
+- Regression tests and Android build/lint are pending CI for this commit. No emulator/device verification or authenticated multi-account runtime test is claimed.
+- This is a client-side guard; repository-level ownership checks and the Supabase migration/RLS slice remain required before cloud-backed production completion.
+
+### Persistent continuity
+- Last area worked: DevDebugCenter — account-scoped workspace collection and route ownership guard.
+- Exact next step: inspect CI, APK and Code Quality for this commit to terminal status; fix only evidence-backed failures, then continue the next executable screen task. Keep this screen open until device RTL/LTR and real backend authorization are verified.

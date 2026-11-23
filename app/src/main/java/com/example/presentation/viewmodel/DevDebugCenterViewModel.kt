@@ -5,8 +5,42 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.VibeStudioRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+internal sealed interface AuthenticatedWorkspaceFeed {
+    data object SignedOut : AuthenticatedWorkspaceFeed
+    data class Loading(val userId: String) : AuthenticatedWorkspaceFeed
+    data class Loaded(val userId: String, val workspaces: List<Workspace>) : AuthenticatedWorkspaceFeed
+    data class Failed(val userId: String) : AuthenticatedWorkspaceFeed
+}
+
+/**
+ * Switches workspace subscriptions with the authenticated account. flatMapLatest cancels
+ * the previous user's subscription before exposing data for the next account.
+ */
+internal fun observeAuthenticatedWorkspaceFeed(
+    currentUser: Flow<UserAccount?>,
+    getWorkspaces: (String) -> Flow<List<Workspace>>
+): Flow<AuthenticatedWorkspaceFeed> = currentUser
+    .map { user -> user?.id?.takeIf(String::isNotBlank) }
+    .distinctUntilChanged()
+    .flatMapLatest { userId ->
+        if (userId == null) {
+            flowOf(AuthenticatedWorkspaceFeed.SignedOut)
+        } else {
+            flow {
+                emit(AuthenticatedWorkspaceFeed.Loading(userId))
+                emitAll(getWorkspaces(userId).map { workspaces ->
+                    AuthenticatedWorkspaceFeed.Loaded(userId, workspaces)
+                })
+            }.catch {
+                emit(AuthenticatedWorkspaceFeed.Failed(userId))
+            }
+        }
+    }
 
 class DevDebugCenterViewModel(
     private val vibeStudioRepository: VibeStudioRepository,
@@ -19,26 +53,79 @@ class DevDebugCenterViewModel(
     private val _workspaces = MutableStateFlow<List<Workspace>>(emptyList())
     val workspaces = _workspaces.asStateFlow()
 
+    private var workspaceFeedJob: Job? = null
+    private var selectedWorkspaceJob: Job? = null
+    private var requestedWorkspaceId: String? = null
+
     init {
         loadWorkspaces()
     }
 
     private fun loadWorkspaces() {
-        viewModelScope.launch {
-            authRepository.currentUser.collect { user ->
-                val userId = user?.id?.takeIf { it.isNotBlank() }
-                if (userId == null) {
-                    _workspaces.value = emptyList()
-                    _state.update { it.copy(isLoading = false, selectedWorkspace = null, error = "سجّل الدخول بحساب صالح لعرض مساحات العمل.") }
-                    return@collect
-                }
-                vibeStudioRepository.getWorkspaces(userId).collect { wsList ->
-                    _workspaces.value = wsList
-                    val currentSelected = _state.value.selectedWorkspace
-                    if (currentSelected == null && wsList.isNotEmpty()) {
-                        selectWorkspace(wsList.first().id)
-                    } else if (wsList.isEmpty()) {
-                        _state.update { it.copy(isLoading = false) }
+        workspaceFeedJob?.cancel()
+        workspaceFeedJob = viewModelScope.launch {
+            observeAuthenticatedWorkspaceFeed(
+                currentUser = authRepository.currentUser,
+                getWorkspaces = vibeStudioRepository::getWorkspaces
+            ).collect { feed ->
+                when (feed) {
+                    AuthenticatedWorkspaceFeed.SignedOut -> {
+                        selectedWorkspaceJob?.cancel()
+                        selectedWorkspaceJob = null
+                        _workspaces.value = emptyList()
+                        _state.value = DevDebugCenterState(
+                            isLoading = false,
+                            error = "سجّل الدخول بحساب صالح لعرض مساحات العمل."
+                        )
+                    }
+
+                    is AuthenticatedWorkspaceFeed.Loading -> {
+                        selectedWorkspaceJob?.cancel()
+                        selectedWorkspaceJob = null
+                        _workspaces.value = emptyList()
+                        _state.value = DevDebugCenterState(isLoading = true)
+                    }
+
+                    is AuthenticatedWorkspaceFeed.Failed -> {
+                        selectedWorkspaceJob?.cancel()
+                        selectedWorkspaceJob = null
+                        _workspaces.value = emptyList()
+                        _state.value = DevDebugCenterState(
+                            isLoading = false,
+                            error = "تعذر تحميل مساحات العمل للحساب الحالي."
+                        )
+                    }
+
+                    is AuthenticatedWorkspaceFeed.Loaded -> {
+                        _workspaces.value = feed.workspaces
+                        val requestedId = requestedWorkspaceId
+                        if (requestedId != null) {
+                            val requested = feed.workspaces.firstOrNull { it.id == requestedId }
+                            if (requested == null) {
+                                selectedWorkspaceJob?.cancel()
+                                selectedWorkspaceJob = null
+                                _state.value = DevDebugCenterState(
+                                    isLoading = false,
+                                    error = "مساحة العمل المطلوبة غير متاحة للحساب الحالي."
+                                )
+                            } else if (_state.value.selectedWorkspace?.id != requested.id) {
+                                loadAuthorizedWorkspace(requested.id)
+                            }
+                        } else {
+                            val selectedId = _state.value.selectedWorkspace?.id
+                            val selected = feed.workspaces.firstOrNull { it.id == selectedId }
+                            when {
+                                selected != null && selected != _state.value.selectedWorkspace ->
+                                    loadAuthorizedWorkspace(selected.id)
+                                selected == null && feed.workspaces.isNotEmpty() ->
+                                    loadAuthorizedWorkspace(feed.workspaces.first().id)
+                                feed.workspaces.isEmpty() -> {
+                                    selectedWorkspaceJob?.cancel()
+                                    selectedWorkspaceJob = null
+                                    _state.value = DevDebugCenterState(isLoading = false)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -46,15 +133,37 @@ class DevDebugCenterViewModel(
     }
 
     fun initForWorkspace(workspaceId: String?) {
-        if (!workspaceId.isNullOrBlank()) {
-            selectWorkspace(workspaceId)
+        if (workspaceId.isNullOrBlank()) return
+        requestedWorkspaceId = workspaceId
+        if (_workspaces.value.any { it.id == workspaceId }) {
+            loadAuthorizedWorkspace(workspaceId)
         }
     }
 
     fun selectWorkspace(workspaceId: String) {
-        viewModelScope.launch {
+        if (workspaceId.isBlank()) return
+        requestedWorkspaceId = workspaceId
+        if (_workspaces.value.none { it.id == workspaceId }) {
+            selectedWorkspaceJob?.cancel()
+            selectedWorkspaceJob = null
+            _state.value = DevDebugCenterState(
+                isLoading = false,
+                error = "مساحة العمل المطلوبة غير متاحة للحساب الحالي."
+            )
+            return
+        }
+        loadAuthorizedWorkspace(workspaceId)
+    }
+
+    private fun loadAuthorizedWorkspace(workspaceId: String) {
+        // Workspace IDs are accepted only from the authenticated user's live workspace feed.
+        if (_workspaces.value.none { it.id == workspaceId }) return
+
+        selectedWorkspaceJob?.cancel()
+        selectedWorkspaceJob = viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             val result = vibeStudioRepository.getDevDebugState(workspaceId)
+            if (!isActive) return@launch
             result.onSuccess { debugState ->
                 _state.value = debugState.copy(isLoading = false)
             }.onFailure { err ->
@@ -117,7 +226,7 @@ class DevDebugCenterViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             val result = vibeStudioRepository.diagnoseCrashAndGenerateFix(crashId)
-            result.onSuccess { (diag, fix) ->
+            result.onSuccess { (_, fix) ->
                 refreshCurrentWorkspace(feedback = "تم تحليل العطل جذرياً وتوليد اقتراح إصلاح في ${fix.filePath}")
             }.onFailure { err ->
                 _state.update { it.copy(isLoading = false, error = "فشل التشخيص: ${err.message}") }
