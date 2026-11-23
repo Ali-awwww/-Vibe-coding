@@ -596,4 +596,14 @@
     <string name="debug_symbols_upload_failed">The mapping could not be validated or saved. Check the file format, application and project.</string>
     <string name="debug_symbols_delete_failed">The mapping could not be deleted.</string>
 
+    <string name="debug_symbols_retry">Retry</string>
+    <string name="debug_symbols_choose_file">Choose mapping file (.txt or .map)</string>
+    <string name="debug_symbols_reading_file">Reading and validating file…</string>
+    <string name="debug_symbols_selected_file">Selected file: %1$s</string>
+    <string name="debug_symbols_file_size">%1$d bytes</string>
+    <string name="debug_symbols_file_unsupported">Choose a .txt or .map ProGuard/R8 mapping file.</string>
+    <string name="debug_symbols_file_empty">The selected mapping file is empty.</string>
+    <string name="debug_symbols_file_too_large">The mapping file exceeds the 10 MiB limit.</string>
+    <string name="debug_symbols_file_invalid_text">The selected file is not valid UTF-8 text.</string>
+    <string name="debug_symbols_file_read_failed">The selected file could not be read. Check its access permission and try again.</string>
 </resources>

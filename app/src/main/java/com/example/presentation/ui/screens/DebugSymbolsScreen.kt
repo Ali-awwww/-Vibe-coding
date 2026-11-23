@@ -1,5 +1,19 @@
 package com.example.presentation.ui.screens
 
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalContext
+import com.example.data.util.MappingFileContent
+import com.example.data.util.MappingFileReadException
+import com.example.data.util.MappingFileReader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.IOException
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -53,12 +67,24 @@ fun DebugSymbolsScreen(projectId: String, navController: NavController, viewMode
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            uiState.errorResId?.let {
-                Text(stringResource(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            val loadFailed = uiState.errorResId == R.string.debug_symbols_load_failed
+            if (uiState.errorResId != null && (!loadFailed || uiState.files.isNotEmpty())) {
+                Text(stringResource(uiState.errorResId), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             if (uiState.isLoading) {
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
+                }
+            } else if (loadFailed && uiState.files.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(stringResource(R.string.debug_symbols_load_failed), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = viewModel::refresh) {
+                        Text(stringResource(R.string.debug_symbols_retry))
+                    }
                 }
             } else if (uiState.files.isEmpty()) {
                 EmptyDebugSymbolsState()
@@ -76,7 +102,7 @@ fun DebugSymbolsScreen(projectId: String, navController: NavController, viewMode
         UploadSymbolDialog(
             applications = uiState.applications,
             isUploading = uiState.isUploading,
-            errorResId = uiState.errorResId,
+            errorResId = uiState.errorResId?.takeUnless { it == R.string.debug_symbols_load_failed },
             onDismiss = { if (!uiState.isUploading) showUploadDialog = false },
             onUpload = { appId, type, version, buildId, fileName, content ->
                 viewModel.uploadFile(appId, type, version, buildId, null, fileName, content) { saved ->
@@ -155,18 +181,71 @@ fun UploadSymbolDialog(
     onDismiss: () -> Unit,
     onUpload: (String, SymbolFileType, String, String?, String, String) -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var selectedAppId by remember(applications) { mutableStateOf(applications.firstOrNull()?.id ?: "") }
     var type by remember { mutableStateOf(SymbolFileType.ANDROID_R8) }
     var version by remember { mutableStateOf("") }
     var buildId by remember { mutableStateOf("") }
-    var fileName by remember { mutableStateOf("") }
-    var content by remember { mutableStateOf("") }
+    var selectedFile by remember { mutableStateOf<MappingFileContent?>(null) }
+    var isReadingFile by remember { mutableStateOf(false) }
+    var fileReadErrorResId by remember { mutableStateOf<Int?>(null) }
+
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            selectedFile = null
+            isReadingFile = true
+            fileReadErrorResId = null
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val displayName = context.contentResolver.query(
+                            uri,
+                            arrayOf(OpenableColumns.DISPLAY_NAME),
+                            null,
+                            null,
+                            null
+                        )?.use { cursor ->
+                            val nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                            if (nameColumn >= 0 && cursor.moveToFirst()) cursor.getString(nameColumn) else null
+                        } ?: throw IOException("The selected document name is unavailable.")
+
+                        val input = context.contentResolver.openInputStream(uri)
+                            ?: throw IOException("The selected document cannot be opened.")
+                        MappingFileReader.read(displayName, input)
+                    }
+                }
+
+                result.fold(
+                    onSuccess = { selectedFile = it },
+                    onFailure = { error ->
+                        selectedFile = null
+                        fileReadErrorResId = when (error) {
+                            is MappingFileReadException -> when (error.reason) {
+                                MappingFileReadException.Reason.UNSUPPORTED_EXTENSION -> R.string.debug_symbols_file_unsupported
+                                MappingFileReadException.Reason.EMPTY -> R.string.debug_symbols_file_empty
+                                MappingFileReadException.Reason.TOO_LARGE -> R.string.debug_symbols_file_too_large
+                                MappingFileReadException.Reason.INVALID_TEXT -> R.string.debug_symbols_file_invalid_text
+                            }
+                            else -> R.string.debug_symbols_file_read_failed
+                        }
+                    }
+                )
+                isReadingFile = false
+            }
+        }
+    }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isUploading && !isReadingFile) onDismiss() },
         title = { Text(stringResource(R.string.debug_symbols_upload_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 if (applications.isEmpty()) {
                     Text(stringResource(R.string.debug_symbols_no_apps), color = MaterialTheme.colorScheme.error)
                 } else {
@@ -176,7 +255,7 @@ fun UploadSymbolDialog(
                             selected = selectedAppId == app.id,
                             onClick = { selectedAppId = app.id },
                             label = { Text(app.name) },
-                            enabled = !isUploading
+                            enabled = !isUploading && !isReadingFile
                         )
                     }
                 }
@@ -188,7 +267,7 @@ fun UploadSymbolDialog(
                             selected = type == symbolType,
                             onClick = { type = symbolType },
                             label = { Text(if (symbolType == SymbolFileType.ANDROID_R8) "R8" else "ProGuard") },
-                            enabled = !isUploading
+                            enabled = !isUploading && !isReadingFile
                         )
                     }
                 }
@@ -198,7 +277,7 @@ fun UploadSymbolDialog(
                     onValueChange = { version = it },
                     label = { Text(stringResource(R.string.debug_symbols_app_version)) },
                     singleLine = true,
-                    enabled = !isUploading,
+                    enabled = !isUploading && !isReadingFile,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -206,45 +285,81 @@ fun UploadSymbolDialog(
                     onValueChange = { buildId = it },
                     label = { Text(stringResource(R.string.debug_symbols_build_id_optional)) },
                     singleLine = true,
-                    enabled = !isUploading,
+                    enabled = !isUploading && !isReadingFile,
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(
-                    value = fileName,
-                    onValueChange = { fileName = it },
-                    label = { Text(stringResource(R.string.debug_symbols_file_name)) },
-                    singleLine = true,
-                    enabled = !isUploading,
+
+                OutlinedButton(
+                    onClick = { filePicker.launch(arrayOf("*/*")) },
+                    enabled = !isUploading && !isReadingFile,
                     modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    label = { Text(stringResource(R.string.debug_symbols_mapping_content)) },
-                    placeholder = { Text("com.example.MainActivity -> a:") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 4,
-                    enabled = !isUploading
-                )
+                ) {
+                    Icon(Icons.Default.AttachFile, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.debug_symbols_choose_file))
+                }
+
+                if (isReadingFile) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text(stringResource(R.string.debug_symbols_reading_file))
+                    }
+                }
+
+                selectedFile?.let { file ->
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(file.fileName, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                stringResource(R.string.debug_symbols_file_size, file.byteSize),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                fileReadErrorResId?.let {
+                    Text(stringResource(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                errorResId?.let {
+                    Text(stringResource(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
                 Text(
                     stringResource(R.string.debug_symbols_local_storage_notice),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                errorResId?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onUpload(selectedAppId, type, version.trim(), buildId.trim().ifBlank { null }, fileName.trim(), content) },
-                enabled = selectedAppId.isNotBlank() && version.isNotBlank() && fileName.isNotBlank() && content.isNotBlank() && !isUploading
+                onClick = {
+                    selectedFile?.let { file ->
+                        onUpload(
+                            selectedAppId,
+                            type,
+                            version.trim(),
+                            buildId.trim().ifBlank { null },
+                            file.fileName,
+                            file.text
+                        )
+                    }
+                },
+                enabled = selectedAppId.isNotBlank() &&
+                    version.isNotBlank() &&
+                    selectedFile != null &&
+                    !isUploading &&
+                    !isReadingFile
             ) {
                 if (isUploading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 else Text(stringResource(R.string.debug_symbols_upload_button))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isUploading) { Text(stringResource(R.string.debug_symbols_cancel)) }
+            TextButton(onClick = onDismiss, enabled = !isUploading && !isReadingFile) {
+                Text(stringResource(R.string.debug_symbols_cancel))
+            }
         }
     )
 }

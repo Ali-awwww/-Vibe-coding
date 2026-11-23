@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.R
 import com.example.domain.model.*
 import com.example.domain.repository.SymbolicationRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -26,10 +27,15 @@ class DebugSymbolsViewModel(
     private val _uiState = MutableStateFlow(DebugSymbolsUiState())
     val uiState = _uiState.asStateFlow()
 
+    private var loadJob: Job? = null
+
     init { loadData() }
 
+    fun refresh() = loadData()
+
     private fun loadData() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorResId = null) }
             combine(
                 repository.getDebugSymbols(projectId),

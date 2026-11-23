@@ -2983,3 +2983,27 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - CI for `71c0c132513862222fae5c743d3ed27151e568f9` passed Code Quality but Android unit-test compilation failed in `GitHubConnectScreenTest.kt`: after adding optional `onForgetToken`, one trailing lambda was bound to the last parameter instead of `onConnectToken`.
 - Corrected the test call to use the named `onConnectToken` argument. No test was executed in the failed run.
 - The DebugSymbols implementation commit `aaaea92672557b845ad9d3f2f264eaf48a3ec015` is queued for CI; this test correction is applied before its test execution can be trusted.
+
+
+## 2026-11-24 — DebugSymbols: bounded native file selection
+
+### Prior parser-slice verification
+- The main HEAD before this change was e511d045a7c02634ce3ff73d4dff67bcd0c4b8fc.
+- Android CI run [45080218888](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45080218888) completed successfully: testDebugUnitTest, Debug APK build and artifact upload passed.
+- APK workflow [45080218832](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45080218832) completed successfully: unit tests, Debug APK and signed Release APK build/upload passed. Code Quality run [45080218906](https://github.com/Ali-awwww/-Vibe-coding/actions/runs/45080218906) completed successfully with lintDebug.
+- The APK job log explicitly reports all three SymbolicationRepositoryImplTest cases passing: cross-project application rejection, mapping-based frame resolution, and pending upload status. This verifies the parser/repository regression tests, not device behavior.
+
+### Implementation
+- Replaced manual file-name/content entry with Android's Storage Access Framework document picker. The user selects a local mapping file; the app reads it through ContentResolver without requesting broad storage permissions or retaining a URI grant.
+- Added bounded streaming reads with a strict 10 MiB limit, case-insensitive .txt/.map validation, strict UTF-8 decoding, BOM handling, and rejection of empty/binary content before the repository parser runs.
+- File reading runs on Dispatchers.IO; the UI shows selected filename/size, progress, and distinct validation/read errors in English and Arabic.
+- Made the upload dialog scrollable for small screens and added a retry action for initial database-load failures.
+- Added focused JVM tests for UTF-8/BOM handling, unsupported extensions, empty files, exact/over-limit boundaries, malformed UTF-8 and binary NUL bytes.
+
+### Verification boundary
+- The new file-reader tests and Android build/lint are pending the CI runs for this commit. No local Gradle execution, emulator/device screenshot, RTL/LTR rendered inspection, TalkBack session, or live Supabase artifact-storage verification is claimed.
+- Mapping records remain local-only. Remote artifact storage, build-ID matching against trusted crash metadata, and non-Android/native symbol formats remain open; this screen stays IN_PROGRESS.
+
+### Persistent continuity
+- Last area worked: DebugSymbols — real local document selection and bounded, strict text ingestion are implemented in source with regression tests.
+- Exact next step: inspect the three push-triggered workflows for this commit to terminal status; fix compiler, resource, unit-test or lint failures from their logs. Keep device/RTL and remote artifact-storage gates open. Then continue the next executable screen task without claiming DebugSymbols complete.

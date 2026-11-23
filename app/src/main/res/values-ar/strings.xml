@@ -596,4 +596,14 @@
     <string name="debug_symbols_upload_failed">تعذر التحقق من ملف الربط أو حفظه. تحقق من الصيغة والتطبيق والمشروع.</string>
     <string name="debug_symbols_delete_failed">تعذر حذف ملف الربط.</string>
 
+    <string name="debug_symbols_retry">إعادة المحاولة</string>
+    <string name="debug_symbols_choose_file">اختيار ملف الربط (.txt أو .map)</string>
+    <string name="debug_symbols_reading_file">جارٍ قراءة الملف والتحقق منه…</string>
+    <string name="debug_symbols_selected_file">الملف المحدد: %1$s</string>
+    <string name="debug_symbols_file_size">%1$d بايت</string>
+    <string name="debug_symbols_file_unsupported">اختر ملف ربط ProGuard/R8 بصيغة .txt أو .map.</string>
+    <string name="debug_symbols_file_empty">ملف الربط المحدد فارغ.</string>
+    <string name="debug_symbols_file_too_large">يتجاوز حجم ملف الربط الحد الأقصى البالغ 10 ميبيبايت.</string>
+    <string name="debug_symbols_file_invalid_text">الملف المحدد ليس نصاً صالحاً بترميز UTF-8.</string>
+    <string name="debug_symbols_file_read_failed">تعذرت قراءة الملف المحدد. تحقق من صلاحية الوصول ثم أعد المحاولة.</string>
 </resources>
