@@ -2,6 +2,7 @@ package com.example.presentation.viewmodel
 
 import com.example.domain.model.UserAccount
 import com.example.domain.model.Workspace
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -10,7 +11,6 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,6 +22,7 @@ class DevDebugCenterViewModelTest {
         val users = MutableStateFlow<UserAccount?>(UserAccount(id = "user-a"))
         val requestedUserIds = mutableListOf<String>()
         var previousSubscriptionCancelled = false
+        val firstUserLoaded = CompletableDeferred<Unit>()
         val received = mutableListOf<AuthenticatedWorkspaceFeed>()
 
         val collector = launch {
@@ -30,6 +31,7 @@ class DevDebugCenterViewModelTest {
                     flow {
                         requestedUserIds += userId
                         emit(emptyList())
+                        firstUserLoaded.complete(Unit)
                         try {
                             awaitCancellation()
                         } finally {
@@ -45,7 +47,7 @@ class DevDebugCenterViewModelTest {
             }.take(4).toList(received)
         }
 
-        yield()
+        firstUserLoaded.await()
         users.value = UserAccount(id = "user-b")
         collector.join()
 

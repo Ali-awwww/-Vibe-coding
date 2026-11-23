@@ -3032,3 +3032,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 ### Persistent continuity
 - Last area worked: DevDebugCenter — account-scoped workspace collection and route ownership guard.
 - Exact next step: inspect CI, APK and Code Quality for this commit to terminal status; fix only evidence-backed failures, then continue the next executable screen task. Keep this screen open until device RTL/LTR and real backend authorization are verified.
+
+
+### Regression-test determinism — 2026-11-24
+- The account-switch test now waits for the first account's workspace emission before switching identities, eliminating a scheduling race in the test itself. The flow operator is explicitly opted in to its coroutine API.
+- CI remains the authoritative Android/JUnit verification; no test pass is claimed from the source update alone.

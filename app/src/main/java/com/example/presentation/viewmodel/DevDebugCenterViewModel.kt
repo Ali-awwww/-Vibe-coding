@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.VibeStudioRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
@@ -17,6 +18,7 @@ internal sealed interface AuthenticatedWorkspaceFeed {
     data class Failed(val userId: String) : AuthenticatedWorkspaceFeed
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 /**
  * Switches workspace subscriptions with the authenticated account. flatMapLatest cancels
  * the previous user's subscription before exposing data for the next account.
