@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithText
+import com.example.R
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -97,6 +98,28 @@ class CrashDetailScreenTest {
         composeRule.onNodeWithText(appContext().getString(com.example.R.string.crash_detail_symbolication_loading))
             .assertIsDisplayed()
         composeRule.onNodeWithTag("crash_symbolication_retry").assertDoesNotExist()
+    }
+
+
+    @Test
+    fun teamInvestigationActionUsesLocalizedResourceAndInvokesCallback() {
+        var started = false
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                CrashInvestigationTeamSection(
+                    isInvestigating = false,
+                    teamExecution = null,
+                    onStartInvestigation = { started = true },
+                    onViewReport = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(appContext().getString(R.string.crash_team_start))
+            .assertIsDisplayed()
+            .performClick()
+        assertTrue(started)
     }
 
     private fun appContext(): android.content.Context =

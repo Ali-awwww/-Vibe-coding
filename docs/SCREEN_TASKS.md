@@ -3348,3 +3348,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The Compose test's `assertDoesNotExist` matcher import was added after reviewing the new test source; it had not yet been executed by CI at the time of this correction.
 
 - A final source-level exhaustiveness check added a defensive fallback to the symbolication status label mapping before the next CI run; the enum currently has all known states mapped explicitly.
+
+
+### 2026-11-25 — Crash investigation team localization
+
+- Removed hard-coded Arabic-only team workflow and report-dialog copy from the CrashDetail route. Team status, progress, start/retry/report actions, report governance notice, copy/fix/close actions and severity summary now use paired English/Arabic resources.
+- Blank exception/message metadata in the report header now uses explicit unavailable labels.
+- Added a Compose regression test proving the localized start action is rendered and invokes the investigation callback.
+- CI for the preceding symbolication-recovery source revision is still running; this localization batch will be validated by the next push-triggered runs. No screen completion or device visual pass is claimed.

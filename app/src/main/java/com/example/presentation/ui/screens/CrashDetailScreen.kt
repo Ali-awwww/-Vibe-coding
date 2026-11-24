@@ -790,12 +790,12 @@ fun CrashInvestigationTeamSection(
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "AI Crash Investigation Team",
+                        stringResource(R.string.crash_team_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "فريق تحقيق تخصصي (9 نماذج ذكاء اصطناعي)",
+                        stringResource(R.string.crash_team_subtitle),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -806,7 +806,7 @@ fun CrashInvestigationTeamSection(
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            "مكتمل",
+                            stringResource(R.string.crash_team_completed),
                             color = Color.White,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -817,7 +817,7 @@ fun CrashInvestigationTeamSection(
 
             Spacer(Modifier.height(10.dp))
             Text(
-                "يتولى الفريق المؤلف من Crash Analyst، Stack Trace Specialist، Source Code Investigator، Root Cause Analyst، Security Auditor، Fix Developer، Code Reviewer، QA Engineer، و Team Leader التحقيق الشامل في العطل وتحديد السبب الجذري ومراجعة المخاطر الأمنية وتصميم اختبار إعادة الإنتاج واقتراح الـ Patch.",
+                stringResource(R.string.crash_team_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -838,7 +838,7 @@ fun CrashInvestigationTeamSection(
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "التحقيق جارٍ بواسطة الفريق (10 خطوات)...",
+                                stringResource(R.string.crash_team_running),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -847,7 +847,7 @@ fun CrashInvestigationTeamSection(
                             }
                         }
                         TextButton(onClick = onViewReport) {
-                            Text("متابعة", fontSize = 11.sp)
+                            Text(stringResource(R.string.crash_team_continue), fontSize = 11.sp)
                         }
                     }
                 }
@@ -860,14 +860,14 @@ fun CrashInvestigationTeamSection(
                     ) {
                         Icon(Icons.Default.Description, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("عرض تقرير التحقيق النهائي", fontSize = 12.sp)
+                        Text(stringResource(R.string.crash_team_view_report), fontSize = 12.sp)
                     }
                     OutlinedButton(
                         onClick = onStartInvestigation
                     ) {
                         Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("إعادة التحقيق", fontSize = 12.sp)
+                        Text(stringResource(R.string.crash_team_retry), fontSize = 12.sp)
                     }
                 }
             } else {
@@ -877,7 +877,7 @@ fun CrashInvestigationTeamSection(
                 ) {
                     Icon(Icons.Default.Psychology, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("بدء التحقيق المعمق بواسطة الفريق (10 خطوات)")
+                    Text(stringResource(R.string.crash_team_start))
                 }
             }
         }
@@ -902,7 +902,7 @@ fun CrashInvestigationDialog(
                 Icon(Icons.Default.Security, null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "AI Crash Investigation Report",
+                    stringResource(R.string.crash_team_report_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -924,12 +924,24 @@ fun CrashInvestigationDialog(
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Text(
-                            "${crashReport.exceptionType} (${crashReport.severity.name})",
+                            stringResource(
+                                R.string.crash_team_crash_summary,
+                                crashReport.exceptionType.takeIf { it.isNotBlank() }
+                                    ?: stringResource(R.string.crashes_exception_unavailable),
+                                stringResource(
+                                    when (crashReport.severity) {
+                                        Severity.CRITICAL -> R.string.crashes_severity_critical
+                                        Severity.HIGH -> R.string.crashes_severity_high
+                                        Severity.MEDIUM -> R.string.crashes_severity_medium
+                                        Severity.LOW -> R.string.crashes_severity_low
+                                    }
+                                )
+                            ),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            crashReport.message,
+                            crashReport.message.takeIf { it.isNotBlank() } ?: stringResource(R.string.crashes_message_unavailable),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -939,7 +951,7 @@ fun CrashInvestigationDialog(
                 // Steps progress list
                 if (execution != null && execution.steps.isNotEmpty()) {
                     Text(
-                        "مسار التحقيق ومهام الأعضاء (${execution.steps.count { it.status == StepStatus.COMPLETED }}/9 مكتملة):",
+                        stringResource(R.string.crash_team_progress, execution.steps.count { it.status == StepStatus.COMPLETED }),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -974,7 +986,7 @@ fun CrashInvestigationDialog(
                 if (execution?.finalResult != null) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text(
-                        "التقرير النهائي الشامل والتوصيات:",
+                        stringResource(R.string.crash_team_final_report),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -1001,7 +1013,7 @@ fun CrashInvestigationDialog(
                             Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "ضوابط الحوكمة: لا يتم تطبيق الإصلاح أو دمجه في بيئة الإنتاج دون مراجعة وموافقة المطور الصريحة.",
+                                stringResource(R.string.crash_team_governance),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -1019,16 +1031,16 @@ fun CrashInvestigationDialog(
                     }) {
                         Icon(if (copied) Icons.Default.Check else Icons.Default.ContentCopy, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(if (copied) "تم النسخ" else "نسخ التقرير")
+                        Text(stringResource(if (copied) R.string.crash_team_copied else R.string.crash_team_copy_report))
                     }
                     Button(onClick = onNavigateToFix) {
                         Icon(Icons.Default.Build, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("مساعد الإصلاح (Fix)")
+                        Text(stringResource(R.string.crash_team_fix_assistant))
                     }
                 } else {
                     Button(onClick = onDismiss) {
-                        Text("حسناً")
+                        Text(stringResource(R.string.crash_team_ok))
                     }
                 }
             }
@@ -1036,7 +1048,7 @@ fun CrashInvestigationDialog(
         dismissButton = {
             if (execution?.finalResult != null) {
                 OutlinedButton(onClick = onDismiss) {
-                    Text("إغلاق")
+                    Text(stringResource(R.string.crash_team_close))
                 }
             }
         }

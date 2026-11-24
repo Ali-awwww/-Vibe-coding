@@ -668,4 +668,25 @@
     <string name="crash_detail_symbolication_failed">فشل تحليل الرموز</string>
     <string name="crash_detail_symbolication_pending">تحليل الرموز قيد الانتظار</string>
 
+
+    <string name="crash_team_title">فريق تحقيق الأعطال بالذكاء الاصطناعي</string>
+    <string name="crash_team_subtitle">فريق تخصصي · 9 نماذج ذكاء اصطناعي</string>
+    <string name="crash_team_completed">مكتمل</string>
+    <string name="crash_team_description">يتولى محلل الأعطال ومتخصص تتبع المكدس ومحقق الشيفرة ومحلل السبب الجذري ومدقق الأمان ومطور الإصلاح ومراجع الشيفرة ومهندس ضمان الجودة وقائد الفريق فحص العطل وتحديد سببه ومراجعة مخاطره الأمنية وتصميم اختبارات إعادة إنتاجه واقتراح رقعة إصلاح.</string>
+    <string name="crash_team_running">التحقيق جارٍ بواسطة الفريق · 10 خطوات…</string>
+    <string name="crash_team_continue">عرض التقدم</string>
+    <string name="crash_team_view_report">عرض تقرير التحقيق النهائي</string>
+    <string name="crash_team_retry">إعادة التحقيق</string>
+    <string name="crash_team_start">بدء التحقيق المعمق بواسطة الفريق (10 خطوات)</string>
+    <string name="crash_team_report_title">تقرير تحقيق الأعطال بالذكاء الاصطناعي</string>
+    <string name="crash_team_crash_summary">%1$s · مستوى الخطورة: %2$s</string>
+    <string name="crash_team_progress">خطوات التحقيق · اكتمل %1$d من 9</string>
+    <string name="crash_team_final_report">التقرير النهائي والتوصيات</string>
+    <string name="crash_team_governance">ضوابط الحوكمة: لا يُطبّق الإصلاح أو يُدمج في بيئة الإنتاج دون مراجعة المطور وموافقته الصريحة.</string>
+    <string name="crash_team_copied">تم النسخ</string>
+    <string name="crash_team_copy_report">نسخ التقرير</string>
+    <string name="crash_team_fix_assistant">مساعد الإصلاح</string>
+    <string name="crash_team_ok">حسنًا</string>
+    <string name="crash_team_close">إغلاق</string>
+
 </resources>

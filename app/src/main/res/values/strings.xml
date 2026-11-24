@@ -668,4 +668,25 @@
     <string name="crash_detail_symbolication_failed">Symbolication failed</string>
     <string name="crash_detail_symbolication_pending">Symbolication pending</string>
 
+
+    <string name="crash_team_title">AI crash investigation team</string>
+    <string name="crash_team_subtitle">Specialist team · 9 AI models</string>
+    <string name="crash_team_completed">Completed</string>
+    <string name="crash_team_description">The Crash Analyst, Stack Trace Specialist, Source Code Investigator, Root Cause Analyst, Security Auditor, Fix Developer, Code Reviewer, QA Engineer and Team Leader investigate the failure, identify its root cause, review security risks, design reproduction tests and propose a patch.</string>
+    <string name="crash_team_running">Team investigation in progress · 10 steps…</string>
+    <string name="crash_team_continue">View progress</string>
+    <string name="crash_team_view_report">View final investigation report</string>
+    <string name="crash_team_retry">Run investigation again</string>
+    <string name="crash_team_start">Start in-depth team investigation (10 steps)</string>
+    <string name="crash_team_report_title">AI crash investigation report</string>
+    <string name="crash_team_crash_summary">%1$s · %2$s severity</string>
+    <string name="crash_team_progress">Investigation steps · %1$d of 9 completed</string>
+    <string name="crash_team_final_report">Final report and recommendations</string>
+    <string name="crash_team_governance">Governance: no fix is applied or merged into production without explicit developer review and approval.</string>
+    <string name="crash_team_copied">Copied</string>
+    <string name="crash_team_copy_report">Copy report</string>
+    <string name="crash_team_fix_assistant">Fix assistant</string>
+    <string name="crash_team_ok">OK</string>
+    <string name="crash_team_close">Close</string>
+
 </resources>
