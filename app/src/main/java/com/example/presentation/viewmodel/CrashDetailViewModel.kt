@@ -132,7 +132,8 @@ class CrashDetailViewModel(
                 ) return@launch
 
                 _uiState.update { current ->
-                    if (current.crash?.id != crash.id || current.crash.stackTrace != crash.stackTrace) {
+                    val currentCrash = current.crash
+                    if (currentCrash == null || currentCrash.id != crash.id || currentCrash.stackTrace != crash.stackTrace) {
                         current
                     } else {
                         current.copy(
