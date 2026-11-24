@@ -3379,3 +3379,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The new `CrashRepositoryCancellationTest` and its cancellation-aware source-context implementation are now on `main`; their execution remains pending.
 
 - A follow-up inspection caught that the wildcard import replacement had removed the Compose test imports entirely because the old import line was matched by the cleanup. Both the package wildcard and `createComposeRule` import are now explicitly restored before the next CI run.
+
+### 2026-11-25 — Source-context compile correction
+
+- CI for `f5edd0bda769a51099959a8cf281b034ad38172d` failed during Kotlin compilation because the source-context replacement had omitted the local `sourceContext` accumulator declaration. The failure was confirmed in the unit-test compile log at lines 694 and 712 of `CrashRepositoryImpl.kt`.
+- Restored the declaration immediately before the cancellation-aware lookup. The correction is committed with this register entry; the next CI run must validate it before any pass status is recorded.

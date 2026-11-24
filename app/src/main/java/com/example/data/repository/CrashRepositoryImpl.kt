@@ -652,6 +652,7 @@ class CrashRepositoryImpl(
             authorizedCrash.stackTrace
         }
         
+        var sourceContext = ""
         // 2. Fetch Source Code Context if available. Cancellation must stop the
         // whole diagnosis rather than being downgraded to an optional lookup failure.
         val sourceContextResult = runCatchingCancellable {
