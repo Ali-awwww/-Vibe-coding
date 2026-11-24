@@ -3346,3 +3346,5 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Commit trace and follow-up source review**
 - CrashDetail implementation/test commits: `6c50931bf878e62455b41e94f1f2ba239884ab92`, nullable snapshot guard `0c3f17652c10237247610569ce3c0bf565471c0d`, and compile/symbolication recovery correction `10d33236520b8b2857662552ccf89e4dfed08470`.
 - The Compose test's `assertDoesNotExist` matcher import was added after reviewing the new test source; it had not yet been executed by CI at the time of this correction.
+
+- A final source-level exhaustiveness check added a defensive fallback to the symbolication status label mapping before the next CI run; the enum currently has all known states mapped explicitly.

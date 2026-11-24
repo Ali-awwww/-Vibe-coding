@@ -636,6 +636,7 @@ fun SymbolicationStatusBanner(
         status == SymbolicationStatus.SOURCE_REVISION_MISSING -> R.string.crash_detail_symbolication_source_missing
         status == SymbolicationStatus.PROCESSING_FAILED -> R.string.crash_detail_symbolication_failed
         status == SymbolicationStatus.PENDING -> R.string.crash_detail_symbolication_pending
+        else -> R.string.crash_detail_symbolication_error
     }
     val icon = when {
         isLoading -> Icons.Default.Sync
