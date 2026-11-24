@@ -645,4 +645,16 @@
     <string name="crashes_message_unavailable">No message supplied</string>
     <string name="crashes_loading_more">Loading more reports...</string>
     <string name="crashes_source_internal_qa">Internal QA</string>
+
+    <string name="crash_detail_not_found_title">Crash report unavailable</string>
+    <string name="crash_detail_not_found_desc">This report may have been deleted or you may no longer have access to it.</string>
+    <string name="crash_detail_load_error_title">Could not load crash report</string>
+    <string name="crash_detail_load_error_desc">Check your connection and project access, then retry.</string>
+    <string name="crash_detail_resolve">Resolve crash</string>
+    <string name="crash_detail_device">Device</string>
+    <string name="crash_detail_os">Operating system</string>
+    <string name="crash_detail_version">App version</string>
+    <string name="crash_detail_copy_stack_trace">Copy stack trace</string>
+    <string name="crash_detail_stack_trace_copied">Stack trace copied</string>
+
 </resources>

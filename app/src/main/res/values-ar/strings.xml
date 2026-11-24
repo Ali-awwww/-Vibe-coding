@@ -645,4 +645,16 @@
     <string name="crashes_message_unavailable">لم يتم توفير رسالة</string>
     <string name="crashes_loading_more">جارٍ تحميل المزيد من التقارير...</string>
     <string name="crashes_source_internal_qa">اختبار الجودة الداخلي</string>
+
+    <string name="crash_detail_not_found_title">تقرير العطل غير متاح</string>
+    <string name="crash_detail_not_found_desc">ربما حُذف هذا التقرير أو لم تعد تملك صلاحية الوصول إليه.</string>
+    <string name="crash_detail_load_error_title">تعذر تحميل تقرير العطل</string>
+    <string name="crash_detail_load_error_desc">تحقق من الاتصال وصلاحية الوصول إلى المشروع ثم أعد المحاولة.</string>
+    <string name="crash_detail_resolve">وضع علامة تم الحل</string>
+    <string name="crash_detail_device">الجهاز</string>
+    <string name="crash_detail_os">نظام التشغيل</string>
+    <string name="crash_detail_version">إصدار التطبيق</string>
+    <string name="crash_detail_copy_stack_trace">نسخ تتبع المكدس</string>
+    <string name="crash_detail_stack_trace_copied">تم نسخ تتبع المكدس</string>
+
 </resources>

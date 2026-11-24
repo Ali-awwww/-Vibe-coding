@@ -2,10 +2,11 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.CancellationException
 import com.example.domain.model.*
 import com.example.domain.repository.CrashRepository
 import com.example.domain.repository.SymbolicationRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -19,7 +20,10 @@ data class CrashDetailUiState(
     val teamExecution: TeamExecution? = null,
     val isInvestigatingWithTeam: Boolean = false,
     val showTeamDialog: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val notFound: Boolean = false,
+    val loadError: Boolean = false,
+    val isResolving: Boolean = false
 )
 
 class CrashDetailViewModel(
@@ -32,13 +36,126 @@ class CrashDetailViewModel(
     private val _uiState = MutableStateFlow(CrashDetailUiState())
     val uiState: StateFlow<CrashDetailUiState> = _uiState.asStateFlow()
 
+    private var loadJob: Job? = null
+    private var symbolicationJob: Job? = null
+    private var analysisJob: Job? = null
+    private var resolveJob: Job? = null
+    private var investigationJob: Job? = null
+    private var loadGeneration = 0
+    private var symbolicationGeneration = 0
+    private var symbolicationFingerprint: Pair<String, String>? = null
+
     fun loadCrash(crashId: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            repository.getCrashDetails(crashId).collect { crash ->
-                _uiState.update { it.copy(crash = crash, isLoading = false) }
-                if (crash != null) {
-                    symbolicateCrash()
+        val generation = ++loadGeneration
+        loadJob?.cancel()
+        symbolicationGeneration++
+        symbolicationJob?.cancel()
+        analysisJob?.cancel()
+        resolveJob?.cancel()
+        investigationJob?.cancel()
+        symbolicationFingerprint = null
+        _uiState.value = CrashDetailUiState(isLoading = true)
+
+        loadJob = viewModelScope.launch {
+            var receivedSnapshot = false
+            try {
+                repository.getCrashDetails(crashId).collect { crash ->
+                    if (generation != loadGeneration) return@collect
+                    receivedSnapshot = true
+
+                    if (crash == null) {
+                        symbolicationGeneration++
+                        symbolicationJob?.cancel()
+                        symbolicationJob = null
+                        symbolicationFingerprint = null
+                        _uiState.update {
+                            it.copy(
+                                crash = null,
+                                isLoading = false,
+                                isSymbolicating = false,
+                                symbolication = null,
+                                notFound = true,
+                                loadError = false
+                            )
+                        }
+                    } else {
+                        _uiState.update {
+                            it.copy(
+                                crash = crash,
+                                isLoading = false,
+                                notFound = false,
+                                loadError = false
+                            )
+                        }
+                        val fingerprint = crash.id to crash.stackTrace
+                        if (fingerprint != symbolicationFingerprint) {
+                            symbolicationFingerprint = fingerprint
+                            startSymbolication(crash, generation)
+                        }
+                    }
+                }
+
+                if (!receivedSnapshot && generation == loadGeneration) {
+                    _uiState.update { it.copy(isLoading = false, notFound = true, loadError = false) }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (generation == loadGeneration) {
+                    _uiState.update { current ->
+                        if (current.crash == null) {
+                            current.copy(isLoading = false, notFound = false, loadError = true)
+                        } else {
+                            current.copy(
+                                isLoading = false,
+                                error = failure.message ?: "Crash details could not be refreshed."
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun startSymbolication(crash: CrashReport, expectedLoadGeneration: Int) {
+        val requestGeneration = ++symbolicationGeneration
+        symbolicationJob?.cancel()
+        _uiState.update {
+            it.copy(symbolication = null, isSymbolicating = true, error = null)
+        }
+
+        symbolicationJob = viewModelScope.launch {
+            try {
+                val result = symbolicationRepository.symbolicate(crash)
+                if (expectedLoadGeneration != loadGeneration ||
+                    requestGeneration != symbolicationGeneration
+                ) return@launch
+
+                _uiState.update { current ->
+                    if (current.crash?.id != crash.id || current.crash.stackTrace != crash.stackTrace) {
+                        current
+                    } else {
+                        current.copy(
+                            symbolication = result.getOrNull(),
+                            isSymbolicating = false,
+                            error = result.exceptionOrNull()?.message
+                        )
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                if (expectedLoadGeneration == loadGeneration &&
+                    requestGeneration == symbolicationGeneration
+                ) {
+                    _uiState.update { it.copy(isSymbolicating = false) }
+                }
+                throw cancelled
+            } catch (failure: Exception) {
+                if (expectedLoadGeneration == loadGeneration &&
+                    requestGeneration == symbolicationGeneration
+                ) {
+                    _uiState.update {
+                        it.copy(isSymbolicating = false, error = failure.message ?: "Symbolication failed.")
+                    }
                 }
             }
         }
@@ -46,36 +163,66 @@ class CrashDetailViewModel(
 
     fun symbolicateCrash() {
         val crash = _uiState.value.crash ?: return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSymbolicating = true) }
-            val result = symbolicationRepository.symbolicate(crash)
-            _uiState.update { 
-                it.copy(
-                    symbolication = result.getOrNull(),
-                    isSymbolicating = false,
-                    error = result.exceptionOrNull()?.message
-                )
-            }
-        }
+        symbolicationFingerprint = crash.id to crash.stackTrace
+        startSymbolication(crash, loadGeneration)
     }
 
     fun analyzeCrash() {
         val crash = _uiState.value.crash ?: return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isAnalyzing = true) }
+        if (_uiState.value.isAnalyzing) return
+        val generation = loadGeneration
+        analysisJob?.cancel()
+        _uiState.update { it.copy(isAnalyzing = true, error = null) }
+
+        analysisJob = viewModelScope.launch {
             try {
                 val diagnosis = repository.getAIDiagnosis(crash)
-                _uiState.update { it.copy(diagnosis = diagnosis, isAnalyzing = false) }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isAnalyzing = false, error = e.message) }
+                if (generation == loadGeneration) {
+                    _uiState.update { it.copy(diagnosis = diagnosis, isAnalyzing = false) }
+                }
+            } catch (cancelled: CancellationException) {
+                if (generation == loadGeneration) {
+                    _uiState.update { it.copy(isAnalyzing = false) }
+                }
+                throw cancelled
+            } catch (failure: Exception) {
+                if (generation == loadGeneration) {
+                    _uiState.update {
+                        it.copy(isAnalyzing = false, error = failure.message ?: "Crash analysis failed.")
+                    }
+                }
             }
         }
     }
 
     fun resolveCrash() {
         val crashId = _uiState.value.crash?.id ?: return
-        viewModelScope.launch {
-            repository.updateCrashStatus(crashId, true)
+        if (_uiState.value.isResolving) return
+        val generation = loadGeneration
+        resolveJob?.cancel()
+        _uiState.update { it.copy(isResolving = true, error = null) }
+
+        resolveJob = viewModelScope.launch {
+            try {
+                repository.updateCrashStatus(crashId, true)
+                if (generation == loadGeneration) {
+                    _uiState.update { it.copy(isResolving = false) }
+                }
+            } catch (cancelled: CancellationException) {
+                if (generation == loadGeneration) {
+                    _uiState.update { it.copy(isResolving = false) }
+                }
+                throw cancelled
+            } catch (failure: Exception) {
+                if (generation == loadGeneration) {
+                    _uiState.update {
+                        it.copy(
+                            isResolving = false,
+                            error = failure.message ?: "The crash could not be marked as resolved."
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -85,6 +232,7 @@ class CrashDetailViewModel(
 
     fun investigateWithCrashTeam(orchestrator: com.example.domain.agent.TeamOrchestrator? = null) {
         val crash = _uiState.value.crash ?: return
+        if (_uiState.value.isInvestigatingWithTeam) return
         val orch = orchestrator ?: teamOrchestrator
         if (orch == null) {
             _uiState.update {
@@ -93,25 +241,30 @@ class CrashDetailViewModel(
             return
         }
 
-        viewModelScope.launch {
-            val userId = authenticatedUserIdOrNull(authRepository?.currentUser?.firstOrNull())
-            if (userId == null) {
-                _uiState.update {
-                    it.copy(
-                        isInvestigatingWithTeam = false,
-                        error = "سجّل الدخول بحساب صالح لبدء تحقيق الفريق."
-                    )
-                }
-                return@launch
-            }
-
-            _uiState.update {
-                it.copy(isInvestigatingWithTeam = true, showTeamDialog = true, error = null)
-            }
-            val prompt = "crashId: ${crash.id}\n${crash.exceptionType}: ${crash.message}\n${crash.stackTrace}"
-
+        val generation = loadGeneration
+        investigationJob?.cancel()
+        investigationJob = viewModelScope.launch {
             try {
+                val userId = authenticatedUserIdOrNull(authRepository?.currentUser?.firstOrNull())
+                if (generation != loadGeneration) return@launch
+                if (userId == null) {
+                    _uiState.update {
+                        it.copy(
+                            isInvestigatingWithTeam = false,
+                            error = "سجّل الدخول بحساب صالح لبدء تحقيق الفريق."
+                        )
+                    }
+                    return@launch
+                }
+
+                _uiState.update {
+                    it.copy(isInvestigatingWithTeam = true, showTeamDialog = true, error = null)
+                }
+                val prompt = "crashId: " + crash.id + "\n" +
+                    crash.exceptionType + ": " + crash.message + "\n" + crash.stackTrace
+
                 orch.executeTask(userId, TeamTemplates.CRASH_INVESTIGATION_TEAM, prompt).collect { exec ->
+                    if (generation != loadGeneration) return@collect
                     _uiState.update {
                         it.copy(
                             teamExecution = exec,
@@ -119,15 +272,23 @@ class CrashDetailViewModel(
                         )
                     }
                     if (exec.status == ExecutionStatus.COMPLETED && exec.finalResult != null) {
-                        // Refresh diagnosis in background
                         repository.getAIDiagnosis(crash)
                     }
                 }
             } catch (cancelled: CancellationException) {
-                _uiState.update { it.copy(isInvestigatingWithTeam = false) }
+                if (generation == loadGeneration) {
+                    _uiState.update { it.copy(isInvestigatingWithTeam = false) }
+                }
                 throw cancelled
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isInvestigatingWithTeam = false, error = e.message) }
+            } catch (failure: Exception) {
+                if (generation == loadGeneration) {
+                    _uiState.update {
+                        it.copy(
+                            isInvestigatingWithTeam = false,
+                            error = failure.message ?: "Team investigation failed."
+                        )
+                    }
+                }
             }
         }
     }

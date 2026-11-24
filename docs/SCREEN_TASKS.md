@@ -3287,3 +3287,34 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added `INTERNAL_QA` to the source enum and changed generated workspace test-failure reports to use it. Crash cards now display a distinct localized Internal QA source label instead of falsely attributing these records to Firebase.
 - Added a regression test asserting that generated quality-test failures retain `INTERNAL_QA` provenance.
 - Cursor-paging CI is still pending after the route-ID compile correction. No device screenshots or rendered RTL/LTR evidence are claimed.
+
+
+### 2026-11-25 — CrashDetail failure-state and live-evidence hardening
+
+**Current baseline and blockers**
+- Main baseline before this batch: `f436b9d09750e24778ee58a805ff50a797b795df`. The latest CI on that baseline completed successfully: Android unit tests, Android lint/code-quality audit, Debug APK build, and Release APK build. Both APK artifacts were uploaded. This validates the existing Crashes paging/filter regression suite, but does not satisfy the required rendered visual/device gate.
+- The Crashes route audit confirmed that the empty-filter state already retains its load-more/retry action. No duplicate fix was made. Its route scope, page cursor, filters, source labels, loading/error/retry states and ViewModel regression tests remain source/CI-covered; RTL/LTR screenshots, small-screen/IME behavior, TalkBack and device lifecycle review remain **BLOCKED** because this execution environment has no Gradle executable, Android SDK/ANDROID_HOME, ADB or attached Android device.
+- The dedicated Supabase project `hgfgbjomwhogpswpqusk` (`vibe-coding`, `eu-west-1`) currently reports `INACTIVE`. It was not started or queried for database contents; no production schema, RLS, Auth, Storage or data was changed. The separate `qabasapp` project was not used.
+
+**Confirmed CrashDetail defects**
+- A missing/unauthorized crash emitted `null`, after which the screen rendered no content or recovery action.
+- A repository Flow failure escaped the ViewModel coroutine and could leave the detail route indefinitely blank/loading.
+- Every Firestore/Room detail emission triggered symbolication again, including status-only updates; a thrown symbolication exception was not caught.
+- Analysis cancellation was caught as an ordinary failure, and resolve-write failures were silently discarded.
+
+**Implementation in this batch**
+- Added explicit not-found and load-error states with localized English/Arabic copy and retry/back actions. Crash detail collection is lifecycle-aware.
+- Serialized/cancelled load and symbolication jobs by generation; symbolication now reruns only when crash ID or stack-trace evidence changes, and thrown failures remain visible and retryable.
+- Made analysis cancellation propagate, surfaced resolve failures, prevented duplicate resolve/analysis requests, and cancelled stale screen actions when a new crash is loaded.
+- Localized the crash header metadata/severity and stack-trace copy accessibility labels; metadata now has bounded layout and explicit unavailable values.
+
+**Regression coverage added**
+- ViewModel tests cover missing records, retry after repository failure, deduplicated symbolication for status-only updates, changed-stack re-symbolication, thrown symbolication failures, resolve-write failures and cancellation.
+- Compose tests cover the not-found and connection-error recovery UI actions.
+
+**Verification boundary**
+- New CrashDetail tests and source changes are committed together on `main`; their CI execution is pending at this entry. No new Gradle result, APK build, emulator screenshot, RTL/LTR rendered review or TalkBack run is claimed.
+- Crashes remains open for its visual/device gate. CrashDetail remains open until the new CI run and the rendered visual/device gate pass.
+
+**Persistent continuity**
+- Exact next step: inspect the push-triggered Android Unit Tests, Code Quality and Build Android APK runs for this commit to terminal status; fix only evidence-backed failures. Then continue the first remaining independent Crashes/CrashDetail criterion without repeating already-green source checks. Do not close either screen without fresh RTL/LTR/device evidence.

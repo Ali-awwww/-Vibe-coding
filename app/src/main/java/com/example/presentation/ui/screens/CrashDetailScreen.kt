@@ -9,7 +9,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -47,7 +48,7 @@ fun CrashDetailScreen(
     navController: NavController,
     viewModel: CrashDetailViewModel
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(crashId) {
         viewModel.loadCrash(crashId)
@@ -59,28 +60,59 @@ fun CrashDetailScreen(
                 title = { Text(stringResource(R.string.crash_details)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.crashes_back)
+                        )
                     }
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate(Screen.FixHistory(uiState.crash?.projectId)) }) {
-                        Icon(Icons.Default.History, contentDescription = stringResource(R.string.fix_history))
+                    if (uiState.crash != null) {
+                        IconButton(onClick = { navController.navigate(Screen.FixHistory(uiState.crash?.projectId)) }) {
+                            Icon(Icons.Default.History, contentDescription = stringResource(R.string.fix_history))
+                        }
                     }
                     if (uiState.crash?.isResolved == false) {
-                        IconButton(onClick = { viewModel.resolveCrash() }) {
-                            Icon(Icons.Default.Check, contentDescription = "Resolve")
+                        IconButton(
+                            onClick = { viewModel.resolveCrash() },
+                            enabled = !uiState.isResolving
+                        ) {
+                            if (uiState.isResolving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = stringResource(R.string.crash_detail_resolve)
+                                )
+                            }
                         }
                     }
                 }
             )
         }
     ) { innerPadding ->
-        if (uiState.isLoading) {
-            Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+        when {
+            uiState.isLoading -> {
+                Box(
+                    Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
-        } else {
-            uiState.crash?.let { crash ->
+            uiState.crash == null -> {
+                CrashDetailUnavailableState(
+                    isLoadError = uiState.loadError,
+                    onRetry = { viewModel.loadCrash(crashId) },
+                    onBack = { navController.popBackStack() },
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+            else -> {
+                val crash = uiState.crash!!
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -90,17 +122,27 @@ fun CrashDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     CrashHeader(crash)
-                    
-                    SymbolicationStatusBanner(uiState.symbolication, onRetry = { viewModel.symbolicateCrash() })
 
-                    Text(stringResource(R.string.stack_trace), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    
-                    if (uiState.symbolication != null && uiState.symbolication!!.status == SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED) {
+                    if (uiState.isSymbolicating) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    SymbolicationStatusBanner(
+                        uiState.symbolication,
+                        onRetry = { viewModel.symbolicateCrash() }
+                    )
+
+                    Text(
+                        stringResource(R.string.stack_trace),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    if (uiState.symbolication?.status == SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED) {
                         SymbolicatedStackTrace(uiState.symbolication!!)
                     } else {
                         StackTraceCard(crash.stackTrace)
                     }
-                    
+
                     Spacer(Modifier.height(8.dp))
 
                     CrashInvestigationTeamSection(
@@ -119,7 +161,10 @@ fun CrashDetailScreen(
                             enabled = !uiState.isAnalyzing && !uiState.isInvestigatingWithTeam
                         ) {
                             if (uiState.isAnalyzing) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
                                 Spacer(Modifier.width(8.dp))
                                 Text(stringResource(R.string.analyzing))
                             } else {
@@ -129,7 +174,7 @@ fun CrashDetailScreen(
                             }
                         }
                     } else {
-                        DiagnosisCard(uiState.diagnosis!!, navController, uiState.crash)
+                        DiagnosisCard(uiState.diagnosis!!, navController, crash)
                     }
 
                     if (uiState.showTeamDialog) {
@@ -138,13 +183,13 @@ fun CrashDetailScreen(
                             crashReport = crash,
                             isInvestigating = uiState.isInvestigatingWithTeam,
                             onDismiss = { viewModel.setShowTeamDialog(false) },
-                            onNavigateToFix = { 
+                            onNavigateToFix = {
                                 viewModel.setShowTeamDialog(false)
                                 navController.navigate(Screen.FixAssistant(crash.id))
                             }
                         )
                     }
-                    
+
                     uiState.error?.let { message ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -164,7 +209,7 @@ fun CrashDetailScreen(
                             ) {
                                 Icon(
                                     Icons.Default.ErrorOutline,
-                                    contentDescription = "خطأ",
+                                    contentDescription = null,
                                     tint = MaterialTheme.colorScheme.error
                                 )
                                 Text(
@@ -176,6 +221,68 @@ fun CrashDetailScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun CrashDetailUnavailableState(
+    isLoadError: Boolean,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .testTag("crash_detail_unavailable_state"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = if (isLoadError) Icons.Default.CloudOff else Icons.Default.Info,
+            contentDescription = null,
+            tint = if (isLoadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(52.dp)
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = stringResource(
+                if (isLoadError) R.string.crash_detail_load_error_title
+                else R.string.crash_detail_not_found_title
+            ),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(
+                if (isLoadError) R.string.crash_detail_load_error_desc
+                else R.string.crash_detail_not_found_desc
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(20.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onBack,
+                modifier = Modifier.weight(1f).testTag("crash_detail_back_button")
+            ) {
+                Text(stringResource(R.string.crashes_back))
+            }
+            Button(
+                onClick = onRetry,
+                modifier = Modifier.weight(1f).testTag("crash_detail_retry_button")
+            ) {
+                Text(stringResource(R.string.crashes_retry))
             }
         }
     }
@@ -197,25 +304,25 @@ fun CrashHeader(crash: CrashReport) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Text(crash.exceptionType, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(crash.message, style = MaterialTheme.typography.bodyMedium)
+            Text(crash.exceptionType.takeIf { it.isNotBlank() } ?: stringResource(R.string.crashes_exception_unavailable), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(crash.message.takeIf { it.isNotBlank() } ?: stringResource(R.string.crashes_message_unavailable), style = MaterialTheme.typography.bodyMedium)
             
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                InfoItem(label = "Device", value = crash.deviceModel)
-                InfoItem(label = "OS", value = crash.osVersion)
-                InfoItem(label = "Version", value = crash.appVersion)
+                InfoItem(label = stringResource(R.string.crash_detail_device), value = crash.deviceModel, modifier = Modifier.weight(1f))
+                InfoItem(label = stringResource(R.string.crash_detail_os), value = crash.osVersion, modifier = Modifier.weight(1f))
+                InfoItem(label = stringResource(R.string.crash_detail_version), value = crash.appVersion, modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-fun InfoItem(label: String, value: String) {
-    Column {
+fun InfoItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+        Text(value.takeIf { it.isNotBlank() } ?: stringResource(R.string.crashes_unavailable), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -233,7 +340,14 @@ fun SeverityBadge(severity: Severity) {
         shape = MaterialTheme.shapes.small
     ) {
         Text(
-            text = severity.name,
+            text = stringResource(
+                when (severity) {
+                    Severity.CRITICAL -> R.string.crashes_severity_critical
+                    Severity.HIGH -> R.string.crashes_severity_high
+                    Severity.MEDIUM -> R.string.crashes_severity_medium
+                    Severity.LOW -> R.string.crashes_severity_low
+                }
+            ),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold
@@ -275,7 +389,7 @@ fun StackTraceCard(stackTrace: String) {
                 ) {
                     Icon(
                         if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
-                        contentDescription = "Copy Stack Trace",
+                        contentDescription = stringResource(if (copied) R.string.crash_detail_stack_trace_copied else R.string.crash_detail_copy_stack_trace),
                         tint = if (copied) Color(0xFF3FB950) else Color(0xFF8B949E),
                         modifier = Modifier.size(16.dp)
                     )
