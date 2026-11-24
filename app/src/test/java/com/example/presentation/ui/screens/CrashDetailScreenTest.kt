@@ -1,5 +1,7 @@
 package com.example.presentation.ui.screens
 
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.R
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertTrue

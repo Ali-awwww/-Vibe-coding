@@ -3377,3 +3377,5 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - CI for commit `4769fafc33687f2fd173e208ee285d7fccf352c4` reached test compilation and failed because `assertDoesNotExist` is exposed through the project's Compose test API usage pattern, not as the individually imported symbol used in the new test.
 - Replaced the individual Compose test imports with the same package wildcard pattern already used by the repository's existing screen tests. This is a test-source correction; no production behavior changed.
 - The new `CrashRepositoryCancellationTest` and its cancellation-aware source-context implementation are now on `main`; their execution remains pending.
+
+- A follow-up inspection caught that the wildcard import replacement had removed the Compose test imports entirely because the old import line was matched by the cleanup. Both the package wildcard and `createComposeRule` import are now explicitly restored before the next CI run.
