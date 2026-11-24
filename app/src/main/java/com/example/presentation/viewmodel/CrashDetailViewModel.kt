@@ -14,7 +14,7 @@ data class CrashDetailUiState(
     val crash: CrashReport? = null,
     val diagnosis: AIDiagnosis? = null,
     val symbolication: SymbolicationReport? = null,
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val isAnalyzing: Boolean = false,
     val isSymbolicating: Boolean = false,
     val teamExecution: TeamExecution? = null,
@@ -23,7 +23,8 @@ data class CrashDetailUiState(
     val error: String? = null,
     val notFound: Boolean = false,
     val loadError: Boolean = false,
-    val isResolving: Boolean = false
+    val isResolving: Boolean = false,
+    val symbolicationError: String? = null
 )
 
 class CrashDetailViewModel(
@@ -74,6 +75,7 @@ class CrashDetailViewModel(
                                 isLoading = false,
                                 isSymbolicating = false,
                                 symbolication = null,
+                                symbolicationError = null,
                                 notFound = true,
                                 loadError = false
                             )
@@ -121,7 +123,7 @@ class CrashDetailViewModel(
         val requestGeneration = ++symbolicationGeneration
         symbolicationJob?.cancel()
         _uiState.update {
-            it.copy(symbolication = null, isSymbolicating = true, error = null)
+            it.copy(symbolication = null, isSymbolicating = true, symbolicationError = null, error = null)
         }
 
         symbolicationJob = viewModelScope.launch {
@@ -139,7 +141,7 @@ class CrashDetailViewModel(
                         current.copy(
                             symbolication = result.getOrNull(),
                             isSymbolicating = false,
-                            error = result.exceptionOrNull()?.message
+                            symbolicationError = result.exceptionOrNull()?.message
                         )
                     }
                 }
@@ -155,7 +157,7 @@ class CrashDetailViewModel(
                     requestGeneration == symbolicationGeneration
                 ) {
                     _uiState.update {
-                        it.copy(isSymbolicating = false, error = failure.message ?: "Symbolication failed.")
+                        it.copy(isSymbolicating = false, symbolicationError = failure.message ?: "Symbolication failed.")
                     }
                 }
             }

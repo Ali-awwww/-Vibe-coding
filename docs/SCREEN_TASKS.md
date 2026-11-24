@@ -3318,3 +3318,26 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Persistent continuity**
 - Exact next step: inspect the push-triggered Android Unit Tests, Code Quality and Build Android APK runs for this commit to terminal status; fix only evidence-backed failures. Then continue the first remaining independent Crashes/CrashDetail criterion without repeating already-green source checks. Do not close either screen without fresh RTL/LTR/device evidence.
+
+
+### 2026-11-25 — CrashDetail CI compile correction and symbolication retry state
+
+**CI finding and correction**
+- The first CI attempt for the CrashDetail batch (`0c3f17652c10237247610569ce3c0bf565471c0d`) failed before unit assertions ran: both the Android Unit Tests and APK workflows reported two unresolved `TextAlign` references in the new unavailable-state composable. This was a source import defect, not a test assertion failure. The missing Compose text-alignment import is corrected in this follow-up.
+- The previous batch also added the nullable crash-snapshot guard after source review; no data or authorization behavior was weakened.
+
+**Additional confirmed UX defect**
+- When symbolication threw an exception or returned a failed `Result` without a report, the status banner returned early for `null` reports. The error text appeared elsewhere, but the user had no symbolication retry action. The banner now has explicit loading, error, pending and terminal-status presentations with a retry action for recoverable/non-success states.
+- The detail ViewModel now starts in a loading state before the route's first load effect, preventing a transient false not-found frame. Symbolication failures have their own state instead of being conflated with diagnosis/resolve errors.
+- Localized symbolication status labels, the resolved chip and retry action are now available in English and Arabic.
+
+**Regression coverage added**
+- Added initial-loading-state coverage and Compose tests for symbolication loading and retry after a thrown failure without a report.
+- Existing tests still cover missing crash, load retry, evidence-key deduplication, changed stack trace, resolve-write failure and cancellation.
+
+**Verification boundary**
+- The previous CI run is a confirmed compile failure; no test suite or APK success is claimed for that commit. The corrected source/tests are committed on `main`; a fresh Android Unit Tests, Code Quality and APK run is required. Device/RTL/LTR/TalkBack verification remains blocked by the unavailable Android SDK/ADB/device.
+- Crashes and CrashDetail remain open; no screen is marked complete.
+
+**Persistent continuity**
+- Exact next step: inspect the new push-triggered CI runs to terminal status, fix only failures backed by compiler/test/lint logs, then continue the remaining crash detail evidence and visual gates without repeating the already-reviewed source changes.

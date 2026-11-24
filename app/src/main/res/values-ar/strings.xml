@@ -657,4 +657,15 @@
     <string name="crash_detail_copy_stack_trace">نسخ تتبع المكدس</string>
     <string name="crash_detail_stack_trace_copied">تم نسخ تتبع المكدس</string>
 
+
+    <string name="crash_detail_symbolication_loading">جارٍ تحليل رموز تتبع المكدس…</string>
+    <string name="crash_detail_symbolication_error">تحليل الرموز غير متاح</string>
+    <string name="crash_detail_symbolication_success">تم تحليل رموز تتبع المكدس</string>
+    <string name="crash_detail_symbolication_partial">تم تحليل بعض الرموز فقط</string>
+    <string name="crash_detail_symbolication_missing">ملفات رموز التصحيح مفقودة</string>
+    <string name="crash_detail_symbolication_mismatch">البناء لا يطابق الرموز</string>
+    <string name="crash_detail_symbolication_source_missing">مراجعة المصدر غير متاحة</string>
+    <string name="crash_detail_symbolication_failed">فشل تحليل الرموز</string>
+    <string name="crash_detail_symbolication_pending">تحليل الرموز قيد الانتظار</string>
+
 </resources>

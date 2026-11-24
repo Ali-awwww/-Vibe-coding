@@ -124,7 +124,7 @@ class CrashDetailViewModelTest {
         viewModel.loadCrash(crash.id)
         advanceUntilIdle()
         assertFalse(viewModel.uiState.value.isSymbolicating)
-        assertEquals("symbolication offline", viewModel.uiState.value.error)
+        assertEquals("symbolication offline", viewModel.uiState.value.symbolicationError)
 
         symbolication.throwFailure = null
         viewModel.symbolicateCrash()
@@ -133,7 +133,18 @@ class CrashDetailViewModelTest {
         assertFalse(viewModel.uiState.value.isSymbolicating)
         assertEquals(2, symbolication.calls)
         assertEquals(SymbolicationStatus.MISSING_DEBUG_SYMBOLS, viewModel.uiState.value.symbolication?.status)
-        assertNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.symbolicationError)
+    }
+
+    @Test
+    fun initialStateWaitsForRouteLoadToBegin() = runTest {
+        val viewModel = CrashDetailViewModel(
+            repository = TestCrashRepository(flowOf(null)),
+            symbolicationRepository = RecordingSymbolicationRepository()
+        )
+
+        assertTrue(viewModel.uiState.value.isLoading)
+        assertNull(viewModel.uiState.value.crash)
     }
 
     @Test

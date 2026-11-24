@@ -657,4 +657,15 @@
     <string name="crash_detail_copy_stack_trace">Copy stack trace</string>
     <string name="crash_detail_stack_trace_copied">Stack trace copied</string>
 
+
+    <string name="crash_detail_symbolication_loading">Resolving stack trace…</string>
+    <string name="crash_detail_symbolication_error">Symbolication unavailable</string>
+    <string name="crash_detail_symbolication_success">Stack trace symbolicated</string>
+    <string name="crash_detail_symbolication_partial">Partially symbolicated</string>
+    <string name="crash_detail_symbolication_missing">Debug symbols missing</string>
+    <string name="crash_detail_symbolication_mismatch">Build does not match</string>
+    <string name="crash_detail_symbolication_source_missing">Source revision missing</string>
+    <string name="crash_detail_symbolication_failed">Symbolication failed</string>
+    <string name="crash_detail_symbolication_pending">Symbolication pending</string>
+
 </resources>

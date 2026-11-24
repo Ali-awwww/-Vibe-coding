@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -123,11 +124,10 @@ fun CrashDetailScreen(
                 ) {
                     CrashHeader(crash)
 
-                    if (uiState.isSymbolicating) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
                     SymbolicationStatusBanner(
-                        uiState.symbolication,
+                        report = uiState.symbolication,
+                        isLoading = uiState.isSymbolicating,
+                        errorMessage = uiState.symbolicationError,
                         onRetry = { viewModel.symbolicateCrash() }
                     )
 
@@ -298,7 +298,7 @@ fun CrashHeader(crash: CrashReport) {
                 if (crash.isResolved) {
                     AssistChip(
                         onClick = {},
-                        label = { Text("Resolved") },
+                        label = { Text(stringResource(R.string.crashes_resolved)) },
                         leadingIcon = { Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp)) }
                     )
                 }
@@ -611,14 +611,39 @@ fun DiagnosisSection(title: String, content: String, icon: androidx.compose.ui.g
 }
 
 @Composable
-fun SymbolicationStatusBanner(report: SymbolicationReport?, onRetry: () -> Unit) {
-    if (report == null) return
-    
-    val color = when(report.status) {
-        SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED -> Color(0xFF2E7D32)
-        SymbolicationStatus.PARTIALLY_SYMBOLICATED -> Color(0xFFFF9800)
+fun SymbolicationStatusBanner(
+    report: SymbolicationReport?,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onRetry: () -> Unit
+) {
+    val status = report?.status
+    if (report == null && !isLoading && errorMessage == null) return
+
+    val color = when {
+        isLoading -> MaterialTheme.colorScheme.primary
+        status == SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED -> Color(0xFF2E7D32)
+        status == SymbolicationStatus.PARTIALLY_SYMBOLICATED -> Color(0xFFFF9800)
         else -> MaterialTheme.colorScheme.error
     }
+    val title = when {
+        isLoading -> R.string.crash_detail_symbolication_loading
+        status == null -> R.string.crash_detail_symbolication_error
+        status == SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED -> R.string.crash_detail_symbolication_success
+        status == SymbolicationStatus.PARTIALLY_SYMBOLICATED -> R.string.crash_detail_symbolication_partial
+        status == SymbolicationStatus.MISSING_DEBUG_SYMBOLS -> R.string.crash_detail_symbolication_missing
+        status == SymbolicationStatus.BUILD_MISMATCH -> R.string.crash_detail_symbolication_mismatch
+        status == SymbolicationStatus.SOURCE_REVISION_MISSING -> R.string.crash_detail_symbolication_source_missing
+        status == SymbolicationStatus.PROCESSING_FAILED -> R.string.crash_detail_symbolication_failed
+        status == SymbolicationStatus.PENDING -> R.string.crash_detail_symbolication_pending
+    }
+    val icon = when {
+        isLoading -> Icons.Default.Sync
+        status == SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED -> Icons.Default.Verified
+        status == SymbolicationStatus.PARTIALLY_SYMBOLICATED -> Icons.Default.Warning
+        else -> Icons.Default.ErrorOutline
+    }
+    val message = errorMessage ?: report?.error
 
     Surface(
         color = color.copy(alpha = 0.1f),
@@ -629,30 +654,33 @@ fun SymbolicationStatusBanner(report: SymbolicationReport?, onRetry: () -> Unit)
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = when(report.status) {
-                    SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED -> Icons.Default.Verified
-                    SymbolicationStatus.PARTIALLY_SYMBOLICATED -> Icons.Default.Warning
-                    else -> Icons.Default.ErrorOutline
-                },
-                contentDescription = null,
-                tint = color
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp,
+                    color = color
+                )
+            } else {
+                Icon(imageVector = icon, contentDescription = null, tint = color)
+            }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = report.status.name.replace("_", " ").lowercase().capitalize(),
+                    text = stringResource(title),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = color
                 )
-                report.error?.let {
+                message?.takeIf { it.isNotBlank() }?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = color.copy(alpha = 0.8f))
                 }
             }
-            if (report.status != SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED) {
-                TextButton(onClick = onRetry) {
-                    Text("Retry", color = color)
+            if (!isLoading && status != SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED) {
+                TextButton(
+                    onClick = onRetry,
+                    modifier = Modifier.testTag("crash_symbolication_retry")
+                ) {
+                    Text(stringResource(R.string.crashes_retry), color = color)
                 }
             }
         }
