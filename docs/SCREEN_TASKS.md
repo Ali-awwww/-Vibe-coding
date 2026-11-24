@@ -3370,3 +3370,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Verification**
 - The new cancellation tests are committed with the repository change. CI is pending; no local Gradle execution is available in this environment.
+
+
+### 2026-11-25 — Compose test import correction
+
+- CI for commit `4769fafc33687f2fd173e208ee285d7fccf352c4` reached test compilation and failed because `assertDoesNotExist` is exposed through the project's Compose test API usage pattern, not as the individually imported symbol used in the new test.
+- Replaced the individual Compose test imports with the same package wildcard pattern already used by the repository's existing screen tests. This is a test-source correction; no production behavior changed.
+- The new `CrashRepositoryCancellationTest` and its cancellation-aware source-context implementation are now on `main`; their execution remains pending.

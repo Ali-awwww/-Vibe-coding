@@ -1,11 +1,5 @@
 package com.example.presentation.ui.screens
 
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.onNodeWithText
 import com.example.R
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertTrue
