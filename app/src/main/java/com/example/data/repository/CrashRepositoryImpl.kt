@@ -652,27 +652,48 @@ class CrashRepositoryImpl(
             authorizedCrash.stackTrace
         }
         
-        // 2. Fetch Source Code Context if available
-        var sourceContext = ""
-        try {
+        // 2. Fetch Source Code Context if available. Cancellation must stop the
+        // whole diagnosis rather than being downgraded to an optional lookup failure.
+        val sourceContextResult = runCatchingCancellable {
             val mapping = githubRepository.getMappingForApp(authorizedCrash.applicationId)
-            if (mapping != null) {
-                val fileName = stackTraceToUse.lines().firstOrNull { it.contains(".kt") || it.contains(".java") }
-                    ?.substringAfterLast(".")?.substringBefore("(") ?: ""
-                
-                if (fileName.isNotBlank()) {
-                    val searchResults = githubRepository.searchCode(uid, mapping.repoOwner, mapping.repoName, "filename:$fileName", mapping.defaultBranch).getOrNull()
+            if (mapping == null) {
+                ""
+            } else {
+                val fileName = stackTraceToUse.lines().firstOrNull {
+                    it.contains(".kt") || it.contains(".java")
+                }?.substringAfterLast(".")?.substringBefore("(").orEmpty()
+
+                if (fileName.isBlank()) {
+                    ""
+                } else {
+                    val searchResults = githubRepository.searchCode(
+                        uid,
+                        mapping.repoOwner,
+                        mapping.repoName,
+                        "filename:$fileName",
+                        mapping.defaultBranch
+                    ).getOrNull()
                     val filePath = searchResults?.firstOrNull()
-                    if (filePath != null) {
-                        val content = githubRepository.fetchFileContent(uid, mapping.repoOwner, mapping.repoName, filePath, mapping.defaultBranch).getOrNull()
-                        if (content != null) {
-                            sourceContext = "\nSOURCE CODE ($filePath):\n$content"
-                        }
+                    val content = filePath?.let {
+                        githubRepository.fetchFileContent(
+                            uid,
+                            mapping.repoOwner,
+                            mapping.repoName,
+                            it,
+                            mapping.defaultBranch
+                        ).getOrNull()
+                    }
+                    if (filePath != null && content != null) {
+                        "\nSOURCE CODE ($filePath):\n$content"
+                    } else {
+                        ""
                     }
                 }
             }
-        } catch (e: Exception) {
-            Log.e("CrashRepository", "Failed to fetch source context: ${e.message}")
+        }
+        sourceContext = sourceContextResult.getOrElse { failure ->
+            Log.e("CrashRepository", "Failed to fetch source context: ${failure.message}")
+            ""
         }
 
         // 3. Prepare AI Prompt
@@ -1755,7 +1776,7 @@ class CrashRepositoryImpl(
     }
 }
 
-private suspend fun <T> runCatchingCancellable(block: suspend () -> T): Result<T> =
+internal suspend fun <T> runCatchingCancellable(block: suspend () -> T): Result<T> =
     try {
         Result.success(block())
     } catch (cancelled: CancellationException) {

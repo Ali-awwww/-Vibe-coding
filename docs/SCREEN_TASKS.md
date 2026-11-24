@@ -3356,3 +3356,17 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Blank exception/message metadata in the report header now uses explicit unavailable labels.
 - Added a Compose regression test proving the localized start action is rendered and invokes the investigation callback.
 - CI for the preceding symbolication-recovery source revision is still running; this localization batch will be validated by the next push-triggered runs. No screen completion or device visual pass is claimed.
+
+
+### 2026-11-25 — Preserve cancellation during optional source-context lookup
+
+**Confirmed defect**
+- `CrashRepositoryImpl.getAIDiagnosis` wrapped the optional GitHub source-context lookup in `catch (Exception)`. Since coroutine cancellation is an exception subtype, leaving CrashDetail during a slow lookup could be swallowed and the repository would continue into AI generation and persistence.
+
+**Implementation and regression coverage**
+- Replaced the broad catch with the repository's cancellation-aware `runCatchingCancellable` boundary. Ordinary GitHub lookup failures still degrade to an empty source context; cancellation now propagates immediately.
+- Made the small cancellation boundary internal for direct regression coverage. Added tests for both cancellation propagation and ordinary optional-lookup failure handling.
+- No provider credential, crash data or production record was changed.
+
+**Verification**
+- The new cancellation tests are committed with the repository change. CI is pending; no local Gradle execution is available in this environment.
