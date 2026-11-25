@@ -3479,3 +3479,22 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 - During pre-CI source review of the Arabic Robolectric test added in `8998f0e9`, the test file was missing the explicit `CrashIntelligenceTheme` import used by its content lambda.
 - Added the import before relying on the new test run. No production code or test assertions changed.
+
+### 2026-11-26 — Symbolicated frame presentation and CI closure evidence
+
+**CI results now verified**
+- Commit `80ed66355a64e12512574e3d46b4570256423525`: Android Unit Tests succeeded with 429 tests, 0 failures and 4 skipped; Android Lint/Code Quality succeeded; Debug and signed Release APK builds and uploads succeeded.
+- The `80ed` test report confirms CrashDetail Compose coverage 8/8, provider mapping tests 4/4 and the cancellation regression 1/1.
+- Commit `6557cf4164344bd5d3c509a1b45d2432bc03ebd6`: Android Unit Tests succeeded with 431 tests, 0 failures and 4 skipped. CrashDetail Compose tests passed 9/9, including English badge labels; the Arabic Robolectric badge test passed 1/1; provider mapper tests passed 4/4; cancellation test passed 1/1. Debug and signed Release APK artifacts were uploaded. Android Lint/Code Quality is still running at this entry.
+- The earlier `8998f0e9` unit-test attempt failed at test compilation because the Arabic test lacked the theme import; the import is present in `6557cf41`, and its full unit-test run is green.
+
+**Confirmed symbolication presentation defect**
+- The R8/ProGuard parser emits resolved `methodName` and `libraryName` while leaving `fileName` null. `SymbolicatedFrameItem` previously rendered resolved method data only inside an `if (fileName != null)` branch, so the actual successful R8 mapping path displayed the original obfuscated line instead of the resolved method.
+
+**Fix and regression coverage**
+- Symbolicated frames now render available method, file/line and library values independently. Missing fields are omitted rather than interpolated as literal `null`; unresolved/system frames retain their original trace line.
+- Applied the shared Vibe panel, border, accent and text tokens to the symbolicated trace panel.
+- Added Compose regressions for a resolved method without a source filename and a partial frame without null-token leakage.
+
+**Verification boundary**
+- This symbolicated-frame correction and its tests are pending a fresh CI run. No screen is marked complete. Arabic RTL / English LTR device screenshots, small-screen/IME behavior, TalkBack and lifecycle/device review remain blocked by the unavailable Android SDK/ADB/device environment.

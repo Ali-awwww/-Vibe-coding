@@ -815,14 +815,27 @@ fun SymbolicationStatusBanner(
 fun SymbolicatedStackTrace(report: SymbolicationReport) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-        border = BorderStroke(1.dp, Color(0xFF30363D))
+        colors = CardDefaults.cardColors(containerColor = VibeDesignTokens.Color.SpaceBackground),
+        border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.18f)),
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Control)
     ) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Column(modifier = Modifier.padding(12.dp)) {
-                report.frames.forEach { frame ->
+                Text(
+                    text = "SYMBOLICATED_TRACE // SYSTEM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeDesignTokens.Color.TextMuted,
+                    fontFamily = JetBrainsMono
+                )
+                HorizontalDivider(
+                    color = VibeDesignTokens.Color.Grid,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+                report.frames.forEachIndexed { index, frame ->
                     SymbolicatedFrameItem(frame)
-                    Spacer(Modifier.height(4.dp))
+                    if (index < report.frames.lastIndex) {
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
             }
         }
@@ -831,41 +844,60 @@ fun SymbolicatedStackTrace(report: SymbolicationReport) {
 
 @Composable
 fun SymbolicatedFrameItem(frame: SymbolicatedFrame) {
+    val methodName = frame.methodName?.takeIf { it.isNotBlank() }
+    val fileName = frame.fileName?.takeIf { it.isNotBlank() }
+    val location = fileName?.let { file ->
+        frame.lineNumber?.takeIf { it > 0 }?.let { "$file:$it" } ?: file
+    }
+    val libraryName = frame.libraryName?.takeIf { it.isNotBlank() && it != "system" }
+
     Column {
-        if (frame.fileName != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "${frame.methodName}",
-                    color = if (frame.isSystem) Color(0xFF9E9E9E) else Color(0xFF64B5F6),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = "(${frame.fileName}:${frame.lineNumber})",
-                    color = Color(0xFF81C784),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp
-                )
-                if (frame.libraryName != null) {
-                    Spacer(Modifier.width(4.dp))
-                    Surface(color = Color.Gray.copy(alpha = 0.3f), shape = MaterialTheme.shapes.extraSmall) {
-                        Text(frame.libraryName, color = Color.LightGray, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp))
+        if (methodName == null && location == null) {
+            Text(
+                text = frame.originalLine,
+                color = VibeDesignTokens.Color.TextPrimary,
+                fontFamily = JetBrainsMono,
+                fontSize = 11.sp
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (methodName != null) {
+                    Text(
+                        text = methodName,
+                        color = if (frame.isSystem) VibeDesignTokens.Color.TextMuted else VibeDesignTokens.Color.Cyan,
+                        fontFamily = JetBrainsMono,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                if (location != null) {
+                    Text(
+                        text = "($location)",
+                        color = VibeDesignTokens.Color.Success,
+                        fontFamily = JetBrainsMono,
+                        fontSize = 11.sp
+                    )
+                }
+                if (libraryName != null) {
+                    Surface(
+                        color = VibeDesignTokens.Color.Grid,
+                        contentColor = VibeDesignTokens.Color.TextMuted,
+                        shape = MaterialTheme.shapes.extraSmall
+                    ) {
+                        Text(
+                            text = libraryName,
+                            fontSize = 9.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
                     }
                 }
             }
-        } else {
-            Text(
-                text = frame.originalLine,
-                color = Color(0xFFE0E0E0),
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp
-            )
         }
     }
 }
-
 private fun String.capitalize() = replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
 
 @Composable

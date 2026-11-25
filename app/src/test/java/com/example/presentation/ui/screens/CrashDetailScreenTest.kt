@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.example.domain.model.CrashReport
 import com.example.domain.model.DiagnosisCertainty
 import com.example.domain.model.ErrorCategory
+import com.example.domain.model.SymbolicatedFrame
 import com.example.R
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertTrue
@@ -213,6 +214,51 @@ class CrashDetailScreenTest {
 
         composeRule.onNodeWithText("Highly likely").assertIsDisplayed()
         composeRule.onNodeWithText("Null pointer exception").assertIsDisplayed()
+    }
+
+    @Test
+    fun symbolicatedMethodIsRenderedWhenSourceFileIsUnavailable() {
+        val frame = SymbolicatedFrame(
+            originalLine = "at a.b(SourceFile:1)",
+            fileName = null,
+            methodName = "com.example.Repository.load",
+            lineNumber = 42,
+            libraryName = "com.example.Repository",
+            isSystem = false
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                SymbolicatedFrameItem(frame)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("com.example.Repository.load").assertIsDisplayed()
+        composeRule.onNodeWithText("com.example.Repository").assertIsDisplayed()
+        composeRule.onNodeWithText("at a.b(SourceFile:1)").assertDoesNotExist()
+    }
+
+    @Test
+    fun partialSymbolicatedFrameNeverRendersNullTokens() {
+        val frame = SymbolicatedFrame(
+            originalLine = "at a.b(SourceFile:1)",
+            fileName = "Repository.kt",
+            methodName = null,
+            lineNumber = 42,
+            libraryName = null,
+            isSystem = false
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                SymbolicatedFrameItem(frame)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("(Repository.kt:42)").assertIsDisplayed()
+        composeRule.onNodeWithText("null").assertDoesNotExist()
     }
 
     private fun appContext(): android.content.Context =
