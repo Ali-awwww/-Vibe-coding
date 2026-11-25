@@ -148,7 +148,7 @@ class CrashDetailScreenTest {
 
         composeRule.onNodeWithTag("crash_detail_resolved_status")
             .assertIsDisplayed()
-            .assertDoesNotHaveClickAction()
+            .assert(!hasClickAction())
         composeRule.onNodeWithTag("crash_header_metadata_compact").assertIsDisplayed()
         composeRule.onNodeWithTag("crash_header_metadata_wide").assertDoesNotExist()
     }

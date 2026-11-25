@@ -3428,3 +3428,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Persistent continuity**
 - Inspect both commit-triggered workflow sets to terminal status. Resolve compiler/test/lint failures from their logs, then continue the Crashes/CrashDetail acceptance items. Keep the screen open until rendered Arabic RTL, English LTR, compact-screen and accessibility/device checks have actual evidence.
+
+### 2026-11-26 — CrashDetail Compose matcher compatibility correction
+
+- The Android Unit Tests run `45707061100` for UI commit `ad6a82dda808e8f7636a2bb9ab65b56be125579a` reached Kotlin unit-test compilation and failed on one unsupported Compose test extension: `assertDoesNotHaveClickAction` is not present in the repository's Compose BOM `2024.09.00`. Production Kotlin compilation completed; the unit-test source did not compile, so no test assertion pass is claimed for that run.
+- Replaced that assertion with the supported semantics matcher form `assert(!hasClickAction())`, retaining the non-interactive resolved-status regression check.
+- The mapper follow-up commit `4001a5de1542175ea3292b605c3ba2e15620d252` was already pushed; its unit-test workflow status is being checked separately. No weakening of the production behavior or test intent was made.
+- Next: inspect the new unit-test/lint/APK workflows and use their compiler/test logs to resolve any remaining issues. Screen and visual/device gates remain open.
