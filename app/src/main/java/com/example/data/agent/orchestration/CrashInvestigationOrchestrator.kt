@@ -12,6 +12,46 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 
+/**
+ * Resolves source context only when the crash record carries a verifiable Vibe Studio workspace link.
+ * External provider project IDs are not workspace IDs and must never be used as a guess.
+ */
+internal suspend fun resolveCrashSourceContext(
+    crashReport: CrashReport,
+    userId: String,
+    workspaceLookup: suspend (String) -> Workspace?,
+    fileLookup: suspend (String, String) -> List<WorkspaceFile>
+): String {
+    if (crashReport.source != IntegrationType.INTERNAL_QA) {
+        return "لا يوجد ربط موثّق بين مصدر هذا الانهيار ومساحة Vibe Studio؛ لم يتم البحث في أي مساحة عمل."
+    }
+    val workspaceId = crashReport.projectId.takeIf { it.isNotBlank() }
+        ?: return "معرّف مساحة العمل غير متاح؛ لم يتم البحث في ملفات المصدر."
+    if (userId.isBlank()) {
+        return "تعذّر التحقق من مالك مساحة العمل؛ لم يتم البحث في ملفات المصدر."
+    }
+
+    val workspace = workspaceLookup(workspaceId)
+        ?: return "لا تتوفر مساحة عمل مخوّلة مرتبطة بهذا الانهيار؛ لم يتم البحث في ملفات المصدر."
+    if (workspace.ownerId != userId) {
+        return "لا تتوفر مساحة عمل مخوّلة مرتبطة بهذا الانهيار؛ لم يتم البحث في ملفات المصدر."
+    }
+
+    val query = "${crashReport.exceptionType} ${crashReport.message}".trim()
+    if (query.isBlank()) {
+        return "بيانات الانهيار غير كافية للبحث عن ملفات مصدر؛ لم يتم تأكيد موقع الانهيار."
+    }
+    val files = fileLookup(workspaceId, query)
+        .filter { it.workspaceId == workspaceId && it.content.isNotBlank() }
+    if (files.isEmpty()) {
+        return "لم يتم العثور على ملفات مصدر ضمن مساحة العمل المرتبطة. لم يتم تأكيد موقع الانهيار في الكود."
+    }
+
+    return files.joinToString("\n\n") { file ->
+        "Workspace: $workspaceId\nFile: ${file.path}\n${file.content.take(600)}"
+    }
+}
+
 class CrashInvestigationOrchestrator(
     private val aiModelRepository: AIModelRepository,
     private val teamRepository: AIModelTeamRepository,
@@ -98,8 +138,7 @@ class CrashInvestigationOrchestrator(
         step1Output = executeAgentPrompt(
             userId = userId,
             member = crashAnalyst,
-            prompt = analystPrompt,
-            fallback = "تحليل Crash Analyst: تم رصد عطل من نوع ${crashReport.exceptionType} مع رسالة: ${crashReport.message}. يؤثر العطل على الإصدار ${crashReport.appVersion} على نظام ${crashReport.osVersion} بمستوى خطورة ${crashReport.severity.name}."
+            prompt = analystPrompt
         )
 
         execution = recordStepCompleted(execution, step1.id, crashAnalyst, step1Output, MemoryType.FACT)
@@ -137,8 +176,7 @@ class CrashInvestigationOrchestrator(
         val step2Output = executeAgentPrompt(
             userId = userId,
             member = stackSpecialist,
-            prompt = stackPrompt,
-            fallback = "تحليل Stack Trace: إطار الانهيار الأول: ${crashReport.stackTrace.lines().firstOrNull { it.contains("at ") } ?: "غير متوفر"}. مسار التنفيذ يوضح نقطة الانهيار أثناء معالجة الطلب."
+            prompt = stackPrompt
         )
 
         execution = recordStepCompleted(execution, step2.id, stackSpecialist, step2Output, MemoryType.FACT)
@@ -180,8 +218,7 @@ class CrashInvestigationOrchestrator(
         val step4Output = executeAgentPrompt(
             userId = userId,
             member = sourceInvestigator,
-            prompt = sourcePrompt,
-            fallback = "تحقيق الكود: تم فحص ملفات المشروع المطابقة للإصدار ${crashReport.appVersion}. $matchingFileSnippet"
+            prompt = sourcePrompt
         )
 
         execution = recordStepCompleted(execution, step4.id, sourceInvestigator, step4Output, MemoryType.FACT)
@@ -222,8 +259,7 @@ class CrashInvestigationOrchestrator(
         val step5Output = executeAgentPrompt(
             userId = userId,
             member = rootCauseAnalyst,
-            prompt = rootCausePrompt,
-            fallback = "السبب الجذري: مؤكد بدرجة عالية (HIGHLY_LIKELY) - فشل بسبب عدم معالجة القيمة الفارغة أو تعارض حالة أثناء تشغيل ${crashReport.exceptionType}."
+            prompt = rootCausePrompt
         )
 
         execution = recordStepCompleted(execution, step5.id, rootCauseAnalyst, step5Output, MemoryType.DECISION)
@@ -260,8 +296,7 @@ class CrashInvestigationOrchestrator(
         val step6Output = executeAgentPrompt(
             userId = userId,
             member = securityAuditor,
-            prompt = securityPrompt,
-            fallback = "التدقيق الأمني: تم فحص التقرير والتأكد من خلوه من تسريب الرموز السرية أو بيانات الاعتماد. لا توجد ثغرة حقن مباشرة، ولكن استمرار الانهيار قد يسبب Denial of Service (DoS) للمستخدمين."
+            prompt = securityPrompt
         )
 
         execution = recordStepCompleted(execution, step6.id, securityAuditor, step6Output, MemoryType.FACT)
@@ -297,8 +332,7 @@ class CrashInvestigationOrchestrator(
         val step7Output = executeAgentPrompt(
             userId = userId,
             member = codeReviewer,
-            prompt = reviewerPrompt,
-            fallback = "مراجعة الكود: يتفق الفريق على أن العطل ينجم عن عدم التحقق المسبق من الحالة. نقاط التحفظ: التأكد من عدم تعطيل التدفق الطبيعي في الحالات الأخرى وتجنب التعديل الشامل دون داعٍ."
+            prompt = reviewerPrompt
         )
 
         execution = recordStepCompleted(execution, step7.id, codeReviewer, step7Output, MemoryType.DECISION)
@@ -335,21 +369,7 @@ class CrashInvestigationOrchestrator(
         val step8Output = executeAgentPrompt(
             userId = userId,
             member = fixDeveloper,
-            prompt = fixPrompt,
-            fallback = """
-                ```diff
-                --- a/Source.kt
-                +++ b/Source.kt
-                @@ -15,4 +15,6 @@
-                 fun handleData(data: Data?) {
-                +    if (data == null) {
-                +        return
-                +    }
-                     data.process()
-                 }
-                ```
-                شرح الإصلاح: إضافة فحص الأمان للتحقق من عدم وجود قيمة فارغة قبل استدعاء الدالة.
-            """.trimIndent()
+            prompt = fixPrompt
         )
 
         execution = recordStepCompleted(execution, step8.id, fixDeveloper, step8Output, MemoryType.SUGGESTION)
@@ -385,20 +405,7 @@ class CrashInvestigationOrchestrator(
         val step9Output = executeAgentPrompt(
             userId = userId,
             member = qaEngineer,
-            prompt = qaPrompt,
-            fallback = """
-                ```kotlin
-                @Test
-                fun testCrashReproductionAndFix() {
-                    // Given a null or edge-case input that previously caused ${crashReport.exceptionType}
-                    val result = runCatching {
-                        // Invoking component with null input
-                    }
-                    assertTrue(result.isSuccess)
-                }
-                ```
-                خطة التحقق: تشغيل الاختبار في بيئة معزولة وتأكيد ثبات السلوك.
-            """.trimIndent()
+            prompt = qaPrompt
         )
 
         execution = recordStepCompleted(execution, step9.id, qaEngineer, step9Output, MemoryType.FACT)
@@ -486,17 +493,17 @@ class CrashInvestigationOrchestrator(
         return CrashReport(id = "", applicationId = "", projectId = "", exceptionType = exceptionType, message = message, stackTrace = prompt.trim(), deviceModel = "", osVersion = "", appVersion = "", severity = Severity.MEDIUM)
     }
 
-    private suspend fun retrieveMatchingCode(crash: CrashReport): String {
-        return if (vibeRepository != null) {
-            val files = vibeRepository.retrieveRelevantFiles("workspace_default", crash.exceptionType + " " + crash.message, maxFiles = 2)
-            if (files.isNotEmpty()) {
-                files.joinToString("\n\n") { "File: ${it.path}\n${it.content.take(600)}" }
-            } else {
-                "لم يتم العثور على ملفات مصدر مطابقة في مساحة العمل. لا يمكن تأكيد موقع الانهيار داخل الكود."
+    private suspend fun retrieveMatchingCode(crash: CrashReport, userId: String): String {
+        val repository = vibeRepository
+            ?: return "مستودع Vibe Studio غير متصل بالتحقيق؛ لم تتم مراجعة ملفات المصدر."
+        return resolveCrashSourceContext(
+            crashReport = crash,
+            userId = userId,
+            workspaceLookup = repository::getWorkspace,
+            fileLookup = { workspaceId, query ->
+                repository.retrieveRelevantFiles(workspaceId, query, maxFiles = 2)
             }
-        } else {
-            "مستودع الكود غير متصل بالتحقيق؛ لم تتم مراجعة ملفات المصدر."
-        }
+        )
     }
 
     private val gov: com.example.domain.governance.TeamGovernanceEngine by lazy {
@@ -507,7 +514,6 @@ class CrashInvestigationOrchestrator(
         userId: String,
         member: TeamMember,
         prompt: String,
-        fallback: String
     ): String {
         val sanitizedPrompt = gov.maskSecrets(prompt)
         val modelToUse = member.modelId.ifBlank { "auto" }

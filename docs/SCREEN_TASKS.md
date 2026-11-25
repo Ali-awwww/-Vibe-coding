@@ -3711,3 +3711,22 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Verification boundary**
 - Source and localization tests are committed together; CI is pending. No physical-device screenshot or time-zone/lifecycle review is claimed.
 - CrashDetail remains open pending full CI, device rendering, accessibility and backend-backed record verification. The next available code task after this metadata slice is to audit the FixAssistant handoff and evidence boundaries; webhook/Crashlytics intake and live Supabase remain blocked by missing backend capability/project availability.
+
+
+### 2026-11-26 — Prevent cross-workspace source lookup during crash investigation
+
+**Confirmed isolation defect**
+- `CrashInvestigationOrchestrator.retrieveMatchingCode` queried the literal workspace ID `workspace_default` for every crash, regardless of the authenticated owner or the crash's provider project. External Sentry/Bugsnag project IDs are not Vibe Studio workspace IDs, so this could inspect unrelated local source or return a misleading source match.
+
+**Fix**
+- Source lookup now runs only for `INTERNAL_QA` crash records, whose two verified creation paths set `projectId = workspace.id`. It resolves that exact workspace, requires `workspace.ownerId == userId`, and filters returned files to the same workspace ID.
+- External provider crashes, missing IDs, absent workspaces and owner mismatches stop before file retrieval with an explicit “not linked / not verified” explanation. The hard-coded default workspace is removed.
+- Removed eight unused fabricated agent fallback strings and the unused fallback parameter. AI provider failures continue to propagate; the orchestrator cannot silently substitute generic root-cause, security, source-inspection, patch or QA claims.
+
+**Regression coverage**
+- Added four tests: external provider IDs never trigger workspace lookup; an owned Internal QA crash resolves its exact workspace; another user's workspace is rejected before file reads; and foreign-workspace file results are filtered.
+
+**Verification boundary**
+- CI for this batch is pending. No claim is made that an AI provider or live workspace was contacted.
+- CI evidence now available: commit `83ac8a95` passed all three workflows; Unit Tests reported 447 tests, 0 failures, 4 skipped. Commit `780eb546` passed Unit Tests (449 tests, 0 failures, 4 skipped), Lint and Debug/Release APK builds; both APK artifacts were uploaded. Commit `ef225c01` passed Lint and Debug/Release APK build but Unit Tests failed to compile because the new Compose test imported `fetchSemanticsNode` from the wrong package. Commit `a458a7a5` changed the test to the supported wildcard test import; its CI result is pending. The current CrashDetail timestamp batch also awaits CI.
+- The next independent FixAssistant task is to verify its source evidence and PR handoff against the selected crash/workspace, without generating a patch from an unlinked workspace.
