@@ -3759,3 +3759,25 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Additional CI findings**
 - The `a458a7a5` UI test run completed 453 tests with 3 failures (4 skipped): two off-screen second-header assertions and one merged-semantics lookup. The `e8199965` test correction uses state replacement and unmerged semantics; its CI result is pending.
 - The source resolver commit `a991bda7` and its test-name correction `d307af2e` failed to compile on the missing `userId` argument. The current call-site correction is committed here; this commit's Unit Tests, Lint and APK workflows must reach terminal status.
+
+
+### 2026-11-26 — FixAssistant source grounding and safe GitHub handoff
+
+**Confirmed data-integrity defects**
+- Fix generation trusted the AI-provided `sourceLocation` without checking it against the raw stack trace or symbolicated frames, then selected `searchResults.firstOrNull()`. A missing/ambiguous location could therefore produce a proposal for an unrelated file.
+- The AI response schema already included `fullFileContent`, but the repository ignored it while committing `suggestedCode` as the entire file. A partial code block could overwrite the rest of a source file.
+- PR creation did not re-read the base file before committing, so a file edited after proposal generation could be overwritten by a stale suggestion.
+
+**Fix**
+- Source locations must now match a real file/line in the raw trace or symbolicated frames. GitHub paths are selected only when exactly one candidate matches the evidence; unknown, mismatched and ambiguous locations fail before file retrieval.
+- The model must return a complete file. `fullFileContent=false`, blank content and unchanged content are rejected before a FixSuggestion is saved.
+- PR creation accepts only a proposed fix with a safe path/branch name, fetches the current default-branch file and compares it byte-for-byte with the stored original, then rechecks the new branch before committing. A stale file or branch race stops before commit/PR. A PR is marked created only after GitHub returns a nonblank URL.
+- Branch names are normalized from the exception type rather than interpolating arbitrary exception text.
+
+**Regression coverage**
+- Added pure tests for trace/symbolication source grounding, ambiguous paths and complete-file enforcement.
+- Added repository tests for unknown/mismatched/ambiguous locations, stale base files and a branch-base race; they assert no commit/PR is attempted.
+
+**Verification boundary**
+- The implementation and regression tests are committed together; CI is pending. No real GitHub branch, commit or Pull Request was created during this run.
+- FixAssistant remains open until the new CI passes, rendered review confirms the actual diff presentation, and a real provider/repository flow is safely verified in an explicitly user-initiated environment. The live Supabase project is still unavailable and remains read-only.

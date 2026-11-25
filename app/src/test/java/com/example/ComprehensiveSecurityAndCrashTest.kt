@@ -32,13 +32,29 @@ class ComprehensiveSecurityAndCrashTest {
     private lateinit var crashRepository: CrashRepository
     private lateinit var context: Context
     private var activeUserId: String? = null
+    private var githubSearchCalls = 0
+    private var githubFileFetchCalls = 0
+    private var githubBranchCalls = 0
+    private var githubCommitCalls = 0
+    private var githubPullRequestCalls = 0
+    private var githubSearchResults: List<String> = emptyList()
+    private var githubBaseFileContent = ""
+    private var githubBranchFileContent: String? = null
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext<Context>()
         activeUserId = null
-        
+        githubSearchCalls = 0
+        githubFileFetchCalls = 0
+        githubBranchCalls = 0
+        githubCommitCalls = 0
+        githubPullRequestCalls = 0
+        githubSearchResults = emptyList()
+        githubBaseFileContent = ""
+        githubBranchFileContent = null
+
         // Initialize Firebase for repository dependencies
         if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) {
             com.google.firebase.FirebaseApp.initializeApp(context)
@@ -66,11 +82,31 @@ class ComprehensiveSecurityAndCrashTest {
             override suspend fun linkRepositoryToApp(mapping: RepositoryMapping) = Result.success(Unit)
             override fun getMappingsForProject(projectId: String) = kotlinx.coroutines.flow.flowOf(emptyList<RepositoryMapping>())
             override suspend fun getMappingForApp(applicationId: String) = null
-            override suspend fun fetchFileContent(userId: String, owner: String, repo: String, path: String, ref: String?) = Result.success("")
-            override suspend fun searchCode(userId: String, owner: String, repo: String, query: String, ref: String?) = Result.success(emptyList<String>())
-            override suspend fun createBranch(userId: String, owner: String, repo: String, branchName: String, fromRef: String) = Result.success("sha")
-            override suspend fun commitChanges(userId: String, owner: String, repo: String, branchName: String, path: String, content: String, message: String) = Result.success(Unit)
-            override suspend fun createPullRequest(userId: String, owner: String, repo: String, title: String, head: String, base: String, body: String) = Result.success("https://github.com/test/pr/1")
+            override suspend fun fetchFileContent(userId: String, owner: String, repo: String, path: String, ref: String?): Result<String> {
+                githubFileFetchCalls++
+                val content = if (ref != null && ref != "main" && githubBranchFileContent != null) {
+                    githubBranchFileContent!!
+                } else {
+                    githubBaseFileContent
+                }
+                return Result.success(content)
+            }
+            override suspend fun searchCode(userId: String, owner: String, repo: String, query: String, ref: String?): Result<List<String>> {
+                githubSearchCalls++
+                return Result.success(githubSearchResults)
+            }
+            override suspend fun createBranch(userId: String, owner: String, repo: String, branchName: String, fromRef: String): Result<String> {
+                githubBranchCalls++
+                return Result.success("sha")
+            }
+            override suspend fun commitChanges(userId: String, owner: String, repo: String, branchName: String, path: String, content: String, message: String): Result<Unit> {
+                githubCommitCalls++
+                return Result.success(Unit)
+            }
+            override suspend fun createPullRequest(userId: String, owner: String, repo: String, title: String, head: String, base: String, body: String): Result<String> {
+                githubPullRequestCalls++
+                return Result.success("https://github.com/test/pr/1")
+            }
         }
         val fakeSymbolicationRepo = object : SymbolicationRepository {
             override fun getDebugSymbols(projectId: String) = kotlinx.coroutines.flow.flowOf(emptyList<DebugSymbolFile>())
@@ -356,6 +392,92 @@ class ComprehensiveSecurityAndCrashTest {
 
 
     @Test
+    fun `fix generation rejects unknown source locations before searching GitHub`() = runTest(testDispatcher) {
+        val crash = seedFixContext()
+        val diagnosis = AIDiagnosis(
+            crashId = crash.id,
+            sourceLocation = "Unknown",
+            certainty = DiagnosisCertainty.UNKNOWN
+        )
+
+        val result = crashRepository.generateFixSuggestion(crash, diagnosis)
+
+        assertTrue(result.isFailure)
+        assertEquals(0, githubSearchCalls)
+        assertEquals(0, githubFileFetchCalls)
+    }
+
+    @Test
+    fun `fix generation rejects source lines absent from raw or symbolicated evidence`() = runTest(testDispatcher) {
+        val crash = seedFixContext()
+        val diagnosis = AIDiagnosis(
+            crashId = crash.id,
+            sourceLocation = "ProfileFragment.kt:75",
+            certainty = DiagnosisCertainty.HIGHLY_LIKELY
+        )
+
+        val result = crashRepository.generateFixSuggestion(crash, diagnosis)
+
+        assertTrue(result.isFailure)
+        assertEquals(0, githubSearchCalls)
+        assertEquals(0, githubFileFetchCalls)
+    }
+
+    @Test
+    fun `fix generation rejects ambiguous repository files instead of choosing the first result`() = runTest(testDispatcher) {
+        val crash = seedFixContext()
+        githubSearchResults = listOf(
+            "app/src/main/java/com/example/ProfileFragment.kt",
+            "feature/src/main/java/com/example/ProfileFragment.kt"
+        )
+        val diagnosis = AIDiagnosis(
+            crashId = crash.id,
+            sourceLocation = "ProfileFragment.kt:74",
+            certainty = DiagnosisCertainty.CONFIRMED
+        )
+
+        val result = crashRepository.generateFixSuggestion(crash, diagnosis)
+
+        assertTrue(result.isFailure)
+        assertEquals(1, githubSearchCalls)
+        assertEquals(0, githubFileFetchCalls)
+    }
+
+    @Test
+    fun `PR creation refuses a source file changed since fix generation`() = runTest(testDispatcher) {
+        val crash = seedFixContext()
+        val fix = seedFixSuggestion(crash.id)
+        githubBaseFileContent = "fun changedSinceSuggestion() {}"
+        database.crashDao().insertFixSuggestion(fix)
+
+        val result = crashRepository.applyFixAndCreatePR(fix.id, "fix-user")
+
+        assertTrue(result.isFailure)
+        assertEquals(1, githubFileFetchCalls)
+        assertEquals(0, githubBranchCalls)
+        assertEquals(0, githubCommitCalls)
+        assertEquals(0, githubPullRequestCalls)
+        assertEquals(FixStatus.PROPOSED, database.crashDao().getFixSuggestionById(fix.id)?.status)
+    }
+
+    @Test
+    fun `PR creation rechecks the branch source before committing to avoid a base race`() = runTest(testDispatcher) {
+        val crash = seedFixContext()
+        val fix = seedFixSuggestion(crash.id)
+        githubBaseFileContent = fix.originalCode
+        githubBranchFileContent = "fun changedAfterBranchCreation() {}"
+        database.crashDao().insertFixSuggestion(fix)
+
+        val result = crashRepository.applyFixAndCreatePR(fix.id, "fix-user")
+
+        assertTrue(result.isFailure)
+        assertEquals(2, githubFileFetchCalls)
+        assertEquals(1, githubBranchCalls)
+        assertEquals(0, githubCommitCalls)
+        assertEquals(0, githubPullRequestCalls)
+    }
+
+    @Test
     fun `test crash lifecycle from creation to resolution`() = runTest(testDispatcher) {
         val userId = "dev_1"
         val projectId = "proj_123"
@@ -393,6 +515,46 @@ class ComprehensiveSecurityAndCrashTest {
         val allCrashes = crashRepository.getLatestCrashes(projectId).first()
         assertTrue(allCrashes.any { it.id == crashId && it.isResolved })
     }
+
+    private suspend fun seedFixContext(): CrashReport {
+        val userId = "fix-user"
+        val projectId = "fix-project"
+        val applicationId = "fix-app"
+        activeUserId = userId
+        crashRepository.addProject(Project(id = projectId, name = "Fix Project", ownerId = userId))
+        crashRepository.addApplication(Application(id = applicationId, projectId = projectId, name = "Fix App"))
+        database.crashDao().insertRepositoryMapping(
+            RepositoryMapping(
+                applicationId = applicationId,
+                projectId = projectId,
+                repoOwner = "test-owner",
+                repoName = "test-repo",
+                defaultBranch = "main"
+            )
+        )
+        val report = CrashReport(
+            id = "fix-crash",
+            projectId = projectId,
+            applicationId = applicationId,
+            userId = userId,
+            exceptionType = "IllegalStateException",
+            message = "Invalid application state",
+            stackTrace = "at com.example.ProfileFragment.onCreate(ProfileFragment.kt:74)"
+        )
+        crashRepository.addCrash(report)
+        return crashRepository.getCrashDetails(report.id).first()
+            ?: error("Seeded crash was not available to the active user.")
+    }
+
+    private fun seedFixSuggestion(crashId: String): FixSuggestion = FixSuggestion(
+        id = "fix-suggestion-1",
+        crashId = crashId,
+        originalCode = "fun original() {}",
+        suggestedCode = "fun updated() {}",
+        filePath = "app/src/main/java/com/example/ProfileFragment.kt",
+        branchName = "fix/illegal-state-exception-abcde",
+        status = FixStatus.PROPOSED
+    )
 
     @Test
     fun `test AES-GCM credential masking and encryption logic`() = runTest(testDispatcher) {

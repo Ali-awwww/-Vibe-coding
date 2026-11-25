@@ -34,6 +34,67 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
 import android.util.Log
 
+internal data class VerifiedCrashSourceLocation(
+    val pathHint: String,
+    val fileName: String,
+    val lineNumber: Int
+)
+
+internal fun resolveVerifiedCrashSourceLocation(
+    diagnosisLocation: String,
+    rawStackTrace: String,
+    symbolicatedFrames: List<SymbolicatedFrame>
+): VerifiedCrashSourceLocation? {
+    val matches = Regex("""([A-Za-z0-9_./\\-]+\\.(?:kt|java)):(\\d+)""", RegexOption.IGNORE_CASE)
+        .findAll(diagnosisLocation.trim())
+        .toList()
+    if (matches.size != 1) return null
+
+    val pathHint = matches.single().groupValues[1].replace('\\', '/')
+    if (pathHint.startsWith("/") || pathHint.split('/').any { it.isBlank() || it == "." || it == ".." }) {
+        return null
+    }
+    val fileName = Regex("""([A-Za-z0-9_-]+\\.(?:kt|java))$""", RegexOption.IGNORE_CASE)
+        .find(pathHint)?.groupValues?.get(1) ?: return null
+    val lineNumber = matches.single().groupValues[2].toIntOrNull()?.takeIf { it > 0 } ?: return null
+    val traceEvidence = Regex("""${Regex.escape(fileName)}:${lineNumber}(?!\\d)""", RegexOption.IGNORE_CASE)
+        .containsMatchIn(rawStackTrace)
+    val symbolicationEvidence = symbolicatedFrames.any { frame ->
+        frame.lineNumber == lineNumber &&
+            frame.fileName?.replace('\\', '/')?.substringAfterLast('/')?.equals(fileName, ignoreCase = true) == true
+    }
+    if (!traceEvidence && !symbolicationEvidence) return null
+
+    return VerifiedCrashSourceLocation(pathHint, fileName, lineNumber)
+}
+
+internal fun selectUniqueCrashSourcePath(
+    searchResults: List<String>,
+    location: VerifiedCrashSourceLocation
+): String? {
+    val expectedPath = location.pathHint.replace('\\', '/').trimStart('/')
+    val directoryHint = expectedPath.substringBeforeLast('/', missingDelimiterValue = "")
+    val matches = searchResults
+        .map { it.replace('\\', '/').trimStart('/') }
+        .filter { path ->
+            path.isNotBlank() &&
+                !path.startsWith("/") &&
+                path.split('/').none { it == ".." } &&
+                path.substringAfterLast('/') == location.fileName &&
+                (directoryHint.isBlank() || path == expectedPath || path.endsWith("/$expectedPath"))
+        }
+        .distinct()
+    return matches.singleOrNull()
+}
+
+internal fun requireCompleteFixFile(response: FixResultResponse): String {
+    if (!response.fullFileContent) {
+        throw IllegalStateException("أعاد النموذج كتلة جزئية لا ملفاً كاملاً؛ لم يتم حفظ اقتراح قد يستبدل بقية الملف.")
+    }
+    return response.suggestedCode.takeIf { it.isNotBlank() }
+        ?: throw IllegalStateException("أعاد النموذج محتوى ملف فارغاً؛ لم يتم حفظ الاقتراح.")
+}
+
 class CrashRepositoryImpl(
     private val firestore: FirebaseFirestore?,
     private val crashDao: CrashDao,
@@ -1443,23 +1504,40 @@ class CrashRepositoryImpl(
         requireOwnedProject(authorizedCrash.projectId, uid)
         require(diagnosis.crashId == authorizedCrash.id) { "The diagnosis does not belong to this crash." }
 
-        val mapping = crashDao.getRepositoryMapping(authorizedCrash.applicationId)?.takeIf { it.projectId == authorizedCrash.projectId }
-            ?: throw IllegalStateException("يجب ربط مستودع GitHub أولاً لاقتراح إصلاح برمجي.")
-        
-        val sourceLocation = diagnosis.sourceLocation // e.g. "ProfileFragment.kt:74"
-        val fileName = sourceLocation.substringBefore(":")
-        
-        // Search for the file to get the full path
+        val mapping = crashDao.getRepositoryMapping(authorizedCrash.applicationId)
+            ?.takeIf { it.projectId == authorizedCrash.projectId }
+            ?: throw IllegalStateException("يجب ربط مستودع GitHub بهذا التطبيق أولاً.")
+        require(mapping.repoOwner.isNotBlank() && mapping.repoName.isNotBlank() && mapping.defaultBranch.isNotBlank()) {
+            "بيانات ربط مستودع GitHub غير مكتملة."
+        }
+
+        val rawLocation = resolveVerifiedCrashSourceLocation(
+            diagnosisLocation = diagnosis.sourceLocation,
+            rawStackTrace = authorizedCrash.stackTrace,
+            symbolicatedFrames = emptyList()
+        ) ?: run {
+            val frames = symbolicationRepository.symbolicate(authorizedCrash).getOrNull()?.frames.orEmpty()
+            resolveVerifiedCrashSourceLocation(
+                diagnosisLocation = diagnosis.sourceLocation,
+                rawStackTrace = authorizedCrash.stackTrace,
+                symbolicatedFrames = frames
+            )
+        } ?: throw IllegalStateException(
+            "موضع المصدر في التشخيص غير مثبت في تتبع الانهيار أو الإطارات المفكوكة؛ لم يتم البحث عن ملف أو إنشاء اقتراح."
+        )
+
         val searchResults = githubRepository.searchCode(
             userId = uid,
             owner = mapping.repoOwner,
             repo = mapping.repoName,
-            query = "filename:$fileName",
+            query = "filename:${rawLocation.fileName}",
             ref = mapping.defaultBranch
         ).getOrThrow()
-        
-        val filePath = searchResults.firstOrNull() ?: throw IllegalStateException("لم يتم العثور على الملف $fileName في المستودع.")
-        
+        val filePath = selectUniqueCrashSourcePath(searchResults, rawLocation)
+            ?: throw IllegalStateException(
+                "تعذر تحديد ملف مصدر واحد مطابق لموضع الانهيار؛ لم يتم اختيار أول نتيجة عشوائياً."
+            )
+
         val originalCode = githubRepository.fetchFileContent(
             userId = uid,
             owner = mapping.repoOwner,
@@ -1467,6 +1545,12 @@ class CrashRepositoryImpl(
             path = filePath,
             ref = mapping.defaultBranch
         ).getOrThrow()
+        if (originalCode.isBlank()) {
+            throw IllegalStateException("ملف المصدر المرتبط بالانهيار فارغ؛ لم يتم إنشاء اقتراح إصلاح.")
+        }
+        if (rawLocation.lineNumber > originalCode.lineSequence().count()) {
+            throw IllegalStateException("تغير ملف المصدر ولم يعد يحتوي على سطر الانهيار؛ أعد تحميل التشخيص قبل إنشاء اقتراح.")
+        }
 
         val prompt = """
             You are an AI Fix Assistant. Propose a code-level fix for this crash.
@@ -1486,13 +1570,15 @@ class CrashRepositoryImpl(
             4. Identify potential side effects.
             5. Provide a detailed explanation for the change.
             6. Output raw JSON ONLY.
+            7. suggestedCode MUST contain the complete updated file, including every unchanged line. Never return a partial block, patch fragment, or excerpt.
+            8. Set fullFileContent=true only when the complete file is present. Otherwise set false and do not propose a change.
             
             JSON SCHEMA:
             {
-              "suggestedCode": "The complete updated file content or the specific block",
+              "suggestedCode": "Complete updated file content, including unchanged lines",
               "explanation": "Why this fix works",
               "potentialSideEffects": "What to watch out for",
-              "fullFileContent": true_or_false
+              "fullFileContent": true
             }
         """.trimIndent()
 
@@ -1511,17 +1597,26 @@ class CrashRepositoryImpl(
         
         val fixResult = moshi.adapter(FixResultResponse::class.java).fromJson(jsonText)
             ?: throw IllegalStateException("فشل تحليل استجابة الذكاء الاصطناعي.")
+        val completeFile = requireCompleteFixFile(fixResult)
+        if (completeFile == originalCode) {
+            throw IllegalStateException("لم يقترح النموذج أي تغيير في ملف المصدر؛ لم يتم حفظ اقتراح فارغ.")
+        }
 
         val fixId = UUID.randomUUID().toString()
+        val exceptionSlug = authorizedCrash.exceptionType.lowercase()
+            .replace(Regex("[^a-z0-9.-]+"), "-")
+            .take(48)
+            .trim('-', '.')
+            .ifBlank { "crash" }
         val fixSuggestion = FixSuggestion(
             id = fixId,
             crashId = authorizedCrash.id,
             originalCode = originalCode,
-            suggestedCode = fixResult.suggestedCode,
+            suggestedCode = completeFile,
             explanation = fixResult.explanation,
             potentialSideEffects = fixResult.potentialSideEffects,
             filePath = filePath,
-            branchName = "fix/${authorizedCrash.exceptionType.lowercase()}-${fixId.take(5)}",
+            branchName = "fix/${exceptionSlug}-${fixId.take(5)}",
             status = FixStatus.PROPOSED,
             testResults = null // Compilation, static analysis, and unit tests have not been executed here.
         )
@@ -1549,11 +1644,47 @@ class CrashRepositoryImpl(
             if (fix.status == FixStatus.PR_CREATED) throw IllegalStateException("A pull request has already been created for this fix.")
             val crash = getCrashDetails(fix.crashId).first() ?: throw SecurityException("The crash is not available to the active account.")
             requireOwnedProject(crash.projectId, uid)
-            val mapping = crashDao.getRepositoryMapping(crash.applicationId)?.takeIf { it.projectId == crash.projectId }
+            if (fix.status != FixStatus.PROPOSED) {
+                throw IllegalStateException("لا يمكن نشر اقتراح مرفوض أو منشور مسبقاً.")
+            }
+            if (fix.originalCode.isBlank() || fix.suggestedCode.isBlank()) {
+                throw IllegalStateException("اقتراح الإصلاح لا يحتوي على ملف أصلي ومحتوى كامل صالح.")
+            }
+            val normalizedPath = fix.filePath.replace('\\', '/')
+            if (normalizedPath.startsWith("/") || normalizedPath.split('/').any { it.isBlank() || it == "." || it == ".." }) {
+                throw IllegalStateException("مسار ملف الإصلاح غير صالح.")
+            }
+            if (!fix.branchName.matches(Regex("fix/[a-z0-9][a-z0-9.-]*-[a-f0-9]{5}"))) {
+                throw IllegalStateException("اسم فرع الإصلاح غير صالح.")
+            }
+            val mapping = crashDao.getRepositoryMapping(crash.applicationId)
+                ?.takeIf { it.projectId == crash.projectId }
                 ?: throw IllegalStateException("المستودع غير مرتبط بهذا التطبيق.")
-            githubRepository.createBranch(uid, mapping.repoOwner, mapping.repoName, fix.branchName, mapping.defaultBranch).getOrThrow()
-            githubRepository.commitChanges(uid, mapping.repoOwner, mapping.repoName, fix.branchName, fix.filePath, fix.suggestedCode,
-                "Fix: ${crash.exceptionType} in ${fix.filePath}").getOrThrow()
+            require(mapping.repoOwner.isNotBlank() && mapping.repoName.isNotBlank() && mapping.defaultBranch.isNotBlank()) {
+                "بيانات ربط مستودع GitHub غير مكتملة."
+            }
+
+            val currentBaseFile = githubRepository.fetchFileContent(
+                uid, mapping.repoOwner, mapping.repoName, normalizedPath, mapping.defaultBranch
+            ).getOrThrow()
+            if (currentBaseFile != fix.originalCode) {
+                throw IllegalStateException("تغير ملف المصدر منذ إنشاء الاقتراح؛ أعد توليد الإصلاح قبل إنشاء Pull Request.")
+            }
+
+            githubRepository.createBranch(
+                uid, mapping.repoOwner, mapping.repoName, fix.branchName, mapping.defaultBranch
+            ).getOrThrow()
+            val branchFile = githubRepository.fetchFileContent(
+                uid, mapping.repoOwner, mapping.repoName, normalizedPath, fix.branchName
+            ).getOrThrow()
+            if (branchFile != fix.originalCode) {
+                throw IllegalStateException("تغير ملف المصدر عند إنشاء الفرع؛ لم يتم إيداع التعديل لتجنب استبدال عمل أحدث.")
+            }
+
+            githubRepository.commitChanges(
+                uid, mapping.repoOwner, mapping.repoName, fix.branchName, normalizedPath, fix.suggestedCode,
+                "Fix: ${crash.exceptionType} in ${normalizedPath}"
+            ).getOrThrow()
             val body = """
                 ## Crash Diagnosis
                 ${crash.exceptionType}: ${crash.message}
@@ -1564,8 +1695,11 @@ class CrashRepositoryImpl(
                 ## Potential Side Effects
                 ${fix.potentialSideEffects}
             """.trimIndent()
-            val prUrl = githubRepository.createPullRequest(uid, mapping.repoOwner, mapping.repoName,
-                "Fix: ${crash.exceptionType} in ${fix.filePath}", fix.branchName, mapping.defaultBranch, body).getOrThrow()
+            val prUrl = githubRepository.createPullRequest(
+                uid, mapping.repoOwner, mapping.repoName,
+                "Fix: ${crash.exceptionType} in ${normalizedPath}", fix.branchName, mapping.defaultBranch, body
+            ).getOrThrow().takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("لم يُرجع GitHub رابط Pull Request صالحاً؛ لم يتم تسجيل نجاح النشر.")
             crashDao.updateFixStatus(fixId, FixStatus.PR_CREATED, prUrl)
             addNotification(SystemNotification(
                 id = UUID.randomUUID().toString(), projectId = crash.projectId,
@@ -1770,7 +1904,7 @@ internal suspend fun <T> runCatchingCancellable(block: suspend () -> T): Result<
         Result.failure(error)
     }
 
-private data class FixResultResponse(
+internal data class FixResultResponse(
     val suggestedCode: String,
     val explanation: String,
     val potentialSideEffects: String,
