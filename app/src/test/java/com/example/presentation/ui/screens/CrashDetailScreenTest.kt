@@ -12,6 +12,8 @@ import com.example.domain.model.CrashReport
 import com.example.domain.model.DiagnosisCertainty
 import com.example.domain.model.ErrorCategory
 import com.example.domain.model.SymbolicatedFrame
+import com.example.domain.model.SymbolicationReport
+import com.example.domain.model.SymbolicationStatus
 import com.example.R
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertTrue
@@ -259,6 +261,87 @@ class CrashDetailScreenTest {
 
         composeRule.onNodeWithText("(Repository.kt:42)").assertIsDisplayed()
         composeRule.onNodeWithText("null").assertDoesNotExist()
+    }
+
+    @Test
+    fun symbolicatedTraceShowsHeaderAndExplicitEmptyState() {
+        val report = SymbolicationReport(
+            status = SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED,
+            frames = emptyList()
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                SymbolicatedStackTrace(report)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("SYMBOLICATED TRACE // SYSTEM").assertIsDisplayed()
+        composeRule.onNodeWithText("No stack frames were returned by symbolication.").assertIsDisplayed()
+    }
+
+    @Test
+    fun symbolicatedFrameDetailsStayWithinCompactPanelWidth() {
+        val method = "com.example.crash.repository.CrashRepositoryImpl.loadCrashDetails"
+        val library = "com.example.crash.repository"
+        val report = SymbolicationReport(
+            status = SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED,
+            frames = listOf(
+                SymbolicatedFrame(
+                    originalLine = "at a.b(SourceFile:1)",
+                    fileName = "CrashRepositoryImpl.kt",
+                    methodName = method,
+                    lineNumber = 128,
+                    libraryName = library,
+                    isSystem = false
+                )
+            )
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                Box(Modifier.width(220.dp)) {
+                    SymbolicatedStackTrace(report)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(method).assertIsDisplayed()
+        composeRule.onNodeWithText("(CrashRepositoryImpl.kt:128)").assertIsDisplayed()
+        composeRule.onNodeWithText(library).assertIsDisplayed()
+
+        val panelBounds = composeRule.onNodeWithTag("symbolicated_frame_content")
+            .fetchSemanticsNode().boundsInRoot
+        val methodBounds = composeRule.onNodeWithText(method).fetchSemanticsNode().boundsInRoot
+        val libraryBounds = composeRule.onNodeWithText(library).fetchSemanticsNode().boundsInRoot
+        assertTrue(methodBounds.left >= panelBounds.left - 1f)
+        assertTrue(methodBounds.right <= panelBounds.right + 1f)
+        assertTrue(libraryBounds.left >= panelBounds.left - 1f)
+        assertTrue(libraryBounds.right <= panelBounds.right + 1f)
+    }
+
+    @Test
+    fun libraryEvidenceIsKeptWhenResolvedMethodAndFileAreMissing() {
+        val frame = SymbolicatedFrame(
+            originalLine = "at a.b(Unknown Source)",
+            fileName = null,
+            methodName = null,
+            lineNumber = null,
+            libraryName = "com.example.crash",
+            isSystem = false
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                SymbolicatedFrameItem(frame)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("at a.b(Unknown Source)").assertIsDisplayed()
+        composeRule.onNodeWithText("com.example.crash").assertIsDisplayed()
     }
 
     private fun appContext(): android.content.Context =

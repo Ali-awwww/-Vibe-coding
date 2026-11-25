@@ -687,6 +687,8 @@
     <string name="crash_detail_symbolication_source_missing">مراجعة المصدر غير متاحة</string>
     <string name="crash_detail_symbolication_failed">فشل تحليل الرموز</string>
     <string name="crash_detail_symbolication_pending">تحليل الرموز قيد الانتظار</string>
+    <string name="crash_detail_symbolicated_trace_header">التتبع بعد فك الترميز // النظام</string>
+    <string name="crash_detail_symbolication_no_frames">لم تُرجع عملية فك الترميز أي إطارات للمكدس.</string>
 
 
     <string name="crash_team_title">فريق تحقيق الأعطال بالذكاء الاصطناعي</string>

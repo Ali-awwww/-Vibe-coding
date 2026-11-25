@@ -819,22 +819,33 @@ fun SymbolicatedStackTrace(report: SymbolicationReport) {
         border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.18f)),
         shape = RoundedCornerShape(VibeDesignTokens.Shape.Control)
     ) {
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.crash_detail_symbolicated_trace_header),
+                style = MaterialTheme.typography.labelSmall,
+                color = VibeDesignTokens.Color.TextMuted,
+                fontFamily = JetBrainsMono
+            )
+            HorizontalDivider(
+                color = VibeDesignTokens.Color.Grid,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+            if (report.frames.isEmpty()) {
                 Text(
-                    text = "SYMBOLICATED_TRACE // SYSTEM",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = stringResource(R.string.crash_detail_symbolication_no_frames),
+                    style = MaterialTheme.typography.bodySmall,
                     color = VibeDesignTokens.Color.TextMuted,
-                    fontFamily = JetBrainsMono
+                    modifier = Modifier.fillMaxWidth()
                 )
-                HorizontalDivider(
-                    color = VibeDesignTokens.Color.Grid,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-                report.frames.forEachIndexed { index, frame ->
-                    SymbolicatedFrameItem(frame)
-                    if (index < report.frames.lastIndex) {
-                        Spacer(Modifier.height(8.dp))
+            } else {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        report.frames.forEachIndexed { index, frame ->
+                            SymbolicatedFrameItem(frame)
+                            if (index < report.frames.lastIndex) {
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -851,48 +862,58 @@ fun SymbolicatedFrameItem(frame: SymbolicatedFrame) {
     }
     val libraryName = frame.libraryName?.takeIf { it.isNotBlank() && it != "system" }
 
-    Column {
-        if (methodName == null && location == null) {
-            Text(
-                text = frame.originalLine,
-                color = VibeDesignTokens.Color.TextPrimary,
-                fontFamily = JetBrainsMono,
-                fontSize = 11.sp
-            )
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                if (methodName != null) {
+    if (methodName == null && location == null && libraryName == null) {
+        Text(
+            text = frame.originalLine,
+            color = VibeDesignTokens.Color.TextPrimary,
+            fontFamily = JetBrainsMono,
+            fontSize = 11.sp,
+            modifier = Modifier.fillMaxWidth()
+        )
+    } else {
+        FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("symbolicated_frame_content"),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (methodName == null && location == null) {
+                Text(
+                    text = frame.originalLine,
+                    color = VibeDesignTokens.Color.TextPrimary,
+                    fontFamily = JetBrainsMono,
+                    fontSize = 11.sp
+                )
+            }
+            if (methodName != null) {
+                Text(
+                    text = methodName,
+                    color = if (frame.isSystem) VibeDesignTokens.Color.TextMuted else VibeDesignTokens.Color.Cyan,
+                    fontFamily = JetBrainsMono,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            if (location != null) {
+                Text(
+                    text = "($location)",
+                    color = VibeDesignTokens.Color.Success,
+                    fontFamily = JetBrainsMono,
+                    fontSize = 11.sp
+                )
+            }
+            if (libraryName != null) {
+                Surface(
+                    color = VibeDesignTokens.Color.Grid,
+                    contentColor = VibeDesignTokens.Color.TextMuted,
+                    shape = MaterialTheme.shapes.extraSmall
+                ) {
                     Text(
-                        text = methodName,
-                        color = if (frame.isSystem) VibeDesignTokens.Color.TextMuted else VibeDesignTokens.Color.Cyan,
-                        fontFamily = JetBrainsMono,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        text = libraryName,
+                        fontSize = 9.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                     )
-                }
-                if (location != null) {
-                    Text(
-                        text = "($location)",
-                        color = VibeDesignTokens.Color.Success,
-                        fontFamily = JetBrainsMono,
-                        fontSize = 11.sp
-                    )
-                }
-                if (libraryName != null) {
-                    Surface(
-                        color = VibeDesignTokens.Color.Grid,
-                        contentColor = VibeDesignTokens.Color.TextMuted,
-                        shape = MaterialTheme.shapes.extraSmall
-                    ) {
-                        Text(
-                            text = libraryName,
-                            fontSize = 9.sp,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
                 }
             }
         }

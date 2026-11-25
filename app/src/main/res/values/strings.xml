@@ -687,6 +687,8 @@
     <string name="crash_detail_symbolication_source_missing">Source revision missing</string>
     <string name="crash_detail_symbolication_failed">Symbolication failed</string>
     <string name="crash_detail_symbolication_pending">Symbolication pending</string>
+    <string name="crash_detail_symbolicated_trace_header">SYMBOLICATED TRACE // SYSTEM</string>
+    <string name="crash_detail_symbolication_no_frames">No stack frames were returned by symbolication.</string>
 
 
     <string name="crash_team_title">AI crash investigation team</string>

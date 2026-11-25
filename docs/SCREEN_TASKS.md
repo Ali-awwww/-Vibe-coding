@@ -3498,3 +3498,28 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Verification boundary**
 - This symbolicated-frame correction and its tests are pending a fresh CI run. No screen is marked complete. Arabic RTL / English LTR device screenshots, small-screen/IME behavior, TalkBack and lifecycle/device review remain blocked by the unavailable Android SDK/ADB/device environment.
+
+### 2026-11-26 — CrashDetail CI closure and symbolicated-trace UX hardening
+
+**Verified baseline on `main`**
+- HEAD `b8398477522dcc0d62af1f042eed9025d60a4a6d` reached terminal success in all three push workflows: Android Unit Tests run `45709813865`, Build Android APK run `45709814017`, and Android Code Quality & Security Audit run `45709814062`.
+- The downloaded unit-test report records **433 tests, 0 failures and 4 skipped**. CrashDetail coverage: `CrashDetailScreenTest` 11/11, Arabic localization 1/1, `CrashDetailViewModelTest` 7/7, provider mapper 4/4 and symbolication cancellation 1/1.
+- Lint completed successfully. Debug APK artifact `15066294361` and signed Release APK artifact `15067980262` were uploaded. These are CI artifacts, not a published release.
+- The recursive repository tree contains no `AGENTS.md` or `agents.md` files. The dedicated Supabase project `hgfgbjomwhogpswpqusk` still reports `INACTIVE`; no wake/restore attempt or production database operation was made.
+
+**Confirmed CrashDetail UX gaps**
+- The symbolicated trace panel used a hard-coded English technical header, so Arabic users saw untranslated copy.
+- A successful symbolication result with an empty frame list rendered a header-only card with no explanation.
+- Frame metadata was composed in a single horizontal row, which could crowd long method/library identifiers on compact screens.
+- A partial frame containing only a library name discarded that available metadata along with its original line.
+
+**Implementation and regression coverage in this batch**
+- Localized the trace-panel header and moved it outside the forced LTR code region so the header follows the app locale while stack frames remain LTR.
+- Added a localized empty-frame state instead of showing a blank trace panel.
+- Changed frame metadata to a wrapping `FlowRow` constrained to the panel width; partial library-only frames now preserve both the original line and library evidence.
+- Added English and Arabic Compose tests for the header/empty state, a compact-width layout regression that checks method/library bounds remain inside the trace panel, and a library-only evidence regression.
+
+**Verification boundary and continuity**
+- The new source, resources and tests are being committed together with this record. Their CI result is pending; the 433-test result above applies only to baseline `b839847`.
+- Local Gradle, emulator/device screenshots, RTL/LTR visual review, IME, TalkBack and lifecycle checks remain unavailable here because this execution environment has no Gradle executable, Android SDK/ANDROID_HOME, ADB or attached device. Keep Crashes and CrashDetail open; do not treat source/CI coverage as visual sign-off.
+- Next: inspect the push-triggered unit-test, lint and Debug/Release APK runs for this commit to terminal status. Fix only evidence-backed failures, then continue the remaining independent Crashes/CrashDetail criteria. Recheck the Supabase prerequisite only after its status changes; do not modify production.

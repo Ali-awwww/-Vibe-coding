@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import com.example.domain.model.SymbolicationReport
+import com.example.domain.model.SymbolicationStatus
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Rule
 import org.junit.Test
@@ -16,6 +18,24 @@ import org.robolectric.annotation.Config
 class CrashDetailArabicLocalizationTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun symbolicatedTraceHeaderAndEmptyStateUseArabicLabels() {
+        val report = SymbolicationReport(
+            status = SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED,
+            frames = emptyList()
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                SymbolicatedStackTrace(report)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("التتبع بعد فك الترميز // النظام").assertIsDisplayed()
+        composeRule.onNodeWithText("لم تُرجع عملية فك الترميز أي إطارات للمكدس.").assertIsDisplayed()
+    }
 
     @Test
     fun diagnosisBadgesUseArabicLabels() {
