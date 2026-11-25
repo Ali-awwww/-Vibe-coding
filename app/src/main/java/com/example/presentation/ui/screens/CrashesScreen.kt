@@ -589,7 +589,9 @@ fun DetailedCrashCard(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
             ) {
                 Text(
-                    text = stringResource(R.string.crashes_source_label, crashSourceLabel(crash.source)),
+                    text = crash.source?.let { source ->
+                        stringResource(R.string.crashes_source_label, crashSourceLabel(source))
+                    } ?: stringResource(R.string.crashes_source_unavailable),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)

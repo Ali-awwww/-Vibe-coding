@@ -6,11 +6,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.fetchSemanticsNode
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.CrashReport
@@ -29,6 +26,26 @@ import org.robolectric.annotation.Config
 class CrashesScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun missingSourceUsesOneExplicitUnavailableLabel() {
+        val crash = CrashReport(
+            id = "missing-source",
+            projectId = "project-1",
+            exceptionType = "IllegalStateException",
+            source = null
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                DetailedCrashCard(crash) {}
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Source unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText("Source: Source unavailable").assertDoesNotExist()
+    }
 
     @Test
     fun detailedCrashCardWrapsMetadataInCompactLtrAndRtlAndRemainsClickable() {

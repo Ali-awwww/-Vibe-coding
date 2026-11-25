@@ -13,6 +13,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.CrashReport
+import com.example.domain.model.IntegrationType
 import com.example.domain.model.DiagnosisCertainty
 import com.example.domain.model.ErrorCategory
 import com.example.domain.model.SymbolicatedFrame
@@ -33,6 +34,36 @@ import org.robolectric.annotation.Config
 class CrashDetailScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun crashHeaderShowsProviderProvenanceAndExplicitMissingSource() {
+        val sentryCrash = CrashReport(
+            id = "sentry-crash",
+            projectId = "project-1",
+            exceptionType = "IllegalStateException",
+            source = IntegrationType.SENTRY
+        )
+        val legacyCrash = CrashReport(
+            id = "legacy-crash",
+            projectId = "project-1",
+            exceptionType = "IllegalStateException",
+            source = null
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                Column {
+                    CrashHeader(sentryCrash)
+                    CrashHeader(legacyCrash)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Source: Sentry").assertIsDisplayed()
+        composeRule.onNodeWithText("Source unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText("Source: Source unavailable").assertDoesNotExist()
+    }
 
     @Test
     fun missingReportOffersRetryAndBackActions() {

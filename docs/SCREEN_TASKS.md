@@ -3681,3 +3681,19 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Source and the new UI regression are committed together; CI is pending. No emulator screenshot or physical-device review is claimed.
 - The visual gate remains open until actual Arabic RTL/English LTR rendered screenshots, small-screen/IME behavior and accessibility/device inspection are available. Live provider/Supabase behavior remains independently gated by the inactive Supabase project and unsupported webhook/Crashlytics receiver paths.
 - Next: inspect the current commit's Unit Tests, Lint and APK workflows to terminal status, then continue crash-provider persistence and detail-screen interaction coverage. Do not mark Crashes complete from source/Compose tests alone.
+
+
+### 2026-11-26 — Preserve source provenance in crash detail and clarify missing-source state
+
+**Confirmed UX defect**
+- Crashes wrapped the unavailable-source fallback inside the source prefix, rendering the redundant text “Source: Source unavailable” (and the equivalent Arabic duplication). CrashDetail did not display the provider provenance at all, despite the list already carrying it.
+
+**Implementation and regression coverage**
+- Crashes now renders a single explicit unavailable label for legacy/null-source records while preserving provider-prefixed labels for known sources.
+- CrashDetail's evidence header now displays the persisted source category for Sentry, Bugsnag, Firebase Crashlytics, webhook, custom and Internal QA records. Null provenance is labeled unavailable without guessing.
+- Added English Compose regressions for known/missing source in both list and detail cards, plus an Arabic Robolectric regression for Internal QA and missing-source labels.
+
+**Verification boundary**
+- The source/detail UI change and localization regressions are committed together; CI is pending. No rendered device screenshot or TalkBack sign-off is claimed.
+- Crashes and CrashDetail remain open pending CI, full navigation/accessibility review and real Android RTL/LTR verification. WEBHOOK ingestion and Firebase Crashlytics remain BLOCKED until their authenticated backend receivers exist; the dedicated Supabase project remains inactive.
+- Next: inspect all current CI runs to terminal status, repair any compile/test failure, then continue the CrashDetail investigation and resolution lifecycle tests.

@@ -336,6 +336,20 @@ fun CrashHeader(crash: CrashReport) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = VibeDesignTokens.Color.TextMuted
             )
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                modifier = Modifier.testTag("crash_detail_source"),
+                color = VibeDesignTokens.Color.SpacePanelRaised,
+                contentColor = VibeDesignTokens.Color.TextMuted,
+                shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact),
+                border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.14f))
+            ) {
+                Text(
+                    text = crashDetailSourceText(crash.source),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
 
             HorizontalDivider(
                 color = VibeDesignTokens.Color.Grid,
@@ -396,6 +410,20 @@ fun CrashHeader(crash: CrashReport) {
         }
     }
 }
+@Composable
+private fun crashDetailSourceText(source: IntegrationType?): String {
+    if (source == null) return stringResource(R.string.crashes_source_unavailable)
+    val sourceName = when (source) {
+        IntegrationType.FIREBASE_CRASHLYTICS -> stringResource(R.string.crashes_source_firebase_crashlytics)
+        IntegrationType.SENTRY -> stringResource(R.string.crashes_source_sentry)
+        IntegrationType.BUGSNAG -> stringResource(R.string.crashes_source_bugsnag)
+        IntegrationType.WEBHOOK -> stringResource(R.string.crashes_source_webhook)
+        IntegrationType.CUSTOM -> stringResource(R.string.crashes_source_custom)
+        IntegrationType.INTERNAL_QA -> stringResource(R.string.crashes_source_internal_qa)
+    }
+    return stringResource(R.string.crashes_source_label, sourceName)
+}
+
 @Composable
 fun InfoItem(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {

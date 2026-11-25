@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import com.example.domain.model.CrashReport
+import com.example.domain.model.IntegrationType
 import com.example.domain.model.SymbolicationReport
 import com.example.domain.model.SymbolicationStatus
 import com.example.ui.theme.CrashIntelligenceTheme
@@ -18,6 +20,33 @@ import org.robolectric.annotation.Config
 class CrashDetailArabicLocalizationTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun crashHeaderShowsArabicSourceAndMissingProvenanceLabels() {
+        val known = CrashReport(
+            id = "known-source",
+            projectId = "project-1",
+            source = IntegrationType.INTERNAL_QA
+        )
+        val missing = CrashReport(
+            id = "missing-source",
+            projectId = "project-1",
+            source = null
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                Column {
+                    CrashHeader(known)
+                    CrashHeader(missing)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("المصدر: اختبار الجودة الداخلي").assertIsDisplayed()
+        composeRule.onNodeWithText("المصدر غير متاح").assertIsDisplayed()
+    }
 
     @Test
     fun symbolicatedTraceHeaderAndEmptyStateUseArabicLabels() {
