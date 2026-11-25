@@ -3584,3 +3584,21 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - This status-message change is committed with its tests and this record; its CI is pending.
 - The current Crashes/CrashDetail screen remains open. Emulator/device screenshots, actual RTL/LTR layout review, TalkBack, IME/lifecycle checks remain blocked by the unavailable Android SDK/ADB/device environment. Supabase project hgfgbjomwhogpswpqusk remains inactive; production schema/data were not touched.
 - Next: finish the 1ec4268d lint/build workflows and inspect the new status-message commit's unit tests, lint and Debug/Release APK workflows to terminal status. Continue the remaining independent CrashDetail criteria without marking the screen complete.
+
+### 2026-11-26 — Verify exact symbolicated clipboard payload
+
+**Code-review finding and correction**
+- The symbolicated copy formatter preserved the original line when no resolved details existed, but a library-only partial frame caused it to copy only the library name. That lost the original unresolved frame from the copied report.
+- Changed the formatter to preserve the original line whenever method and file/line evidence are absent, then append any available library metadata.
+
+**Regression coverage**
+- Added a recording ClipboardManager to the Compose test and asserted the exact copied payload for a resolved frame, an unresolved frame and a library-only frame. This verifies the clipboard contents, not merely the copy-button state.
+
+**CI evidence update**
+- Commit 1ec4268d8a5762d0cb839d37d7155fe62cc30693 has now reached terminal success in Unit Tests, Code Quality/Lint and Build Android APK. Its report: 441 tests, 0 failures, 4 skipped; CrashDetailScreenTest 17/17 and Arabic localization 3/3. Debug and signed Release APK artifacts were uploaded.
+- Commit fa49dd830c3ebeadf73f01512233277ce08bbef6 (localized symbolication status descriptions) still has its three CI workflows running at this entry. No result is inferred for that commit or this follow-up.
+
+**Verification boundary**
+- This clipboard-content fix is committed with its regression test and this record; its CI is pending.
+- Crashes/CrashDetail remain open. No emulator/device visual, TalkBack, IME/lifecycle or live Supabase verification is claimed.
+- Next: inspect the fa49dd83 and new commit workflows to terminal status, fix only logged failures, then continue the remaining CrashDetail acceptance criteria.

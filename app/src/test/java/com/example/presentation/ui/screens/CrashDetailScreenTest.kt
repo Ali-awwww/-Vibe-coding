@@ -5,7 +5,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.CrashReport
@@ -16,6 +20,7 @@ import com.example.domain.model.SymbolicationReport
 import com.example.domain.model.SymbolicationStatus
 import com.example.R
 import com.example.ui.theme.CrashIntelligenceTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -487,7 +492,69 @@ class CrashDetailScreenTest {
         composeRule.onNodeWithText("Some application frames could not be resolved.").assertDoesNotExist()
     }
 
+    @Test
+    fun symbolicatedTraceCopiesResolvedAndOriginalFrameEvidence() {
+        val clipboard = RecordingClipboardManager()
+        val report = SymbolicationReport(
+            status = SymbolicationStatus.PARTIALLY_SYMBOLICATED,
+            frames = listOf(
+                SymbolicatedFrame(
+                    originalLine = "at a.b(SourceFile:1)",
+                    fileName = "Repository.kt",
+                    methodName = "com.example.Repository.load",
+                    lineNumber = 42,
+                    libraryName = "com.example",
+                    isSystem = false
+                ),
+                SymbolicatedFrame(
+                    originalLine = "at x.y(Unknown Source)",
+                    fileName = null,
+                    methodName = null,
+                    lineNumber = null,
+                    libraryName = null,
+                    isSystem = false
+                ),
+                SymbolicatedFrame(
+                    originalLine = "at m.n(Unknown Source)",
+                    fileName = null,
+                    methodName = null,
+                    lineNumber = null,
+                    libraryName = "com.example.unresolved",
+                    isSystem = false
+                )
+            )
+        )
+
+        composeRule.setContent {
+            CompositionLocalProvider(LocalClipboardManager provides clipboard) {
+                CrashIntelligenceTheme(darkTheme = true) {
+                    SymbolicatedStackTrace(report)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("crash_detail_copy_symbolicated_stack_trace_button").performClick()
+
+        assertEquals(
+            "com.example.Repository.load (Repository.kt:42) com.example\n" +
+                "at x.y(Unknown Source)\n" +
+                "at m.n(Unknown Source) com.example.unresolved",
+            clipboard.copiedText?.text
+        )
+    }
+
     private fun appContext(): android.content.Context =
         androidx.test.core.app.ApplicationProvider.getApplicationContext()
 
+}
+
+private class RecordingClipboardManager : ClipboardManager {
+    var copiedText: AnnotatedString? = null
+
+    override fun getText(): AnnotatedString? = copiedText
+
+    override fun setText(annotatedString: AnnotatedString) {
+        copiedText = annotatedString
+    }
 }

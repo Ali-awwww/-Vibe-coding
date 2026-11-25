@@ -917,9 +917,9 @@ private fun SymbolicatedFrame.toClipboardLine(): String {
         lineNumber?.takeIf { it > 0 }?.let { "$file:$it" } ?: file
     }
     val libraryName = libraryName?.takeIf { it.isNotBlank() && it != "system" }
-    return listOfNotNull(methodName, location?.let { "($it)" }, libraryName)
-        .joinToString(" ")
-        .ifBlank { originalLine }
+    val primaryEvidence = listOfNotNull(methodName, location?.let { "($it)" })
+        .ifEmpty { listOf(originalLine) }
+    return (primaryEvidence + listOfNotNull(libraryName)).joinToString(" ")
 }
 
 @OptIn(ExperimentalLayoutApi::class)
