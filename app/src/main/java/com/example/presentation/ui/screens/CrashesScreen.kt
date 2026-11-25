@@ -1,6 +1,8 @@
 package com.example.presentation.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -19,10 +21,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import androidx.compose.ui.platform.testTag
 import com.example.R
 import com.example.di.DependencyProvider
 import com.example.domain.model.CrashReport
@@ -30,6 +34,7 @@ import com.example.domain.model.IntegrationType
 import com.example.domain.model.Severity
 import com.example.presentation.navigation.Screen
 import com.example.presentation.viewmodel.CrashesViewModel
+import com.example.ui.theme.VibeDesignTokens
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,6 +72,7 @@ fun CrashesScreen(
     var showFilters by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -113,7 +119,13 @@ fun CrashesScreen(
                             contentDescription = stringResource(if (searchVisible) R.string.crashes_close_search else R.string.crashes_search)
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.primary,
+                    actionIconContentColor = MaterialTheme.colorScheme.primary
+                )
             )
         }
     ) { innerPadding ->
@@ -131,7 +143,9 @@ fun CrashesScreen(
 
             if (hasActiveFilter) {
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     LazyRow(
@@ -208,18 +222,34 @@ fun CrashesScreen(
             }
 
             // Results count
-            Row(
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.crashes_results_count, uiState.filteredCrashes.size, uiState.crashes.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.BugReport,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.crashes_results_count, uiState.filteredCrashes.size, uiState.crashes.size),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
 
             if (uiState.isLoading) {
@@ -466,7 +496,7 @@ private fun LoadMoreCrashesButton(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DetailedCrashCard(
     crash: CrashReport,
@@ -485,51 +515,54 @@ fun DetailedCrashCard(
         ?: stringResource(R.string.crashes_unavailable)
     val versionLabel = crash.appVersion.takeIf { it.isNotBlank() }
         ?: stringResource(R.string.crashes_unavailable)
+    val severityAccent = when (crash.severity) {
+        Severity.CRITICAL, Severity.HIGH -> VibeDesignTokens.Color.Error
+        Severity.MEDIUM -> VibeDesignTokens.Color.Warning
+        Severity.LOW -> VibeDesignTokens.Color.Success
+    }
 
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("crashes_detailed_card"),
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, severityAccent.copy(alpha = 0.3f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Medium)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Micro)) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Small),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val (badgeBg, badgeText) = when (crash.severity) {
-                        Severity.CRITICAL -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-                        Severity.HIGH -> MaterialTheme.colorScheme.error to MaterialTheme.colorScheme.onError
-                        Severity.MEDIUM -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-                        Severity.LOW -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-
                     Surface(
-                        color = badgeBg,
-                        shape = MaterialTheme.shapes.extraSmall
+                        color = severityAccent.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact),
+                        border = BorderStroke(1.dp, severityAccent.copy(alpha = 0.45f))
                     ) {
                         Text(
                             text = severityLabel(crash.severity.name),
                             style = MaterialTheme.typography.labelSmall,
-                            color = badgeText,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             fontWeight = FontWeight.Bold
                         )
                     }
 
                     Text(
                         text = exceptionLabel,
+                        modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -544,60 +577,68 @@ fun DetailedCrashCard(
                 text = crash.message.takeIf { it.isNotBlank() }
                     ?: stringResource(R.string.crashes_message_unavailable),
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
                 color = if (crash.message.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
                     else MaterialTheme.colorScheme.onSurface
             )
 
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.extraSmall
+                shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
             ) {
                 Text(
                     text = stringResource(R.string.crashes_source_label, crashSourceLabel(crash.source)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
                 )
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("crashes_card_metadata"),
+                horizontalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Small),
+                verticalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Small)
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Text(
+                    text = stringResource(R.string.crashes_device_os, deviceLabel, osLabel),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact)
                 ) {
-                    // Device & OS
                     Text(
-                        text = stringResource(R.string.crashes_device_os, deviceLabel, osLabel),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.crashes_version_value, versionLabel),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    // Version
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = MaterialTheme.shapes.extraSmall
-                    ) {
-                        Text(
-                            text = stringResource(R.string.crashes_version_value, versionLabel),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
                 }
 
                 if (crash.isResolved) {
-                    Text(
-                        text = stringResource(R.string.crashes_resolved),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.crashes_resolved),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                        )
+                    }
                 }
             }
         }

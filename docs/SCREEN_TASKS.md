@@ -3663,3 +3663,21 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - This source and route-lifecycle batch is committed with its regressions. CI must reach terminal success before acceptance.
 - Emulator/device rendered review, Arabic RTL/English LTR screenshots, TalkBack, IME/lifecycle device checks and live Supabase verification remain unverified/blocked. Crashes and CrashDetail remain open.
 - Next: inspect CI for both commits to terminal status, then continue provider persistence/error-path tests and the remaining CrashDetail interaction states without treating static route wiring as visual sign-off.
+
+
+### 2026-11-26 — Crashes screen visual hierarchy and compact metadata layout
+
+**Observed design issues**
+- The crash list relied on default Material card shape/elevation and had no clear visual relationship between incident severity, source provenance and the diagnostic metadata.
+- Device/OS, build version and resolved state shared a single horizontal row; long values could crowd the card on narrow devices. The results count was visually detached from the incident queue.
+
+**Implemented visual/UX changes**
+- Reworked incident cards to use the shared Vibe shape/spacing tokens, explicit severity-accent borders, readable severity chips, a separated timestamp/source hierarchy and a restrained panel treatment.
+- Replaced the fixed metadata row with a wrapping FlowRow. Long exception/message/device/version text is bounded with line limits and ellipsis instead of forcing a horizontal overflow.
+- Styled the top app bar, active-filter surface and results-count rail using the shared theme surface/accent roles. Existing filter, retry, paging and exact crash-detail navigation callbacks are preserved.
+- Added a Robolectric Compose regression at 260 dp that checks metadata bounds in both LTR and RTL and verifies the incident card remains clickable.
+
+**Verification boundary**
+- Source and the new UI regression are committed together; CI is pending. No emulator screenshot or physical-device review is claimed.
+- The visual gate remains open until actual Arabic RTL/English LTR rendered screenshots, small-screen/IME behavior and accessibility/device inspection are available. Live provider/Supabase behavior remains independently gated by the inactive Supabase project and unsupported webhook/Crashlytics receiver paths.
+- Next: inspect the current commit's Unit Tests, Lint and APK workflows to terminal status, then continue crash-provider persistence and detail-screen interaction coverage. Do not mark Crashes complete from source/Compose tests alone.
