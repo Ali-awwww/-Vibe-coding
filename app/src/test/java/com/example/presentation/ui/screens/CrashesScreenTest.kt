@@ -78,8 +78,10 @@ class CrashesScreenTest {
         fun assertMetadataWithinCard() {
             val cardBounds = composeRule.onNodeWithTag("crashes_detailed_card")
                 .fetchSemanticsNode().boundsInRoot
-            val metadataBounds = composeRule.onNodeWithTag("crashes_card_metadata")
-                .fetchSemanticsNode().boundsInRoot
+            val metadataBounds = composeRule.onNodeWithTag(
+                "crashes_card_metadata",
+                useUnmergedTree = true
+            ).fetchSemanticsNode().boundsInRoot
             assertTrue(metadataBounds.left >= cardBounds.left - 1f)
             assertTrue(metadataBounds.right <= cardBounds.right + 1f)
         }

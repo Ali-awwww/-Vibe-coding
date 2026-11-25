@@ -3730,3 +3730,19 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - CI for this batch is pending. No claim is made that an AI provider or live workspace was contacted.
 - CI evidence now available: commit `83ac8a95` passed all three workflows; Unit Tests reported 447 tests, 0 failures, 4 skipped. Commit `780eb546` passed Unit Tests (449 tests, 0 failures, 4 skipped), Lint and Debug/Release APK builds; both APK artifacts were uploaded. Commit `ef225c01` passed Lint and Debug/Release APK build but Unit Tests failed to compile because the new Compose test imported `fetchSemanticsNode` from the wrong package. Commit `a458a7a5` changed the test to the supported wildcard test import; its CI result is pending. The current CrashDetail timestamp batch also awaits CI.
 - The next independent FixAssistant task is to verify its source evidence and PR handoff against the selected crash/workspace, without generating a patch from an unlinked workspace.
+
+
+### 2026-11-26 — Correct Compose regression visibility assumptions
+
+**CI evidence**
+- Commit `a458a7a5` compiled the new Crashes card test and ran 453 tests: 3 failures, 4 skipped. Lint completed successfully; the failures were limited to the new UI tests.
+- Two CrashDetail tests placed two tall headers in a non-scrollable test column, so the second header was off-screen when asserting the missing-source state. The Crashes card's nested FlowRow test tag was present only in the unmerged semantics tree; the default finder hid it.
+
+**Correction**
+- Reworked the source/timestamp tests to switch a single rendered CrashHeader between known and missing evidence, avoiding off-screen assertions.
+- The compact card layout test now queries the nested FlowRow through the unmerged semantics tree while retaining the bounds assertions in both LTR and RTL.
+- No production behavior was changed in this test-only correction.
+
+**Verification boundary**
+- CI for the corrected test suite and the later source-isolation commit is pending. The earlier 83ac and 780 commits passed all workflows; 780 reported 449 tests, 0 failures and 4 skipped, with Debug and signed Release APK artifacts uploaded.
+- Next: verify the corrected UI tests, timestamp UI and workspace-isolation regression in the terminal CI results before advancing to FixAssistant.

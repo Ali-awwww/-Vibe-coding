@@ -1,6 +1,6 @@
 package com.example.presentation.ui.screens
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -34,17 +34,17 @@ class CrashDetailArabicLocalizationTest {
             timestamp = 0L
         )
 
+        val displayedCrash = mutableStateOf(occurred)
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {
-                Column {
-                    CrashHeader(occurred)
-                    CrashHeader(missing)
-                }
+                CrashHeader(displayedCrash.value)
             }
         }
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("وقت الحدوث:", substring = true).assertIsDisplayed()
+        composeRule.runOnIdle { displayedCrash.value = missing }
+        composeRule.waitForIdle()
         composeRule.onNodeWithText("وقت الحدوث غير متاح").assertIsDisplayed()
     }
 
@@ -61,17 +61,17 @@ class CrashDetailArabicLocalizationTest {
             source = null
         )
 
+        val displayedCrash = mutableStateOf(known)
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {
-                Column {
-                    CrashHeader(known)
-                    CrashHeader(missing)
-                }
+                CrashHeader(displayedCrash.value)
             }
         }
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("المصدر: اختبار الجودة الداخلي").assertIsDisplayed()
+        composeRule.runOnIdle { displayedCrash.value = missing }
+        composeRule.waitForIdle()
         composeRule.onNodeWithText("المصدر غير متاح").assertIsDisplayed()
     }
 

@@ -48,17 +48,17 @@ class CrashDetailScreenTest {
             timestamp = 0L
         )
 
+        val displayedCrash = mutableStateOf(occurred)
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {
-                Column {
-                    CrashHeader(occurred)
-                    CrashHeader(missing)
-                }
+                CrashHeader(displayedCrash.value)
             }
         }
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Occurred", substring = true).assertIsDisplayed()
+        composeRule.runOnIdle { displayedCrash.value = missing }
+        composeRule.waitForIdle()
         composeRule.onNodeWithText("Occurrence time unavailable").assertIsDisplayed()
     }
 
@@ -77,17 +77,17 @@ class CrashDetailScreenTest {
             source = null
         )
 
+        val displayedCrash = mutableStateOf(sentryCrash)
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {
-                Column {
-                    CrashHeader(sentryCrash)
-                    CrashHeader(legacyCrash)
-                }
+                CrashHeader(displayedCrash.value)
             }
         }
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Source: Sentry").assertIsDisplayed()
+        composeRule.runOnIdle { displayedCrash.value = legacyCrash }
+        composeRule.waitForIdle()
         composeRule.onNodeWithText("Source unavailable").assertIsDisplayed()
         composeRule.onNodeWithText("Source: Source unavailable").assertDoesNotExist()
     }
