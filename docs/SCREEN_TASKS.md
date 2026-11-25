@@ -3630,3 +3630,18 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Verification boundary**
 - Commits fa49dd83, dfe6b6c8 and c76ecc17 have CI workflows in progress at this entry; no terminal result is inferred. The pagination correction is committed with tests and this record; its CI is pending.
 - Next: inspect these workflow sets and the new pagination commit to terminal status, repair any logged failure, then continue the Crashes screen's remaining provider-source and navigation criteria.
+
+
+### 2026-11-26 — Align later-page retry test with look-ahead pagination
+
+**CI evidence and root cause**
+- HEAD `3279fababef4eacac91adbf0a42a8cf4d16f47f4`: Android Code Quality/Lint and Debug/Release APK workflow completed successfully. Android Unit Tests ran 447 tests: 1 failed, 4 skipped.
+- The only failure was `CrashesViewModelTest.failedNextPageCanBeRetriedWithoutDroppingLoadedCrashes`. Its fixture contained exactly 25 records, so the pageSize+1 look-ahead contract correctly returned no next cursor; the test's initial `canLoadMore == true` assertion was invalid. The Gradle HTML report identifies this assertion at line 273. This was a stale test fixture, not a production pagination defect.
+
+**Regression correction**
+- Expanded that fixture to 26 records. The test now verifies that a failed second-page request preserves the first 25 records, retry loads the 26th record, clears the paging error, retains descending order and terminates pagination.
+
+**Verification boundary**
+- This test correction is committed with this entry. CI for the new commit must reach terminal status before this regression is accepted.
+- The preceding symbolication and step-count commits `fa49dd83`, `dfe6b6c8` and `c76ecc17` each reached success in Unit Tests, Lint and APK workflows. On 3279, only the unit-test workflow failed.
+- No Android emulator/device, rendered RTL/LTR, TalkBack, IME/lifecycle or live Supabase verification is claimed. Crashes/CrashDetail remain open; the next independent Crashes task is source-provenance coverage across supported intake paths and exact crash-detail navigation/lifecycle.

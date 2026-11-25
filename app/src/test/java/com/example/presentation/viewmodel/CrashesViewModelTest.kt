@@ -257,7 +257,7 @@ class CrashesViewModelTest {
 
     @Test
     fun failedNextPageCanBeRetriedWithoutDroppingLoadedCrashes() = runTest {
-        repository.crashes.value = (0 until 25).map { index ->
+        repository.crashes.value = (0 until 26).map { index ->
             CrashReport(
                 id = "page-$index",
                 projectId = "p1",
@@ -284,6 +284,8 @@ class CrashesViewModelTest {
         advanceUntilIdle()
         assertNull(viewModel.uiState.value.loadMoreError)
         assertFalse(viewModel.uiState.value.canLoadMore)
-        assertEquals(25, viewModel.uiState.value.crashes.size)
+        assertEquals(26, viewModel.uiState.value.crashes.size)
+        assertEquals("page-25", viewModel.uiState.value.crashes.first().id)
+        assertEquals("page-0", viewModel.uiState.value.crashes.last().id)
     }
 }
