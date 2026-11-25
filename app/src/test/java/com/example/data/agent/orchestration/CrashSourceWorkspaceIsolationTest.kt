@@ -107,7 +107,7 @@ class CrashSourceWorkspaceIsolationTest {
     }
 
     @Test
-    fun internalQaFiltersAnyFileReturnedForA differentWorkspace() = runTest {
+    fun internalQaFiltersAnyFileReturnedForADifferentWorkspace() = runTest {
         val result = resolveCrashSourceContext(
             crashReport = CrashReport(
                 id = "qa-crash",
