@@ -676,6 +676,7 @@
     <string name="crash_detail_copy_stack_trace">Copy stack trace</string>
     <string name="crash_detail_stack_trace_copied">Stack trace copied</string>
     <string name="crash_detail_stack_trace_unavailable">No stack trace was provided with this crash report.</string>
+    <string name="crash_detail_stack_trace_header">STACK TRACE // SYSTEM</string>
 
 
     <string name="crash_detail_symbolication_loading">Resolving stack trace…</string>

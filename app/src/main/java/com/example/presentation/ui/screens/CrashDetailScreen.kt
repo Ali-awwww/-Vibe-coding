@@ -446,7 +446,7 @@ fun StackTraceCard(stackTrace: String) {
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = "STACK_TRACE // SYSTEM",
+                    text = stringResource(R.string.crash_detail_stack_trace_header),
                     style = MaterialTheme.typography.labelSmall,
                     color = VibeDesignTokens.Color.TextMuted,
                     fontFamily = JetBrainsMono
@@ -484,7 +484,7 @@ fun StackTraceCard(stackTrace: String) {
                             .background(VibeDesignTokens.Color.Error, CircleShape)
                     )
                     Text(
-                        text = "STACK_TRACE // SYSTEM",
+                        text = stringResource(R.string.crash_detail_stack_trace_header),
                         style = MaterialTheme.typography.labelSmall,
                         color = VibeDesignTokens.Color.TextMuted,
                         fontFamily = JetBrainsMono
@@ -826,6 +826,12 @@ fun CrashTraceContent(report: SymbolicationReport?, rawStackTrace: String) {
 
 @Composable
 fun SymbolicatedStackTrace(report: SymbolicationReport) {
+    val clipboardManager = LocalClipboardManager.current
+    val copyText = remember(report.frames) {
+        report.frames.joinToString("\n") { it.toClipboardLine() }
+    }
+    var copied by remember(report.frames) { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = VibeDesignTokens.Color.SpaceBackground),
@@ -833,12 +839,40 @@ fun SymbolicatedStackTrace(report: SymbolicationReport) {
         shape = RoundedCornerShape(VibeDesignTokens.Shape.Control)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = stringResource(R.string.crash_detail_symbolicated_trace_header),
-                style = MaterialTheme.typography.labelSmall,
-                color = VibeDesignTokens.Color.TextMuted,
-                fontFamily = JetBrainsMono
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.crash_detail_symbolicated_trace_header),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeDesignTokens.Color.TextMuted,
+                    fontFamily = JetBrainsMono,
+                    modifier = Modifier.weight(1f)
+                )
+                if (report.frames.isNotEmpty()) {
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(copyText))
+                            copied = true
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("crash_detail_copy_symbolicated_stack_trace_button")
+                    ) {
+                        Icon(
+                            if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                            contentDescription = stringResource(
+                                if (copied) R.string.crash_detail_stack_trace_copied
+                                else R.string.crash_detail_copy_stack_trace
+                            ),
+                            tint = if (copied) VibeDesignTokens.Color.Success else VibeDesignTokens.Color.TextMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
             HorizontalDivider(
                 color = VibeDesignTokens.Color.Grid,
                 modifier = Modifier.padding(vertical = 8.dp)
@@ -864,6 +898,18 @@ fun SymbolicatedStackTrace(report: SymbolicationReport) {
             }
         }
     }
+}
+
+private fun SymbolicatedFrame.toClipboardLine(): String {
+    val methodName = methodName?.takeIf { it.isNotBlank() }
+    val fileName = fileName?.takeIf { it.isNotBlank() }
+    val location = fileName?.let { file ->
+        lineNumber?.takeIf { it > 0 }?.let { "$file:$it" } ?: file
+    }
+    val libraryName = libraryName?.takeIf { it.isNotBlank() && it != "system" }
+    return listOfNotNull(methodName, location?.let { "($it)" }, libraryName)
+        .joinToString(" ")
+        .ifBlank { originalLine }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

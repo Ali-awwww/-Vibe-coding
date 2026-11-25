@@ -3551,3 +3551,19 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Verification boundary**
 - The opt-in correction is committed below; its unit-test, lint and Debug/Release APK workflows must reach terminal status before accepting the UI change. The previous FlowRow commits are recorded as failed compile attempts, not successful verification.
 - Continue to keep the screen open for rendered RTL/LTR, compact-device and accessibility verification.
+
+### 2026-11-26 — Preserve copy and localization across symbolication states
+
+**Additional CrashDetail gaps**
+- The raw stack-trace card still displayed the English-only `STACK_TRACE // SYSTEM` header in Arabic.
+- Switching to symbolicated frames removed the raw card's copy affordance, so a successful or partial symbolication result could no longer be copied from the detail screen.
+
+**Implementation and tests**
+- Added English/Arabic resources for the raw stack-trace header and replaced both available/empty-state literals.
+- Added a 48 dp accessible copy action to symbolicated traces. Clipboard text includes resolved method, file/line and library metadata, and falls back to the original line for unresolved frames. The copied state resets when frame evidence changes; an empty report has no copy action.
+- Added Compose regression coverage for copy/reset behavior and Arabic raw-trace header rendering.
+
+**Verification boundary**
+- Commit `0185166f9c38be5e72947a61f9786e10835691d3` has unit-test, lint and APK workflows in progress at the time of this follow-up; its result is not inferred. The earlier FlowRow compile failures and opt-in correction are recorded in the preceding entries.
+- This follow-up's checks are pending. No emulator/device, TalkBack, RTL/LTR screenshot or live Supabase verification is claimed. Keep the screen open.
+- Next: inspect both commit-triggered CI sets to terminal status, repair any evidence-backed compiler/test/lint failure, then continue the remaining Crashes/CrashDetail criteria.

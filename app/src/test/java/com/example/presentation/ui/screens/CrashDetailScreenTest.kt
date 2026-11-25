@@ -279,6 +279,7 @@ class CrashDetailScreenTest {
 
         composeRule.onNodeWithText("SYMBOLICATED TRACE // SYSTEM").assertIsDisplayed()
         composeRule.onNodeWithText("No stack frames were returned by symbolication.").assertIsDisplayed()
+        composeRule.onNodeWithTag("crash_detail_copy_symbolicated_stack_trace_button").assertDoesNotExist()
     }
 
     @Test
@@ -403,6 +404,60 @@ class CrashDetailScreenTest {
         composeRule.onNodeWithText(originalTrace).assertIsDisplayed()
         composeRule.onNodeWithTag("crash_detail_copy_stack_trace_button").assertIsDisplayed()
         composeRule.onNodeWithText("SYMBOLICATED TRACE // SYSTEM").assertDoesNotExist()
+    }
+
+    @Test
+    fun symbolicatedTraceCopyConfirmationResetsWhenFramesChange() {
+        val report = mutableStateOf(
+            SymbolicationReport(
+                status = SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED,
+                frames = listOf(
+                    SymbolicatedFrame(
+                        originalLine = "at a.b(SourceFile:1)",
+                        fileName = "Repository.kt",
+                        methodName = "com.example.Repository.first",
+                        lineNumber = 1,
+                        libraryName = "com.example",
+                        isSystem = false
+                    )
+                )
+            )
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                SymbolicatedStackTrace(report.value)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithContentDescription(
+            appContext().getString(R.string.crash_detail_copy_stack_trace)
+        ).performClick()
+        composeRule.onNodeWithContentDescription(
+            appContext().getString(R.string.crash_detail_stack_trace_copied)
+        ).assertExists()
+
+        composeRule.runOnIdle {
+            report.value = SymbolicationReport(
+                status = SymbolicationStatus.PARTIALLY_SYMBOLICATED,
+                frames = listOf(
+                    SymbolicatedFrame(
+                        originalLine = "at a.b(SourceFile:2)",
+                        fileName = "Repository.kt",
+                        methodName = "com.example.Repository.second",
+                        lineNumber = 2,
+                        libraryName = "com.example",
+                        isSystem = false
+                    )
+                )
+            )
+        }
+
+        composeRule.onNodeWithContentDescription(
+            appContext().getString(R.string.crash_detail_copy_stack_trace)
+        ).assertExists()
+        composeRule.onNodeWithTag("crash_detail_copy_symbolicated_stack_trace_button").assertIsDisplayed()
     }
 
     private fun appContext(): android.content.Context =

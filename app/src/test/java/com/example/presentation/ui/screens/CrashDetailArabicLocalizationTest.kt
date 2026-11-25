@@ -38,6 +38,18 @@ class CrashDetailArabicLocalizationTest {
     }
 
     @Test
+    fun rawStackTraceHeaderUsesArabicLabel() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                StackTraceCard("at com.example.Repository.load(Repository.kt:42)")
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("تتبع المكدس // النظام").assertIsDisplayed()
+    }
+
+    @Test
     fun diagnosisBadgesUseArabicLabels() {
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {
