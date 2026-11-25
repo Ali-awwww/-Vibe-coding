@@ -3384,3 +3384,28 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 - CI for `f5edd0bda769a51099959a8cf281b034ad38172d` failed during Kotlin compilation because the source-context replacement had omitted the local `sourceContext` accumulator declaration. The failure was confirmed in the unit-test compile log at lines 694 and 712 of `CrashRepositoryImpl.kt`.
 - Restored the declaration immediately before the cancellation-aware lookup. The correction is committed with this register entry; the next CI run must validate it before any pass status is recorded.
+
+### 2026-11-26 — CrashDetail responsive metadata and partial-record UX
+
+**CI baseline closed**
+- Inspected the push-triggered workflows for HEAD `841a67eb0cfd58bd3dd425f5fa34119de515d90c`: Android Unit Tests run `45687097809`, Android Code Quality run `45687097847`, and Build Android APK run `45687098002` all reached `completed / success`.
+- The test job ran on JDK 21 and uploaded `unit-test-reports` (artifact `15057360590`). The quality job's lint step passed and uploaded `lint-results` (artifact `15056398375`). The APK workflow completed Debug and Release build, upload and cleanup steps; it uploaded Debug artifact `15057181447` and `CrashIntelligence-Release-APK-signed` artifact `15057096796`.
+- The release-signing workflow is tag-triggered (`v*`) or manually dispatched; this main-branch push did not create a release or tag.
+- The repository's recursive tree at this baseline contains no `AGENTS.md` / `agents.md`; root `AGENTS.md` is absent.
+
+**Implementation in this batch**
+- Replaced the resolved-state AssistChip's empty click callback with a non-interactive, semantically informational status surface.
+- Made CrashDetail metadata responsive: compact content uses a two-column first row plus a full-width app-version row; wider layouts retain three columns. The metadata remains content-wrapping rather than truncating device/OS/version values.
+- Applied shared Vibe surface, accent, text and spacing tokens to the crash header and stack-trace panel.
+- Blank stack traces now render an explicit localized unavailable state and do not offer a misleading copy action. The copy confirmation is keyed to the actual trace so it resets when evidence changes. The copy target now uses a 48 dp touch surface.
+
+**Regression coverage added**
+- Compose tests assert that resolved status has no click action, compact metadata uses the responsive layout, a missing trace has no copy affordance, and copy confirmation resets when the trace changes.
+
+**Verification boundary**
+- The preceding HEAD's three CI workflows are green; this new source/test batch has not yet run through CI at the time of this commit. No local Gradle run, emulator screenshot, RTL/LTR rendered review, large-font check or TalkBack run is claimed.
+- The dedicated Supabase project `hgfgbjomwhogpswpqusk` still reports `INACTIVE`; no attempt was made to start it and no production schema, RLS, Auth, Storage or data was changed. `qabasapp` was not accessed.
+- Crashes and CrashDetail remain open. The visual/device gate is still blocked by the unavailable Android SDK/ADB/device environment.
+
+**Persistent continuity**
+- Inspect the push-triggered unit-test, lint and Debug/Release APK runs for this commit to terminal status. Fix only failures supported by compiler, test or lint evidence; then continue the next independent Crashes/CrashDetail acceptance item without repeating already-green checks. Do not close either screen without fresh Arabic RTL, English LTR and device evidence.

@@ -656,6 +656,7 @@
     <string name="crash_detail_version">إصدار التطبيق</string>
     <string name="crash_detail_copy_stack_trace">نسخ تتبع المكدس</string>
     <string name="crash_detail_stack_trace_copied">تم نسخ تتبع المكدس</string>
+    <string name="crash_detail_stack_trace_unavailable">لم يُرفق تتبع المكدس بهذا التقرير.</string>
 
 
     <string name="crash_detail_symbolication_loading">جارٍ تحليل رموز تتبع المكدس…</string>

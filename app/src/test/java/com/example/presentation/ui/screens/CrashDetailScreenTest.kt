@@ -2,6 +2,12 @@ package com.example.presentation.ui.screens
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.example.domain.model.CrashReport
 import com.example.R
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertTrue
@@ -116,6 +122,78 @@ class CrashDetailScreenTest {
             .assertIsDisplayed()
             .performClick()
         assertTrue(started)
+    }
+
+    @Test
+    fun resolvedStatusIsInformationalAndMetadataAdaptsToCompactWidth() {
+        val crash = CrashReport(
+            id = "crash-compact",
+            projectId = "project-1",
+            exceptionType = "IllegalStateException",
+            message = "The operation could not be completed.",
+            deviceModel = "Pixel 9 Pro",
+            osVersion = "Android 16",
+            appVersion = "2.4.0",
+            isResolved = true
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                Box(Modifier.width(320.dp)) {
+                    CrashHeader(crash)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("crash_detail_resolved_status")
+            .assertIsDisplayed()
+            .assertDoesNotHaveClickAction()
+        composeRule.onNodeWithTag("crash_header_metadata_compact").assertIsDisplayed()
+        composeRule.onNodeWithTag("crash_header_metadata_wide").assertDoesNotExist()
+    }
+
+    @Test
+    fun missingStackTraceShowsUnavailableStateWithoutCopyAction() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                StackTraceCard("  ")
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("crash_detail_stack_trace_unavailable").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            appContext().getString(R.string.crash_detail_stack_trace_unavailable)
+        ).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            appContext().getString(R.string.crash_detail_copy_stack_trace)
+        ).assertDoesNotExist()
+    }
+
+    @Test
+    fun copyConfirmationResetsWhenStackTraceEvidenceChanges() {
+        val stackTrace = mutableStateOf("at Example.first(Example.kt:1)")
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                StackTraceCard(stackTrace.value)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithContentDescription(
+            appContext().getString(R.string.crash_detail_copy_stack_trace)
+        ).performClick()
+        composeRule.onNodeWithContentDescription(
+            appContext().getString(R.string.crash_detail_stack_trace_copied)
+        ).assertExists()
+
+        composeRule.runOnIdle {
+            stackTrace.value = "at Example.second(Example.kt:2)"
+        }
+        composeRule.onNodeWithContentDescription(
+            appContext().getString(R.string.crash_detail_copy_stack_trace)
+        ).assertExists()
     }
 
     private fun appContext(): android.content.Context =

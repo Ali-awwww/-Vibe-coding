@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 
 import androidx.compose.ui.res.stringResource
 import com.example.R
+import com.example.ui.theme.VibeDesignTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -290,34 +291,112 @@ internal fun CrashDetailUnavailableState(
 
 @Composable
 fun CrashHeader(crash: CrashReport) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
+        colors = CardDefaults.cardColors(containerColor = VibeDesignTokens.Color.SpacePanel),
+        border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.22f))
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SeverityBadge(crash.severity)
                 Spacer(Modifier.width(8.dp))
                 if (crash.isResolved) {
-                    AssistChip(
-                        onClick = {},
-                        label = { Text(stringResource(R.string.crashes_resolved)) },
-                        leadingIcon = { Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp)) }
-                    )
+                    Surface(
+                        modifier = Modifier.testTag("crash_detail_resolved_status"),
+                        color = VibeDesignTokens.Color.Success.copy(alpha = 0.14f),
+                        contentColor = VibeDesignTokens.Color.Success,
+                        shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text(
+                                stringResource(R.string.crashes_resolved),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Text(crash.exceptionType.takeIf { it.isNotBlank() } ?: stringResource(R.string.crashes_exception_unavailable), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(crash.message.takeIf { it.isNotBlank() } ?: stringResource(R.string.crashes_message_unavailable), style = MaterialTheme.typography.bodyMedium)
-            
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                InfoItem(label = stringResource(R.string.crash_detail_device), value = crash.deviceModel, modifier = Modifier.weight(1f))
-                InfoItem(label = stringResource(R.string.crash_detail_os), value = crash.osVersion, modifier = Modifier.weight(1f))
-                InfoItem(label = stringResource(R.string.crash_detail_version), value = crash.appVersion, modifier = Modifier.weight(1f))
+            Text(
+                crash.exceptionType.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.crashes_exception_unavailable),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = VibeDesignTokens.Color.TextPrimary
+            )
+            Text(
+                crash.message.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.crashes_message_unavailable),
+                style = MaterialTheme.typography.bodyMedium,
+                color = VibeDesignTokens.Color.TextMuted
+            )
+
+            HorizontalDivider(
+                color = VibeDesignTokens.Color.Grid,
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
+
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                if (maxWidth < 420.dp) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("crash_header_metadata_compact"),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            InfoItem(
+                                label = stringResource(R.string.crash_detail_device),
+                                value = crash.deviceModel,
+                                modifier = Modifier.weight(1f)
+                            )
+                            InfoItem(
+                                label = stringResource(R.string.crash_detail_os),
+                                value = crash.osVersion,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        InfoItem(
+                            label = stringResource(R.string.crash_detail_version),
+                            value = crash.appVersion,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("crash_header_metadata_wide"),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        InfoItem(
+                            label = stringResource(R.string.crash_detail_device),
+                            value = crash.deviceModel,
+                            modifier = Modifier.weight(1f)
+                        )
+                        InfoItem(
+                            label = stringResource(R.string.crash_detail_os),
+                            value = crash.osVersion,
+                            modifier = Modifier.weight(1f)
+                        )
+                        InfoItem(
+                            label = stringResource(R.string.crash_detail_version),
+                            value = crash.appVersion,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
         }
     }
 }
-
 @Composable
 fun InfoItem(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
@@ -357,13 +436,41 @@ fun SeverityBadge(severity: Severity) {
 
 @Composable
 fun StackTraceCard(stackTrace: String) {
+    if (stackTrace.isBlank()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("crash_detail_stack_trace_unavailable"),
+            shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
+            colors = CardDefaults.cardColors(containerColor = VibeDesignTokens.Color.SpaceBackground),
+            border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.18f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = "STACK_TRACE // SYSTEM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeDesignTokens.Color.TextMuted,
+                    fontFamily = JetBrainsMono
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.crash_detail_stack_trace_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VibeDesignTokens.Color.TextMuted
+                )
+            }
+        }
+        return
+    }
+
     val clipboardManager = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
+    var copied by remember(stackTrace) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-        border = BorderStroke(1.dp, Color(0xFF30363D))
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
+        colors = CardDefaults.cardColors(containerColor = VibeDesignTokens.Color.SpaceBackground),
+        border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.18f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -372,11 +479,15 @@ fun StackTraceCard(stackTrace: String) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(modifier = Modifier.size(8.dp).background(Color(0xFFF85149), CircleShape))
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(VibeDesignTokens.Color.Error, CircleShape)
+                    )
                     Text(
                         text = "STACK_TRACE // SYSTEM",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF8B949E),
+                        color = VibeDesignTokens.Color.TextMuted,
                         fontFamily = JetBrainsMono
                     )
                 }
@@ -385,17 +496,25 @@ fun StackTraceCard(stackTrace: String) {
                         clipboardManager.setText(AnnotatedString(stackTrace))
                         copied = true
                     },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("crash_detail_copy_stack_trace_button")
                 ) {
                     Icon(
                         if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
-                        contentDescription = stringResource(if (copied) R.string.crash_detail_stack_trace_copied else R.string.crash_detail_copy_stack_trace),
-                        tint = if (copied) Color(0xFF3FB950) else Color(0xFF8B949E),
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = stringResource(
+                            if (copied) R.string.crash_detail_stack_trace_copied
+                            else R.string.crash_detail_copy_stack_trace
+                        ),
+                        tint = if (copied) VibeDesignTokens.Color.Success else VibeDesignTokens.Color.TextMuted,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
-            HorizontalDivider(color = Color(0xFF30363D), modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                color = VibeDesignTokens.Color.Grid,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Box(
                     modifier = Modifier
@@ -404,7 +523,7 @@ fun StackTraceCard(stackTrace: String) {
                 ) {
                     Text(
                         text = stackTrace,
-                        color = Color(0xFFE6EDF3),
+                        color = VibeDesignTokens.Color.TextPrimary,
                         fontFamily = JetBrainsMono,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
@@ -414,7 +533,6 @@ fun StackTraceCard(stackTrace: String) {
         }
     }
 }
-
 @Composable
 fun DiagnosisCard(diagnosis: AIDiagnosis, navController: NavController, crash: CrashReport?) {
     Card(
