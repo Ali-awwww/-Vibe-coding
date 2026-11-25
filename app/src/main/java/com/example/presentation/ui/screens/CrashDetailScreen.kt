@@ -866,6 +866,7 @@ fun SymbolicatedStackTrace(report: SymbolicationReport) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SymbolicatedFrameItem(frame: SymbolicatedFrame) {
     val methodName = frame.methodName?.takeIf { it.isNotBlank() }

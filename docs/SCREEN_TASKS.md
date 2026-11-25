@@ -3538,3 +3538,16 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The preceding UX commit `656d238b695b43e0aceceb498eee37758e844fbd` has its unit-test, lint and Debug/Release APK workflows in progress at the time of this source review; no pass is inferred for it or this follow-up.
 - No live Supabase integration or device/emulator verification is claimed. Keep the Crashes/CrashDetail screen gate open pending terminal CI and rendered Arabic RTL / English LTR, compact-screen and accessibility evidence.
 - Next: inspect both commit-triggered CI sets to terminal status and fix only failures supported by logs. Then continue the next independent CrashDetail acceptance gap.
+
+### 2026-11-26 — Compose FlowRow opt-in compile correction
+
+**CI finding**
+- All three workflows for commit `656d238b695b43e0aceceb498eee37758e844fbd` reached terminal failure because Kotlin compilation rejected the experimental `FlowRow` API at `CrashDetailScreen.kt:874` without an explicit opt-in. Unit tests did not execute; lint and APK jobs stopped at the same production compile error.
+- Commit `6719d5bca2261f87c1eb3b6b2bad2b1a702689d1` included the same FlowRow call and therefore also requires this compile correction; its three workflow runs were still in progress when inspected.
+
+**Correction**
+- Added the required `@OptIn(ExperimentalLayoutApi::class)` only to `SymbolicatedFrameItem`, the composable that uses FlowRow. No test assertions or production behavior were weakened.
+
+**Verification boundary**
+- The opt-in correction is committed below; its unit-test, lint and Debug/Release APK workflows must reach terminal status before accepting the UI change. The previous FlowRow commits are recorded as failed compile attempts, not successful verification.
+- Continue to keep the screen open for rendered RTL/LTR, compact-device and accessibility verification.
