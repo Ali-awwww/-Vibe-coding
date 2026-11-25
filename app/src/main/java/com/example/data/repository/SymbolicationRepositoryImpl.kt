@@ -13,7 +13,7 @@ class SymbolicationRepositoryImpl(
     override fun getDebugSymbols(projectId: String): Flow<List<DebugSymbolFile>> =
         crashDao.getDebugSymbolsForProject(projectId)
 
-    override suspend fun uploadDebugSymbol(file: DebugSymbolFile): Result<Unit> = runCatching {
+    override suspend fun uploadDebugSymbol(file: DebugSymbolFile): Result<Unit> = runCatchingCancellable {
         require(file.applicationId.isNotBlank()) { "An application is required." }
         require(file.projectId.isNotBlank()) { "A project is required." }
         require(file.appVersion.isNotBlank()) { "An application version is required." }
@@ -38,12 +38,12 @@ class SymbolicationRepositoryImpl(
         crashDao.insertDebugSymbol(newFile.copy(status = SymbolicationStatus.PENDING))
     }
 
-    override suspend fun deleteDebugSymbol(id: String): Result<Unit> = runCatching {
+    override suspend fun deleteDebugSymbol(id: String): Result<Unit> = runCatchingCancellable {
         require(id.isNotBlank()) { "A symbol artifact ID is required." }
         crashDao.deleteDebugSymbol(id)
     }
 
-    override suspend fun symbolicate(crashReport: CrashReport): Result<SymbolicationReport> = runCatching {
+    override suspend fun symbolicate(crashReport: CrashReport): Result<SymbolicationReport> = runCatchingCancellable {
         val matchingSymbols = crashDao.getMatchingDebugSymbols(crashReport.applicationId, crashReport.appVersion)
             .sortedByDescending { it.uploadTimestamp }
 

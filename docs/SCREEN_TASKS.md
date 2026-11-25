@@ -3435,3 +3435,21 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Replaced that assertion with the supported semantics matcher form `assert(!hasClickAction())`, retaining the non-interactive resolved-status regression check.
 - The mapper follow-up commit `4001a5de1542175ea3292b605c3ba2e15620d252` was already pushed; its unit-test workflow status is being checked separately. No weakening of the production behavior or test intent was made.
 - Next: inspect the new unit-test/lint/APK workflows and use their compiler/test logs to resolve any remaining issues. Screen and visual/device gates remain open.
+
+### 2026-11-26 — CI evidence and symbolication cancellation safety
+
+**CI findings for the CrashDetail/provider batch**
+- The first two unit-test attempts (`ad6a82d` and `4001a5d`) did not validate assertions because the test source still used the unsupported `assertDoesNotHaveClickAction` extension. The corrected matcher is now on `main` as `d3b3b239`.
+- The corrected unit-test run `45707529296` compiled and executed 226 tests. It reported 37 failures, all attributable to Maven Central HTTP 429 responses while Robolectric fetched `android-all-instrumented` (31 failures on Android 16 and 6 on Android 14). No assertion failures were reported outside those dependency-download failures.
+- The four new `CrashReportSourceMapperTest` cases executed and passed (4/4). The new Robolectric-backed CrashDetail Compose tests could not execute because their Android runtime artifact download was rate-limited.
+- Lint and Debug/Release APK workflows for `d3b3b239` were still running at this entry; no terminal success is inferred.
+
+**Confirmed lifecycle defect**
+- `SymbolicationRepositoryImpl.uploadDebugSymbol`, `deleteDebugSymbol` and `symbolicate` wrapped suspending DAO work in Kotlin `runCatching`, which captures `CancellationException`. CrashDetail could therefore receive cancellation as an ordinary `Result.failure` rather than allowing navigation/replacement cancellation to terminate the operation.
+
+**Correction and regression test**
+- Switched all three suspend operations to the existing same-package `runCatchingCancellable` helper, which rethrows cancellation and captures only ordinary failures.
+- Added a non-Robolectric regression test that injects a cancellation-throwing `CrashDao` proxy into each operation and asserts that cancellation escapes the repository boundary.
+
+**Persistent continuity**
+- Inspect lint/APK runs for `d3b3b239` to terminal status. Once concurrent runs finish and Maven Central's 429 window has cleared, rerun only the failed unit-test job for the latest main commit; do not weaken Robolectric coverage or mark the UI tests passed until they execute. Then validate the new cancellation regression in CI and continue the Crashes/CrashDetail route audit. Device RTL/LTR, TalkBack and emulator gates remain open.
