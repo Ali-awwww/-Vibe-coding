@@ -48,7 +48,7 @@ class SymbolicationRepositoryImpl(
             .sortedByDescending { it.uploadTimestamp }
 
         if (matchingSymbols.isEmpty()) {
-            return@runCatching SymbolicationReport(
+            return@runCatchingCancellable SymbolicationReport(
                 status = SymbolicationStatus.MISSING_DEBUG_SYMBOLS,
                 frames = emptyList(),
                 error = "No mapping files match application version ${crashReport.appVersion}."
@@ -57,7 +57,7 @@ class SymbolicationRepositoryImpl(
 
         val selected = matchingSymbols.firstOrNull {
             it.type == SymbolFileType.ANDROID_PROGUARD || it.type == SymbolFileType.ANDROID_R8
-        } ?: return@runCatching SymbolicationReport(
+        } ?: return@runCatchingCancellable SymbolicationReport(
             status = SymbolicationStatus.PROCESSING_FAILED,
             frames = crashReport.stackTrace.lines().map(::unresolvedFrame),
             error = "The stored symbol format is not supported by this client."
@@ -66,7 +66,7 @@ class SymbolicationRepositoryImpl(
         val mappings = ProguardMappingParser.parse(selected.fileContent)
         if (mappings.isEmpty()) {
             crashDao.updateDebugSymbolStatus(selected.id, SymbolicationStatus.PROCESSING_FAILED)
-            return@runCatching SymbolicationReport(
+            return@runCatchingCancellable SymbolicationReport(
                 status = SymbolicationStatus.PROCESSING_FAILED,
                 frames = crashReport.stackTrace.lines().map(::unresolvedFrame),
                 error = "The stored ProGuard/R8 mapping could not be parsed."

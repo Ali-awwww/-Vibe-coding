@@ -3453,3 +3453,9 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Persistent continuity**
 - Inspect lint/APK runs for `d3b3b239` to terminal status. Once concurrent runs finish and Maven Central's 429 window has cleared, rerun only the failed unit-test job for the latest main commit; do not weaken Robolectric coverage or mark the UI tests passed until they execute. Then validate the new cancellation regression in CI and continue the Crashes/CrashDetail route audit. Device RTL/LTR, TalkBack and emulator gates remain open.
+
+### 2026-11-26 — Symbolication cancellation label compile correction
+
+- Build Android APK run `45708238405` reached `compileDebugKotlin` and failed on three unresolved lambda labels in `SymbolicationRepositoryImpl.symbolicate`. The suspend operations had been switched to `runCatchingCancellable`, but the early-return labels still named the old `runCatching` lambda.
+- Updated all three early-return labels to `return@runCatchingCancellable`. The cancellation contract and return values are unchanged; this is the required compile correction.
+- The cancellation regression test was added in the preceding commit but has not yet executed. This correction commit must pass main compilation, unit tests, lint and Debug/Release packaging before the cancellation change can be accepted.
