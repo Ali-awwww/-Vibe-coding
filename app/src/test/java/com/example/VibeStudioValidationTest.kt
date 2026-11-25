@@ -178,6 +178,32 @@ class VibeStudioValidationTest {
     }
 
     @Test
+    fun simulatedCrashKeepsInternalQaProvenanceInTheLocalDatabase() = runTest(testDispatcher) {
+        val workspaceId = "ws-simulated-crash"
+        vibeStudioRepository.createWorkspace(
+            Workspace(id = workspaceId, ownerId = "user-1", name = "Sandbox")
+        )
+
+        val result = vibeStudioRepository.recordSimulatedCrash(
+            workspaceId = workspaceId,
+            exceptionType = "IllegalStateException",
+            message = "Simulated failure",
+            stackTrace = "at Sandbox.run(Sandbox.kt:1)"
+        )
+
+        assertTrue(result.isSuccess)
+        val report = result.getOrThrow()
+        assertEquals(IntegrationType.INTERNAL_QA, report.source)
+        assertEquals("[SIMULATED] Simulated failure", report.message)
+
+        val persisted = database.crashDao().getCrashDetails(report.id).first()
+        assertNotNull(persisted)
+        assertEquals(IntegrationType.INTERNAL_QA, persisted?.source)
+        assertEquals(workspaceId, persisted?.projectId)
+        assertEquals(workspaceId, persisted?.applicationId)
+    }
+
+    @Test
     fun devServerDoesNotReportRunningWithoutAnExecutionBackend() = runTest(testDispatcher) {
         val workspaceId = "ws-runtime-unavailable"
         vibeStudioRepository.createWorkspace(

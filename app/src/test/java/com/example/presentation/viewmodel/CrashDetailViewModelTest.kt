@@ -111,6 +111,39 @@ class CrashDetailViewModelTest {
     }
 
     @Test
+    fun changingCrashIdLoadsTheRequestedRecordAndIgnoresOldRouteUpdates() = runTest {
+        val firstCrash = testCrash()
+        val secondCrash = testCrash().copy(id = "crash-2", message = "Second crash")
+        val firstDetails = MutableStateFlow<CrashReport?>(firstCrash)
+        val secondDetails = MutableStateFlow<CrashReport?>(secondCrash)
+        val requestedIds = mutableListOf<String>()
+        val repository = object : CrashRepository by FakeCrashRepository() {
+            override fun getCrashDetails(crashId: String): Flow<CrashReport?> {
+                requestedIds += crashId
+                return when (crashId) {
+                    firstCrash.id -> firstDetails
+                    secondCrash.id -> secondDetails
+                    else -> flowOf(null)
+                }
+            }
+        }
+        val viewModel = CrashDetailViewModel(repository, RecordingSymbolicationRepository())
+
+        viewModel.loadCrash(firstCrash.id)
+        advanceUntilIdle()
+        assertEquals(firstCrash.id, viewModel.uiState.value.crash?.id)
+
+        viewModel.loadCrash(secondCrash.id)
+        advanceUntilIdle()
+        firstDetails.value = firstCrash.copy(message = "Stale update from previous route")
+        advanceUntilIdle()
+
+        assertEquals(listOf(firstCrash.id, secondCrash.id), requestedIds)
+        assertEquals(secondCrash.id, viewModel.uiState.value.crash?.id)
+        assertEquals(secondCrash.message, viewModel.uiState.value.crash?.message)
+    }
+
+    @Test
     fun thrownSymbolicationFailureIsVisibleAndRetryable() = runTest {
         val crash = testCrash()
         val symbolication = RecordingSymbolicationRepository().apply {

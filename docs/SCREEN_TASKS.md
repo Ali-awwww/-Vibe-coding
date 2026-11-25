@@ -3645,3 +3645,21 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - This test correction is committed with this entry. CI for the new commit must reach terminal status before this regression is accepted.
 - The preceding symbolication and step-count commits `fa49dd83`, `dfe6b6c8` and `c76ecc17` each reached success in Unit Tests, Lint and APK workflows. On 3279, only the unit-test workflow failed.
 - No Android emulator/device, rendered RTL/LTR, TalkBack, IME/lifecycle or live Supabase verification is claimed. Crashes/CrashDetail remain open; the next independent Crashes task is source-provenance coverage across supported intake paths and exact crash-detail navigation/lifecycle.
+
+
+### 2026-11-26 — Crash source provenance and CrashDetail route lifecycle
+
+**Confirmed source-provenance gap**
+- Sentry and Bugsnag payload mapping already stamps the provider enum and has mapper tests. The local Vibe Studio `recordSimulatedCrash` path created a persisted sandbox report without a source, so Crashes displayed it as provenance unavailable even though the origin was known.
+- Added `INTERNAL_QA` provenance to that explicitly simulated/local-only record and a Robolectric/Room regression asserting the returned and persisted record retain that source and workspace scope.
+- Webhook review: `validateWebhook` verifies project ownership, rate limits and HMAC only; it does not parse or persist a crash payload. `syncCrashes` rejects WEBHOOK as unsupported and marks the integration ERROR. Do not treat a signature check as webhook ingestion or display it as connected. A real authenticated webhook receiver and payload contract remain BLOCKED; Firebase Crashlytics likewise remains unsupported pending a trusted backend proxy.
+
+**CrashDetail route/lifecycle coverage**
+- CrashesScreen navigates with the exact `crash.id` via `Screen.CrashDetail(crash.id)`; AppNavigation decodes that route and passes its ID to CrashDetailScreen.
+- Added a ViewModel regression for switching from one crash ID to another: the new route loads its own record, the previous subscription is cancelled, and a later update from the old record cannot overwrite the current detail state.
+
+**Verification boundary and continuity**
+- Commit `83ac8a95e7a39c5657c46f94358cd20ab708f62b` fixed the stale 25-record retry fixture; its Unit Tests and Lint workflows were still in progress when this batch was prepared, while the Debug/Release APK workflow had succeeded. No test result is inferred here.
+- This source and route-lifecycle batch is committed with its regressions. CI must reach terminal success before acceptance.
+- Emulator/device rendered review, Arabic RTL/English LTR screenshots, TalkBack, IME/lifecycle device checks and live Supabase verification remain unverified/blocked. Crashes and CrashDetail remain open.
+- Next: inspect CI for both commits to terminal status, then continue provider persistence/error-path tests and the remaining CrashDetail interaction states without treating static route wiring as visual sign-off.
