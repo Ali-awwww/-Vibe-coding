@@ -3523,3 +3523,18 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The new source, resources and tests are being committed together with this record. Their CI result is pending; the 433-test result above applies only to baseline `b839847`.
 - Local Gradle, emulator/device screenshots, RTL/LTR visual review, IME, TalkBack and lifecycle checks remain unavailable here because this execution environment has no Gradle executable, Android SDK/ANDROID_HOME, ADB or attached device. Keep Crashes and CrashDetail open; do not treat source/CI coverage as visual sign-off.
 - Next: inspect the push-triggered unit-test, lint and Debug/Release APK runs for this commit to terminal status. Fix only evidence-backed failures, then continue the remaining independent Crashes/CrashDetail criteria. Recheck the Supabase prerequisite only after its status changes; do not modify production.
+
+### 2026-11-26 — Render partial symbolication evidence in CrashDetail
+
+**Confirmed functional defect**
+- `SymbolicationRepositoryImpl` returns `PARTIALLY_SYMBOLICATED` when at least one application frame is resolved and others are not.
+- `CrashDetailScreen` rendered the symbolicated report only for `SUCCESSFULLY_SYMBOLICATED`; a legitimate partial result therefore fell back to the raw trace and hid the resolved method/library evidence even though the status banner reported partial success.
+
+**Correction and regression coverage**
+- Added `CrashTraceContent` as the single display decision: both fully and partially symbolicated reports render their frame evidence; missing-symbol, mismatch, pending and processing-failure states retain the original trace and its copy action.
+- Added Compose regressions proving a partial report displays both resolved and unresolved frames without substituting the raw trace, while a failed report preserves the original trace and copy affordance.
+
+**Verification boundary**
+- The preceding UX commit `656d238b695b43e0aceceb498eee37758e844fbd` has its unit-test, lint and Debug/Release APK workflows in progress at the time of this source review; no pass is inferred for it or this follow-up.
+- No live Supabase integration or device/emulator verification is claimed. Keep the Crashes/CrashDetail screen gate open pending terminal CI and rendered Arabic RTL / English LTR, compact-screen and accessibility evidence.
+- Next: inspect both commit-triggered CI sets to terminal status and fix only failures supported by logs. Then continue the next independent CrashDetail acceptance gap.

@@ -138,11 +138,10 @@ fun CrashDetailScreen(
                         fontWeight = FontWeight.Bold
                     )
 
-                    if (uiState.symbolication?.status == SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED) {
-                        SymbolicatedStackTrace(uiState.symbolication!!)
-                    } else {
-                        StackTraceCard(crash.stackTrace)
-                    }
+                    CrashTraceContent(
+                        report = uiState.symbolication,
+                        rawStackTrace = crash.stackTrace
+                    )
 
                     Spacer(Modifier.height(8.dp))
 
@@ -808,6 +807,20 @@ fun SymbolicationStatusBanner(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun CrashTraceContent(report: SymbolicationReport?, rawStackTrace: String) {
+    val displayableReport = report?.takeIf {
+        it.status == SymbolicationStatus.SUCCESSFULLY_SYMBOLICATED ||
+            it.status == SymbolicationStatus.PARTIALLY_SYMBOLICATED
+    }
+
+    if (displayableReport != null) {
+        SymbolicatedStackTrace(displayableReport)
+    } else {
+        StackTraceCard(rawStackTrace)
     }
 }
 

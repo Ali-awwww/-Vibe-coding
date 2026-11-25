@@ -344,6 +344,67 @@ class CrashDetailScreenTest {
         composeRule.onNodeWithText("com.example.crash").assertIsDisplayed()
     }
 
+    @Test
+    fun partialSymbolicationShowsResolvedAndUnresolvedFrames() {
+        val report = SymbolicationReport(
+            status = SymbolicationStatus.PARTIALLY_SYMBOLICATED,
+            frames = listOf(
+                SymbolicatedFrame(
+                    originalLine = "at a.b(SourceFile:1)",
+                    fileName = "CrashRepositoryImpl.kt",
+                    methodName = "com.example.crash.CrashRepositoryImpl.load",
+                    lineNumber = 42,
+                    libraryName = "com.example.crash",
+                    isSystem = false
+                ),
+                SymbolicatedFrame(
+                    originalLine = "at x.y(Unknown Source)",
+                    fileName = null,
+                    methodName = null,
+                    lineNumber = null,
+                    libraryName = null,
+                    isSystem = false
+                )
+            ),
+            error = "Some application frames could not be resolved."
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                CrashTraceContent(
+                    report = report,
+                    rawStackTrace = "RAW_TRACE_FALLBACK_SHOULD_NOT_REPLACE_PARTIAL_FRAMES"
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("com.example.crash.CrashRepositoryImpl.load").assertIsDisplayed()
+        composeRule.onNodeWithText("at x.y(Unknown Source)").assertIsDisplayed()
+        composeRule.onNodeWithText("RAW_TRACE_FALLBACK_SHOULD_NOT_REPLACE_PARTIAL_FRAMES").assertDoesNotExist()
+    }
+
+    @Test
+    fun failedSymbolicationKeepsOriginalTraceAndCopyAction() {
+        val report = SymbolicationReport(
+            status = SymbolicationStatus.PROCESSING_FAILED,
+            frames = emptyList(),
+            error = "No application frames were resolved."
+        )
+        val originalTrace = "at com.example.crash.Repository.load(Repository.kt:42)"
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                CrashTraceContent(report = report, rawStackTrace = originalTrace)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(originalTrace).assertIsDisplayed()
+        composeRule.onNodeWithTag("crash_detail_copy_stack_trace_button").assertIsDisplayed()
+        composeRule.onNodeWithText("SYMBOLICATED TRACE // SYSTEM").assertDoesNotExist()
+    }
+
     private fun appContext(): android.content.Context =
         androidx.test.core.app.ApplicationProvider.getApplicationContext()
 
