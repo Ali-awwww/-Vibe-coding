@@ -3746,3 +3746,16 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Verification boundary**
 - CI for the corrected test suite and the later source-isolation commit is pending. The earlier 83ac and 780 commits passed all workflows; 780 reported 449 tests, 0 failures and 4 skipped, with Debug and signed Release APK artifacts uploaded.
 - Next: verify the corrected UI tests, timestamp UI and workspace-isolation regression in the terminal CI results before advancing to FixAssistant.
+
+
+### 2026-11-26 — Pass the authenticated identity into crash source resolution
+
+**CI root cause**
+- The first workspace-isolation commit and its immediate test-name correction did not compile: the resolver signature had been changed to require the authenticated `userId`, but the orchestration call site still invoked the old one-argument form. GitHub Actions reported `No value passed for parameter 'userId'` at `CrashInvestigationOrchestrator.kt:187`. This was a missed call-site update, not a backend failure.
+
+**Correction**
+- The source lookup now passes the exact authenticated identity from `ModeOrchestrator.execute` into the owner check. No fallback workspace or inferred owner is used.
+
+**Additional CI findings**
+- The `a458a7a5` UI test run completed 453 tests with 3 failures (4 skipped): two off-screen second-header assertions and one merged-semantics lookup. The `e8199965` test correction uses state replacement and unmerged semantics; its CI result is pending.
+- The source resolver commit `a991bda7` and its test-name correction `d307af2e` failed to compile on the missing `userId` argument. The current call-site correction is committed here; this commit's Unit Tests, Lint and APK workflows must reach terminal status.

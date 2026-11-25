@@ -184,7 +184,7 @@ class CrashInvestigationOrchestrator(
         onUpdate(execution)
 
         // 5. Step 3: Match Version Code & Gather Project Source
-        val matchingFileSnippet = retrieveMatchingCode(crashReport)
+        val matchingFileSnippet = retrieveMatchingCode(crashReport, userId)
 
         // 6. Step 4: Source Code Investigator (ربط الانهيار بالكود الحقيقي)
         val step4 = ExecutionStep(
