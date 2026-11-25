@@ -694,11 +694,17 @@ fun DiagnosisCard(diagnosis: AIDiagnosis, navController: NavController, crash: C
 
 @Composable
 fun CertaintyBadge(certainty: DiagnosisCertainty) {
-    val color = when(certainty) {
+    val color = when (certainty) {
         DiagnosisCertainty.CONFIRMED -> Color(0xFF2E7D32)
         DiagnosisCertainty.HIGHLY_LIKELY -> Color(0xFF1976D2)
         DiagnosisCertainty.POSSIBLE -> Color(0xFFFF9800)
         DiagnosisCertainty.UNKNOWN -> Color.Gray
+    }
+    val labelRes = when (certainty) {
+        DiagnosisCertainty.CONFIRMED -> R.string.diagnosis_certainty_confirmed
+        DiagnosisCertainty.HIGHLY_LIKELY -> R.string.diagnosis_certainty_highly_likely
+        DiagnosisCertainty.POSSIBLE -> R.string.diagnosis_certainty_possible
+        DiagnosisCertainty.UNKNOWN -> R.string.diagnosis_certainty_unknown
     }
     Surface(
         color = color.copy(alpha = 0.1f),
@@ -707,7 +713,7 @@ fun CertaintyBadge(certainty: DiagnosisCertainty) {
         modifier = Modifier.padding(top = 4.dp)
     ) {
         Text(
-            text = certainty.name,
+            text = stringResource(labelRes),
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             fontSize = 9.sp,
@@ -715,7 +721,6 @@ fun CertaintyBadge(certainty: DiagnosisCertainty) {
         )
     }
 }
-
 @Composable
 fun DiagnosisSection(title: String, content: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -865,20 +870,36 @@ private fun String.capitalize() = replaceFirstChar { if (it.isLowerCase()) it.ti
 
 @Composable
 fun CategoryBadge(category: com.example.domain.model.ErrorCategory) {
+    val labelRes = when (category) {
+        com.example.domain.model.ErrorCategory.NULL_POINTER_EXCEPTION -> R.string.error_category_null_pointer_exception
+        com.example.domain.model.ErrorCategory.OUT_OF_MEMORY -> R.string.error_category_out_of_memory
+        com.example.domain.model.ErrorCategory.NETWORK_ERROR -> R.string.error_category_network_error
+        com.example.domain.model.ErrorCategory.API_ERROR -> R.string.error_category_api_error
+        com.example.domain.model.ErrorCategory.DATABASE_ERROR -> R.string.error_category_database_error
+        com.example.domain.model.ErrorCategory.ANR -> R.string.error_category_anr
+        com.example.domain.model.ErrorCategory.UI_THREAD_BLOCKING -> R.string.error_category_ui_thread_blocking
+        com.example.domain.model.ErrorCategory.NATIVE_CRASH -> R.string.error_category_native_crash
+        com.example.domain.model.ErrorCategory.MEMORY_LEAK -> R.string.error_category_memory_leak
+        com.example.domain.model.ErrorCategory.DEPENDENCY_CONFLICT -> R.string.error_category_dependency_conflict
+        com.example.domain.model.ErrorCategory.PERMISSION_ERROR -> R.string.error_category_permission_error
+        com.example.domain.model.ErrorCategory.RUNTIME_EXCEPTION -> R.string.error_category_runtime_exception
+        com.example.domain.model.ErrorCategory.FATAL_EXCEPTION -> R.string.error_category_fatal_exception
+        com.example.domain.model.ErrorCategory.UNKNOWN_ERROR -> R.string.error_category_unknown_error
+        com.example.domain.model.ErrorCategory.CUSTOM -> R.string.error_category_custom
+    }
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
         contentColor = MaterialTheme.colorScheme.primary,
         shape = MaterialTheme.shapes.extraSmall
     ) {
         Text(
-            text = category.name.replace("_", " "),
+            text = stringResource(labelRes),
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             fontSize = 10.sp
         )
     }
 }
-
 @Composable
 fun CrashInvestigationTeamSection(
     isInvestigating: Boolean,

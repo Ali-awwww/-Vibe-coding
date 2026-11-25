@@ -3459,3 +3459,18 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Build Android APK run `45708238405` reached `compileDebugKotlin` and failed on three unresolved lambda labels in `SymbolicationRepositoryImpl.symbolicate`. The suspend operations had been switched to `runCatchingCancellable`, but the early-return labels still named the old `runCatching` lambda.
 - Updated all three early-return labels to `return@runCatchingCancellable`. The cancellation contract and return values are unchanged; this is the required compile correction.
 - The cancellation regression test was added in the preceding commit but has not yet executed. This correction commit must pass main compilation, unit tests, lint and Debug/Release packaging before the cancellation change can be accepted.
+
+### 2026-11-26 — Crash diagnosis badges localized for Arabic and English
+
+**Confirmed UI defect**
+- CrashDetail rendered `DiagnosisCertainty.name` and `ErrorCategory.name` directly, exposing enum identifiers such as `HIGHLY_LIKELY` and `NULL_POINTER_EXCEPTION` in user-facing diagnosis badges instead of translated labels.
+
+**Fix**
+- Added exhaustive resource mappings for all four diagnosis-certainty values and all fifteen error categories.
+- Added English and Arabic strings; badges now resolve labels through `stringResource` and no longer expose raw enum names.
+
+**Regression coverage**
+- Added Compose assertions for representative English and Arabic certainty/category labels. The Arabic test uses an Arabic Robolectric resource configuration; execution still depends on the same Robolectric runtime artifact that was rate-limited in the previous CI attempt.
+
+**Verification boundary**
+- The latest code build/lint/test set for `80ed6635` is still running at this entry. No result is inferred. Crashes/CrashDetail remain open until CI is green and device-based Arabic RTL / English LTR, compact layout, accessibility and lifecycle checks have fresh evidence.

@@ -3,11 +3,14 @@ package com.example.presentation.ui.screens
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.CrashReport
+import com.example.domain.model.DiagnosisCertainty
+import com.example.domain.model.ErrorCategory
 import com.example.R
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertTrue
@@ -194,6 +197,22 @@ class CrashDetailScreenTest {
         composeRule.onNodeWithContentDescription(
             appContext().getString(R.string.crash_detail_copy_stack_trace)
         ).assertExists()
+    }
+
+    @Test
+    fun diagnosisBadgesUseLocalizedEnglishLabels() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                Column {
+                    CertaintyBadge(DiagnosisCertainty.HIGHLY_LIKELY)
+                    CategoryBadge(ErrorCategory.NULL_POINTER_EXCEPTION)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Highly likely").assertIsDisplayed()
+        composeRule.onNodeWithText("Null pointer exception").assertIsDisplayed()
     }
 
     private fun appContext(): android.content.Context =
