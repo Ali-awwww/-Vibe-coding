@@ -129,6 +129,7 @@ class CrashDetailScreenTest {
         }
         composeRule.waitForIdle()
 
+        composeRule.onNodeWithText("Start in-depth team investigation (9 steps)").assertIsDisplayed()
         composeRule.onNodeWithText(appContext().getString(R.string.crash_team_start))
             .assertIsDisplayed()
             .performClick()

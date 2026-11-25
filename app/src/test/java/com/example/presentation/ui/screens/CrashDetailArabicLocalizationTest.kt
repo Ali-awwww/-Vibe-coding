@@ -77,6 +77,23 @@ class CrashDetailArabicLocalizationTest {
     }
 
     @Test
+    fun crashTeamStartUsesNineStepArabicLabel() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                CrashInvestigationTeamSection(
+                    isInvestigating = false,
+                    teamExecution = null,
+                    onStartInvestigation = {},
+                    onViewReport = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("بدء التحقيق المعمق بواسطة الفريق (9 خطوات)").assertIsDisplayed()
+    }
+
+    @Test
     fun diagnosisBadgesUseArabicLabels() {
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {

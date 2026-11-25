@@ -3602,3 +3602,14 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - This clipboard-content fix is committed with its regression test and this record; its CI is pending.
 - Crashes/CrashDetail remain open. No emulator/device visual, TalkBack, IME/lifecycle or live Supabase verification is claimed.
 - Next: inspect the fa49dd83 and new commit workflows to terminal status, fix only logged failures, then continue the remaining CrashDetail acceptance criteria.
+
+### 2026-11-26 — Align CrashDetail investigation step counts
+
+**Confirmed UI inconsistency**
+- The team section described nine AI models and its progress resource counted completion out of nine, while the start/running labels promised ten steps.
+- Updated the English and Arabic start/running copy to nine steps, matching the nine roles and the progress denominator. Added exact English and Arabic Compose assertions.
+
+**CI continuity**
+- Commits 0185166f and 1ec4268d have all three workflows terminal-success; 1ec includes 441 tests, 0 failures and 4 skipped, plus successful lint and Debug/Release APK artifacts.
+- Commits fa49dd83 and dfe6b6c have their unit-test, lint and APK workflows in progress at this entry. Their results are not inferred.
+- This step-count correction and its tests are committed below; inspect its CI to terminal status before accepting it.
