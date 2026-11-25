@@ -3567,3 +3567,20 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Commit `0185166f9c38be5e72947a61f9786e10835691d3` has unit-test, lint and APK workflows in progress at the time of this follow-up; its result is not inferred. The earlier FlowRow compile failures and opt-in correction are recorded in the preceding entries.
 - This follow-up's checks are pending. No emulator/device, TalkBack, RTL/LTR screenshot or live Supabase verification is claimed. Keep the screen open.
 - Next: inspect both commit-triggered CI sets to terminal status, repair any evidence-backed compiler/test/lint failure, then continue the remaining Crashes/CrashDetail criteria.
+
+### 2026-11-26 — CI evidence and localized symbolication status details
+
+**CI results verified**
+- Commit 0185166f9c38be5e72947a61f9786e10835691d3: all three workflows reached terminal success. Unit tests: **439 passed, 0 failed, 4 skipped**; CrashDetailScreenTest 16/16, Arabic localization 2/2 and CrashDetailViewModelTest 7/7. Lint succeeded; its report contains 202 project-wide warnings and no CrashDetailScreen.kt finding. Debug APK artifact 15068136627 and signed Release APK artifact 15067888011 were uploaded.
+- Commit 1ec4268d8a5762d0cb839d37d7155fe62cc30693: unit tests succeeded with **441 passed, 0 failed, 4 skipped**; CrashDetailScreenTest 17/17 and Arabic localization 3/3. Debug and signed Release APK build steps succeeded and artifacts 15068960416 / 15068521815 were uploaded. At this entry, the build workflow was still completing post-actions and the lint job was still running; do not mark those two workflows terminal-success yet.
+- The earlier FlowRow commits 656d238b and 6719d5bc failed their CI workflows. The 656d logs identify the missing ExperimentalLayoutApi opt-in; commit 0185166f compiles and its unit/lint/build checks pass, confirming the correction.
+
+**Additional confirmed localization gap and fix**
+- SymbolicationRepositoryImpl supplies English diagnostic text for partial, missing-symbol, mismatch, source-revision and processing-failure statuses. The status banner previously displayed those raw messages in Arabic.
+- Added locale-specific explanations for each known status. Runtime exception details remain available after a localized summary instead of replacing the summary.
+- Added English and Arabic Compose regressions proving a partial-symbolication banner explains unresolved frames in the selected locale and does not leak the repository's English status string.
+
+**Verification boundary and continuity**
+- This status-message change is committed with its tests and this record; its CI is pending.
+- The current Crashes/CrashDetail screen remains open. Emulator/device screenshots, actual RTL/LTR layout review, TalkBack, IME/lifecycle checks remain blocked by the unavailable Android SDK/ADB/device environment. Supabase project hgfgbjomwhogpswpqusk remains inactive; production schema/data were not touched.
+- Next: finish the 1ec4268d lint/build workflows and inspect the new status-message commit's unit tests, lint and Debug/Release APK workflows to terminal status. Continue the remaining independent CrashDetail criteria without marking the screen complete.

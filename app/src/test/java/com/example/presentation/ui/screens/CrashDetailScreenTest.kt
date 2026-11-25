@@ -460,6 +460,33 @@ class CrashDetailScreenTest {
         composeRule.onNodeWithTag("crash_detail_copy_symbolicated_stack_trace_button").assertIsDisplayed()
     }
 
+    @Test
+    fun partialSymbolicationBannerExplainsUnresolvedFramesWithoutRawEnglishError() {
+        val report = SymbolicationReport(
+            status = SymbolicationStatus.PARTIALLY_SYMBOLICATED,
+            frames = emptyList(),
+            error = "Some application frames could not be resolved."
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                SymbolicationStatusBanner(
+                    report = report,
+                    isLoading = false,
+                    errorMessage = null,
+                    onRetry = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Partially symbolicated").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Some frames remain unresolved; the original trace is preserved below."
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Some application frames could not be resolved.").assertDoesNotExist()
+    }
+
     private fun appContext(): android.content.Context =
         androidx.test.core.app.ApplicationProvider.getApplicationContext()
 

@@ -50,6 +50,33 @@ class CrashDetailArabicLocalizationTest {
     }
 
     @Test
+    fun partialSymbolicationBannerUsesArabicDescription() {
+        val report = SymbolicationReport(
+            status = SymbolicationStatus.PARTIALLY_SYMBOLICATED,
+            frames = emptyList(),
+            error = "Some application frames could not be resolved."
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                SymbolicationStatusBanner(
+                    report = report,
+                    isLoading = false,
+                    errorMessage = null,
+                    onRetry = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("تم تحليل بعض الرموز فقط").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "لا تزال بعض الإطارات دون فك رموز؛ وقد احتُفظ بتتبعها الأصلي أدناه."
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Some application frames could not be resolved.").assertDoesNotExist()
+    }
+
+    @Test
     fun diagnosisBadgesUseArabicLabels() {
         composeRule.setContent {
             CrashIntelligenceTheme(darkTheme = true) {

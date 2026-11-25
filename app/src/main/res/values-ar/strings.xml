@@ -688,6 +688,12 @@
     <string name="crash_detail_symbolication_source_missing">مراجعة المصدر غير متاحة</string>
     <string name="crash_detail_symbolication_failed">فشل تحليل الرموز</string>
     <string name="crash_detail_symbolication_pending">تحليل الرموز قيد الانتظار</string>
+    <string name="crash_detail_symbolication_error_desc">تعذر إكمال طلب فك رموز تتبع المكدس. أعد المحاولة.</string>
+    <string name="crash_detail_symbolication_partial_desc">لا تزال بعض الإطارات دون فك رموز؛ وقد احتُفظ بتتبعها الأصلي أدناه.</string>
+    <string name="crash_detail_symbolication_missing_desc">لا يوجد ملف رموز تصحيح يطابق إصدار هذا التطبيق.</string>
+    <string name="crash_detail_symbolication_mismatch_desc">ملفات رموز التصحيح المرفوعة لا تطابق هذا البناء من التطبيق.</string>
+    <string name="crash_detail_symbolication_source_missing_desc">تعذر العثور على مراجعة المصدر المرتبطة بهذه الرموز.</string>
+    <string name="crash_detail_symbolication_failed_desc">لم يتم فك رموز أي إطار للتطبيق باستخدام ملف المطابقة المحدد.</string>
     <string name="crash_detail_symbolicated_trace_header">التتبع بعد فك الترميز // النظام</string>
     <string name="crash_detail_symbolication_no_frames">لم تُرجع عملية فك الترميز أي إطارات للمكدس.</string>
 

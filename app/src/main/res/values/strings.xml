@@ -688,6 +688,12 @@
     <string name="crash_detail_symbolication_source_missing">Source revision missing</string>
     <string name="crash_detail_symbolication_failed">Symbolication failed</string>
     <string name="crash_detail_symbolication_pending">Symbolication pending</string>
+    <string name="crash_detail_symbolication_error_desc">The symbolication request could not be completed. Try again.</string>
+    <string name="crash_detail_symbolication_partial_desc">Some frames remain unresolved; the original trace is preserved below.</string>
+    <string name="crash_detail_symbolication_missing_desc">No debug-symbol mapping matches this app version.</string>
+    <string name="crash_detail_symbolication_mismatch_desc">The uploaded debug symbols do not match this app build.</string>
+    <string name="crash_detail_symbolication_source_missing_desc">The source revision for these symbols could not be found.</string>
+    <string name="crash_detail_symbolication_failed_desc">No application frames could be resolved from the selected mapping.</string>
     <string name="crash_detail_symbolicated_trace_header">SYMBOLICATED TRACE // SYSTEM</string>
     <string name="crash_detail_symbolication_no_frames">No stack frames were returned by symbolication.</string>
 

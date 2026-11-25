@@ -766,7 +766,17 @@ fun SymbolicationStatusBanner(
         status == SymbolicationStatus.PARTIALLY_SYMBOLICATED -> Icons.Default.Warning
         else -> Icons.Default.ErrorOutline
     }
-    val message = errorMessage ?: report?.error
+    val message = errorMessage?.takeIf { it.isNotBlank() }?.let { detail ->
+        "${stringResource(R.string.crash_detail_symbolication_error_desc)}\n$detail"
+    } ?: when (status) {
+        SymbolicationStatus.PARTIALLY_SYMBOLICATED -> stringResource(R.string.crash_detail_symbolication_partial_desc)
+        SymbolicationStatus.MISSING_DEBUG_SYMBOLS -> stringResource(R.string.crash_detail_symbolication_missing_desc)
+        SymbolicationStatus.BUILD_MISMATCH -> stringResource(R.string.crash_detail_symbolication_mismatch_desc)
+        SymbolicationStatus.SOURCE_REVISION_MISSING -> stringResource(R.string.crash_detail_symbolication_source_missing_desc)
+        SymbolicationStatus.PROCESSING_FAILED -> stringResource(R.string.crash_detail_symbolication_failed_desc)
+        null -> stringResource(R.string.crash_detail_symbolication_error_desc)
+        else -> report?.error
+    }
 
     Surface(
         color = color.copy(alpha = 0.1f),
