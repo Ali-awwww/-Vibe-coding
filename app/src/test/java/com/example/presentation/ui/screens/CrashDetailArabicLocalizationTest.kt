@@ -22,6 +22,33 @@ class CrashDetailArabicLocalizationTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun crashHeaderShowsArabicOccurrenceTimeAndMissingTimeState() {
+        val occurred = CrashReport(
+            id = "occurred-crash",
+            projectId = "project-1",
+            timestamp = 1_764_000_000_000L
+        )
+        val missing = CrashReport(
+            id = "missing-time",
+            projectId = "project-1",
+            timestamp = 0L
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                Column {
+                    CrashHeader(occurred)
+                    CrashHeader(missing)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("وقت الحدوث:", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("وقت الحدوث غير متاح").assertIsDisplayed()
+    }
+
+    @Test
     fun crashHeaderShowsArabicSourceAndMissingProvenanceLabels() {
         val known = CrashReport(
             id = "known-source",

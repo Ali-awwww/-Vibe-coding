@@ -38,6 +38,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.example.ui.theme.JetBrainsMono
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import java.text.DateFormat
+import java.util.Date
+import java.util.Locale
 
 import androidx.compose.ui.res.stringResource
 import com.example.R
@@ -290,6 +293,12 @@ internal fun CrashDetailUnavailableState(
 
 @Composable
 fun CrashHeader(crash: CrashReport) {
+    val occurrenceTime = remember(crash.timestamp) {
+        crash.timestamp.takeIf { it > 0L }?.let { timestamp ->
+            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault())
+                .format(Date(timestamp))
+        }
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
@@ -350,6 +359,14 @@ fun CrashHeader(crash: CrashReport) {
                     style = MaterialTheme.typography.labelSmall
                 )
             }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = occurrenceTime?.let { stringResource(R.string.crash_detail_occurred_at, it) }
+                    ?: stringResource(R.string.crash_detail_timestamp_unavailable),
+                modifier = Modifier.testTag("crash_detail_timestamp"),
+                style = MaterialTheme.typography.labelSmall,
+                color = VibeDesignTokens.Color.TextMuted
+            )
 
             HorizontalDivider(
                 color = VibeDesignTokens.Color.Grid,

@@ -718,4 +718,6 @@
     <string name="crash_team_ok">حسنًا</string>
     <string name="crash_team_close">إغلاق</string>
 
+    <string name="crash_detail_occurred_at">وقت الحدوث: %1$s</string>
+    <string name="crash_detail_timestamp_unavailable">وقت الحدوث غير متاح</string>
 </resources>

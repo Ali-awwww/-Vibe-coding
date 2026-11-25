@@ -36,6 +36,33 @@ class CrashDetailScreenTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun crashHeaderShowsOccurrenceTimeOrExplicitUnavailableState() {
+        val occurred = CrashReport(
+            id = "occurred-crash",
+            projectId = "project-1",
+            timestamp = 1_764_000_000_000L
+        )
+        val missing = CrashReport(
+            id = "missing-time",
+            projectId = "project-1",
+            timestamp = 0L
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                Column {
+                    CrashHeader(occurred)
+                    CrashHeader(missing)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Occurred", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Occurrence time unavailable").assertIsDisplayed()
+    }
+
+    @Test
     fun crashHeaderShowsProviderProvenanceAndExplicitMissingSource() {
         val sentryCrash = CrashReport(
             id = "sentry-crash",

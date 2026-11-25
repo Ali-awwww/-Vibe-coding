@@ -718,4 +718,6 @@
     <string name="crash_team_ok">OK</string>
     <string name="crash_team_close">Close</string>
 
+    <string name="crash_detail_occurred_at">Occurred %1$s</string>
+    <string name="crash_detail_timestamp_unavailable">Occurrence time unavailable</string>
 </resources>

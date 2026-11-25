@@ -3697,3 +3697,17 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The source/detail UI change and localization regressions are committed together; CI is pending. No rendered device screenshot or TalkBack sign-off is claimed.
 - Crashes and CrashDetail remain open pending CI, full navigation/accessibility review and real Android RTL/LTR verification. WEBHOOK ingestion and Firebase Crashlytics remain BLOCKED until their authenticated backend receivers exist; the dedicated Supabase project remains inactive.
 - Next: inspect all current CI runs to terminal status, repair any compile/test failure, then continue the CrashDetail investigation and resolution lifecycle tests.
+
+
+### 2026-11-26 — CrashDetail occurrence timestamp evidence
+
+**Confirmed metadata gap**
+- The Crashes list showed each report's timestamp, but the CrashDetail evidence header omitted the original occurrence time. That left an important forensic field unavailable once a user opened the record.
+
+**Implementation and regression coverage**
+- CrashDetail now renders the persisted occurrence timestamp using the device locale/time zone and explicitly labels zero/missing timestamps as unavailable rather than formatting the epoch as a real event.
+- Added English and Arabic string resources and Robolectric Compose regressions for both present and missing timestamps.
+
+**Verification boundary**
+- Source and localization tests are committed together; CI is pending. No physical-device screenshot or time-zone/lifecycle review is claimed.
+- CrashDetail remains open pending full CI, device rendering, accessibility and backend-backed record verification. The next available code task after this metadata slice is to audit the FixAssistant handoff and evidence boundaries; webhook/Crashlytics intake and live Supabase remain blocked by missing backend capability/project availability.
