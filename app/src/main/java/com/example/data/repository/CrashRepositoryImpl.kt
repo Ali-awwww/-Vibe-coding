@@ -1306,23 +1306,12 @@ class CrashRepositoryImpl(
             persistSyncedIssue(issue)
 
             firstEvent?.let { event ->
-                val rawMsg = event.message ?: ""
-                val rawStack = event.entries?.firstOrNull { it.type == "stacktrace" }?.data?.values?.firstOrNull()?.stacktrace?.frames?.joinToString("\n") {
-                    "${it.function} (${it.filename}:${it.lineNo})"
-                } ?: "No stacktrace available"
-
-                val crash = CrashReport(
-                    id = event.id,
+                val crash = CrashReportSourceMapper.fromSentry(
                     projectId = projectId,
-                    exceptionType = sentryIssue.metadata?.type ?: "Unknown",
-                    message = SecurityUtils.PiiScrubber.scrub(rawMsg),
-                    stackTrace = SecurityUtils.PiiScrubber.scrub(rawStack),
+                    issue = sentryIssue,
+                    event = event,
                     timestamp = parseDate(event.dateCreated),
-                    severity = issue.severity,
-                    source = IntegrationType.SENTRY,
-                    appVersion = event.release ?: "Unknown",
-                    osVersion = event.contexts?.os?.version ?: "Unknown",
-                    deviceModel = event.contexts?.device?.model ?: "Unknown"
+                    severity = issue.severity
                 )
                 persistSyncedCrash(crash)
             }
@@ -1356,24 +1345,12 @@ class CrashRepositoryImpl(
 
             val events = bugsnagApi.getErrorEvents("token ${config.token}", bugsnagError.id)
             events.firstOrNull()?.let { event ->
-                val exception = event.exceptions?.firstOrNull()
-                val rawMsg = exception?.message ?: ""
-                val rawStack = exception?.stacktrace?.joinToString("\n") {
-                    "${it.method} (${it.file}:${it.lineNumber})"
-                } ?: "No stacktrace available"
-
-                val crash = CrashReport(
-                    id = event.id,
+                val crash = CrashReportSourceMapper.fromBugsnag(
                     projectId = projectId,
-                    exceptionType = exception?.errorClass ?: "Unknown",
-                    message = SecurityUtils.PiiScrubber.scrub(rawMsg),
-                    stackTrace = SecurityUtils.PiiScrubber.scrub(rawStack),
+                    error = bugsnagError,
+                    event = event,
                     timestamp = parseDate(event.received_at),
-                    severity = issue.severity,
-                    source = IntegrationType.BUGSNAG,
-                    appVersion = event.app?.version ?: "Unknown",
-                    osVersion = event.device?.osVersion ?: "Unknown",
-                    deviceModel = event.device?.model ?: "Unknown"
+                    severity = issue.severity
                 )
                 persistSyncedCrash(crash)
             }

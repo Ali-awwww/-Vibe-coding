@@ -3409,3 +3409,22 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Persistent continuity**
 - Inspect the push-triggered unit-test, lint and Debug/Release APK runs for this commit to terminal status. Fix only failures supported by compiler, test or lint evidence; then continue the next independent Crashes/CrashDetail acceptance item without repeating already-green checks. Do not close either screen without fresh Arabic RTL, English LTR and device evidence.
+
+### 2026-11-26 — Sentry/Bugsnag crash records preserve missing evidence
+
+**Confirmed defect**
+- The Sentry and Bugsnag sync paths persisted the literal `No stacktrace available` when a provider event had no stack frames, and used `Unknown` for absent exception/device/OS/app-version fields. CrashDetail therefore received placeholder text as if it were source evidence and exposed a copy action for a trace that did not exist.
+
+**Fix**
+- Added a pure provider-to-domain mapper used by both sync paths. Missing fields now remain empty for the UI's localized unavailable state; partial frames include only real method/file/line components and never interpolate `null`.
+- Sentry and Bugsnag provenance, timestamps, severity and project association remain explicit. Provider messages and stack traces continue through the PII scrubber. Bugsnag uses its provider error class/message only when the event-level exception field is absent.
+
+**Regression coverage added**
+- Added four mapper tests covering missing evidence for both providers, partial frame formatting, source/timestamp preservation and PII redaction.
+- This removes the placeholder stack-trace path that the preceding CrashDetail UI change was designed to handle.
+
+**Verification boundary**
+- The CrashDetail responsive-UI commit's unit-test, lint and APK workflows were still in progress when this follow-up was prepared; no result is inferred from a running job. The new mapper code/tests are also pending CI. No local Gradle execution or device/emulator verification is claimed.
+
+**Persistent continuity**
+- Inspect both commit-triggered workflow sets to terminal status. Resolve compiler/test/lint failures from their logs, then continue the Crashes/CrashDetail acceptance items. Keep the screen open until rendered Arabic RTL, English LTR, compact-screen and accessibility/device checks have actual evidence.
