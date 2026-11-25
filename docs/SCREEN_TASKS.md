@@ -3781,3 +3781,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 **Verification boundary**
 - The implementation and regression tests are committed together; CI is pending. No real GitHub branch, commit or Pull Request was created during this run.
 - FixAssistant remains open until the new CI passes, rendered review confirms the actual diff presentation, and a real provider/repository flow is safely verified in an explicitly user-initiated environment. The live Supabase project is still unavailable and remains read-only.
+
+
+### 2026-11-26 — Correct source-location regex escaping before CI acceptance
+
+- Static review of the new resolver found that Kotlin raw-string regexes had been double-escaped by the code-generation step (`\\.` and `\\d` inside triple quotes). That would reject valid `File.kt:line` evidence even though the safety rules were correct.
+- Corrected the raw regex literals to use a single regex escape for the extension dot and line-number boundary. The regression suite covers raw stack traces, symbolicated frames, unknown/mismatched locations and ambiguous repository paths.
+- This correction is included in the next CI run; the previous commit's test result is not accepted as verification.

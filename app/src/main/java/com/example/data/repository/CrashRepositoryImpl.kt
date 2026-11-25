@@ -45,7 +45,7 @@ internal fun resolveVerifiedCrashSourceLocation(
     rawStackTrace: String,
     symbolicatedFrames: List<SymbolicatedFrame>
 ): VerifiedCrashSourceLocation? {
-    val matches = Regex("""([A-Za-z0-9_./\\-]+\\.(?:kt|java)):(\\d+)""", RegexOption.IGNORE_CASE)
+    val matches = Regex("""([A-Za-z0-9_./-]+\.(?:kt|java)):(\d+)""", RegexOption.IGNORE_CASE)
         .findAll(diagnosisLocation.trim())
         .toList()
     if (matches.size != 1) return null
@@ -54,10 +54,10 @@ internal fun resolveVerifiedCrashSourceLocation(
     if (pathHint.startsWith("/") || pathHint.split('/').any { it.isBlank() || it == "." || it == ".." }) {
         return null
     }
-    val fileName = Regex("""([A-Za-z0-9_-]+\\.(?:kt|java))$""", RegexOption.IGNORE_CASE)
+    val fileName = Regex("""([A-Za-z0-9_-]+\.(?:kt|java))$""", RegexOption.IGNORE_CASE)
         .find(pathHint)?.groupValues?.get(1) ?: return null
     val lineNumber = matches.single().groupValues[2].toIntOrNull()?.takeIf { it > 0 } ?: return null
-    val traceEvidence = Regex("""${Regex.escape(fileName)}:${lineNumber}(?!\\d)""", RegexOption.IGNORE_CASE)
+    val traceEvidence = Regex("""${Regex.escape(fileName)}:${lineNumber}(?!\d)""", RegexOption.IGNORE_CASE)
         .containsMatchIn(rawStackTrace)
     val symbolicationEvidence = symbolicatedFrames.any { frame ->
         frame.lineNumber == lineNumber &&
