@@ -3474,3 +3474,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Verification boundary**
 - The latest code build/lint/test set for `80ed6635` is still running at this entry. No result is inferred. Crashes/CrashDetail remain open until CI is green and device-based Arabic RTL / English LTR, compact layout, accessibility and lifecycle checks have fresh evidence.
+
+### 2026-11-26 — Arabic badge test import correction
+
+- During pre-CI source review of the Arabic Robolectric test added in `8998f0e9`, the test file was missing the explicit `CrashIntelligenceTheme` import used by its content lambda.
+- Added the import before relying on the new test run. No production code or test assertions changed.
