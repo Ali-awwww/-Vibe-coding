@@ -3613,3 +3613,20 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Commits 0185166f and 1ec4268d have all three workflows terminal-success; 1ec includes 441 tests, 0 failures and 4 skipped, plus successful lint and Debug/Release APK artifacts.
 - Commits fa49dd83 and dfe6b6c have their unit-test, lint and APK workflows in progress at this entry. Their results are not inferred.
 - This step-count correction and its tests are committed below; inspect its CI to terminal status before accepting it.
+
+### 2026-11-26 — Crashes pagination exact-boundary correction
+
+**CrashDetail continuity**
+- CrashDetail's remaining visual sign-off is BLOCKED because this environment has no Android SDK/ADB or attached emulator/device; live Supabase-backed verification is separately BLOCKED because the dedicated project remains INACTIVE. These are not PASS and the screen is not complete. The independent source/Compose work continues to be verified by CI.
+
+**Confirmed Crashes pagination defect**
+- Both Firestore and Room paging generated a next cursor whenever a page contained exactly pageSize rows. With exactly 100 records and 25-row pages, the fourth full page therefore advertised a fifth page that did not exist; the UI issued an unnecessary empty request before it could reach a true terminal state.
+- The CrashRepository interface default and shared FakeCrashRepository used the same exact-page-size rule, so the existing 60-record test did not expose the 100-record boundary.
+
+**Correction and regression coverage**
+- Firestore and Room now fetch one look-ahead row, return only pageSize records, and create a cursor only when the extra row proves that another page exists. The default repository implementation and test fake use the same look-ahead contract.
+- Added view-model regressions for exactly 100 records (four pages, no empty fifth request) and 101 records (the 101st record remains reachable and pagination then terminates).
+
+**Verification boundary**
+- Commits fa49dd83, dfe6b6c8 and c76ecc17 have CI workflows in progress at this entry; no terminal result is inferred. The pagination correction is committed with tests and this record; its CI is pending.
+- Next: inspect these workflow sets and the new pagination commit to terminal status, repair any logged failure, then continue the Crashes screen's remaining provider-source and navigation criteria.

@@ -192,6 +192,70 @@ class CrashesViewModelTest {
     }
 
     @Test
+    fun exactHundredCrashBoundaryDoesNotRequestAnEmptyFifthPage() = runTest {
+        repository.crashes.value = (0 until 100).map { index ->
+            CrashReport(
+                id = "crash-$index",
+                projectId = "p1",
+                applicationId = "a1",
+                message = "Crash $index",
+                timestamp = index.toLong()
+            )
+        }
+        val viewModel = CrashesViewModel(
+            repository = repository,
+            initialProjectId = "p1",
+            initialAppId = "a1"
+        )
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        repeat(3) {
+            viewModel.loadMore()
+            advanceUntilIdle()
+        }
+
+        assertEquals(100, viewModel.uiState.value.visibleCrashes.size)
+        assertFalse(viewModel.uiState.value.canLoadMore)
+        assertEquals(4, repository.getCrashPageCalls)
+
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertEquals(4, repository.getCrashPageCalls)
+    }
+
+    @Test
+    fun oneHundredAndFirstCrashRemainsReachableAfterFourFullPages() = runTest {
+        repository.crashes.value = (0 until 101).map { index ->
+            CrashReport(
+                id = "crash-$index",
+                projectId = "p1",
+                applicationId = "a1",
+                message = "Crash $index",
+                timestamp = index.toLong()
+            )
+        }
+        val viewModel = CrashesViewModel(
+            repository = repository,
+            initialProjectId = "p1",
+            initialAppId = "a1"
+        )
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        repeat(4) {
+            viewModel.loadMore()
+            advanceUntilIdle()
+        }
+
+        assertEquals(101, viewModel.uiState.value.visibleCrashes.size)
+        assertEquals("crash-100", viewModel.uiState.value.visibleCrashes.first().id)
+        assertEquals("crash-0", viewModel.uiState.value.visibleCrashes.last().id)
+        assertFalse(viewModel.uiState.value.canLoadMore)
+        assertEquals(5, repository.getCrashPageCalls)
+    }
+
+    @Test
     fun failedNextPageCanBeRetriedWithoutDroppingLoadedCrashes() = runTest {
         repository.crashes.value = (0 until 25).map { index ->
             CrashReport(

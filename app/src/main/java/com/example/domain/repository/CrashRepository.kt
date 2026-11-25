@@ -27,8 +27,13 @@ interface CrashRepository {
         val all = getLatestCrashes(projectId, applicationId).first()
             .sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
         val start = if (cursor == null) 0 else all.indexOfFirst { it.id == cursor.id }.let { if (it < 0) all.size else it + 1 }
-        val page = all.drop(start).take(pageSize)
-        val next = if (page.size == pageSize) page.last().let { CrashPageCursor(it.timestamp, it.id) } else null
+        val fetched = all.drop(start).take(pageSize + 1)
+        val page = fetched.take(pageSize)
+        val next = if (fetched.size > pageSize) {
+            page.lastOrNull()?.let { CrashPageCursor(it.timestamp, it.id) }
+        } else {
+            null
+        }
         return CrashPage(page, next)
     }
     fun getAllCrashes(): Flow<List<CrashReport>>

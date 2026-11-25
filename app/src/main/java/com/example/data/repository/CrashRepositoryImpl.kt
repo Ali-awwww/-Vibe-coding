@@ -377,17 +377,19 @@ class CrashRepositoryImpl(
             if (applicationId != null) query = query.whereEqualTo("applicationId", applicationId)
             query = query.orderBy("timestamp", Query.Direction.DESCENDING)
                 .orderBy(FieldPath.documentId(), Query.Direction.DESCENDING)
-                .limit(pageSize.toLong())
+                .limit((pageSize + 1).toLong())
             if (cursor != null) {
                 val documentKey = if (projectId != null) cursor.id else cursor.documentPath ?: cursor.id
                 query = query.startAfter(cursor.timestamp, documentKey)
             }
             return try {
                 val snapshot = query.get().await()
-                val crashes = snapshot.documents.mapNotNull { it.toObject(CrashReport::class.java) }
+                val fetchedDocuments = snapshot.documents
+                val pageDocuments = fetchedDocuments.take(pageSize)
+                val crashes = pageDocuments.mapNotNull { it.toObject(CrashReport::class.java) }
                     .filter { it.projectId in projectIds && (projectId == null || it.projectId == projectId) }
-                val nextCursor = if (snapshot.size() == pageSize) {
-                    snapshot.documents.lastOrNull()?.let { document ->
+                val nextCursor = if (fetchedDocuments.size > pageSize) {
+                    pageDocuments.lastOrNull()?.let { document ->
                         val timestamp = document.getLong("timestamp") ?: document.toObject(CrashReport::class.java)?.timestamp ?: 0L
                         CrashPageCursor(timestamp, document.id, document.reference.path)
                     }
@@ -401,14 +403,19 @@ class CrashRepositoryImpl(
             }
         }
 
-        val crashes = if (projectId != null) {
-            crashDao.getCrashPage(projectId, applicationId, cursor?.timestamp, cursor?.id, pageSize)
+        val fetchedCrashes = if (projectId != null) {
+            crashDao.getCrashPage(projectId, applicationId, cursor?.timestamp, cursor?.id, pageSize + 1)
                 .filter { it.projectId in projectIds }
         } else {
-            crashDao.getCrashPageForProjects(projectIds.toList(), applicationId, cursor?.timestamp, cursor?.id, pageSize)
+            crashDao.getCrashPageForProjects(projectIds.toList(), applicationId, cursor?.timestamp, cursor?.id, pageSize + 1)
         }
-        val nextCursor = if (crashes.size == pageSize) crashes.last().let { CrashPageCursor(it.timestamp, it.id) } else null
-        return CrashPage(crashes, nextCursor)
+        val page = fetchedCrashes.take(pageSize)
+        val nextCursor = if (fetchedCrashes.size > pageSize) {
+            page.lastOrNull()?.let { CrashPageCursor(it.timestamp, it.id) }
+        } else {
+            null
+        }
+        return CrashPage(page, nextCursor)
     }
 
     override fun getAllCrashes(): Flow<List<CrashReport>> = flow {

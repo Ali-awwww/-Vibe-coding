@@ -151,9 +151,10 @@ class FakeCrashRepository : CrashRepository {
                 if (index < 0) matching.size else index + 1
             }
         }
-        val page = matching.drop(startIndex).take(pageSize)
-        val nextCursor = if (page.size == pageSize) {
-            page.last().let { CrashPageCursor(it.timestamp, it.id) }
+        val fetched = matching.drop(startIndex).take(pageSize + 1)
+        val page = fetched.take(pageSize)
+        val nextCursor = if (fetched.size > pageSize) {
+            page.lastOrNull()?.let { CrashPageCursor(it.timestamp, it.id) }
         } else {
             null
         }
