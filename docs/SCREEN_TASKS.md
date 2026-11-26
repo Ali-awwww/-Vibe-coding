@@ -3831,7 +3831,7 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Existing repository callbacks, validation, recovery-link behavior and provider operations remain the source of truth; no backend success state was introduced.
 
 **Regression coverage added**
-- `LoginScreenTest.kt`: diagnostics are collapsed until expanded; mode switches clear secrets and reset visibility; email-confirmation-required signup clears both password fields; the form card remains within a 320 dp viewport in LTR and RTL.
+- `LoginScreenTest.kt`: diagnostics are collapsed until expanded; mode switches clear secrets and reset visibility; email-confirmation-required signup clears both password fields; the form card remains within a 320 dp viewport in LTR and RTL. The first CI compile identified unsupported explicit imports for Compose test assertion/fetch extensions; the test now uses the same wildcard import surface as the existing screen tests.
 
 **Verification boundary**
 - Tests were added but have not yet been executed in this run. GitHub Actions for this single main commit must reach terminal status before any test/build/lint success is claimed.
@@ -3857,8 +3857,15 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - `AIModelTeamRepositoryImplTest.kt`: disables implicit discovery for the test that asserts fail-closed behavior when no backend is supplied.
 
 **Verification boundary**
-- These are source/test corrections based on the downloaded failing-test reports. They have not yet been executed. The newer Login commit's unit/lint/APK workflows were still in progress at the time of this follow-up.
+- These are source/test corrections based on the downloaded failing-test reports. They have not yet been executed. The newer Login commit's unit workflow stopped at test compilation because Compose test assertion/fetch extensions were imported as unresolved top-level symbols; the follow-up uses the established wildcard import pattern.
 - No live Firestore request, Supabase mutation or production configuration change was made.
 
 **Next exact step**
 - Inspect the follow-up commit's Actions runs, including the four previously failing tests and the four new Login Compose tests. Fix any remaining failure from its actual report rather than changing assertions speculatively.
+
+
+### 2026-11-27 — Correct Compose test API imports from CI compiler evidence
+
+- The Login UI test compile failed with three exact unresolved references: `assertDoesNotExist`, `assertExists` and `fetchSemanticsNode`. The existing Compose screen tests import `androidx.compose.ui.test.*`, which is the supported API surface for these extensions in this repository's Compose version.
+- Replaced the individual explicit imports with the same wildcard import used by the already-compiling screen tests. No production source or test assertion was changed.
+- This correction is committed to `main`; the new unit-test run is required to verify compilation and execution. The prior compile failure is not treated as a test result.
