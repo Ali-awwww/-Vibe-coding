@@ -51,11 +51,18 @@ class LoginScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("auth_diagnostic_panel").assertIsDisplayed()
+        composeRule.onNodeWithTag("auth_diagnostic_panel")
+            .assertExists()
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithText("credential provider detail").assertDoesNotExist()
 
-        composeRule.onNodeWithTag("toggle_auth_diagnostics_button").performClick()
-        composeRule.onNodeWithText("credential provider detail").assertIsDisplayed()
+        composeRule.onNodeWithTag("toggle_auth_diagnostics_button")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithText("credential provider detail")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -70,14 +77,17 @@ class LoginScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("toggle_auth_mode_button").performClick()
-        composeRule.onNodeWithTag("password_input").performTextInput("sensitive-password")
-        composeRule.onNodeWithTag("auth_password_visibility_button").performClick()
-        composeRule.onNodeWithTag("back_to_sign_in_button").performClick()
-        composeRule.onNodeWithTag("toggle_auth_mode_button").performClick()
+        composeRule.onNodeWithTag("toggle_auth_mode_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("display_name_input").assertExists()
+        composeRule.onNodeWithTag("password_input").performScrollTo().performTextInput("sensitive-password")
+        composeRule.onNodeWithTag("auth_password_visibility_button").performScrollTo().performClick()
+        composeRule.onNodeWithTag("back_to_sign_in_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("toggle_auth_mode_button").performScrollTo().performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("password_input").assertTextEquals("")
+        composeRule.onNodeWithTag("password_input").performScrollTo().assertTextEquals("")
         composeRule.onNodeWithContentDescription(context.getString(R.string.auth_show_password))
             .assertExists()
         composeRule.onNodeWithContentDescription(context.getString(R.string.auth_hide_password))
@@ -101,19 +111,21 @@ class LoginScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("toggle_auth_mode_button").performClick()
-        composeRule.onNodeWithTag("display_name_input").performTextInput("Developer")
-        composeRule.onNodeWithTag("email_input").performTextInput("developer@example.com")
-        composeRule.onNodeWithTag("password_input").performTextInput("sensitive-password")
-        composeRule.onNodeWithTag("confirm_password_input").performTextInput("sensitive-password")
-        composeRule.onNodeWithTag("auth_submit_button").performClick()
+        composeRule.onNodeWithTag("toggle_auth_mode_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("display_name_input").performScrollTo().performTextInput("Developer")
+        composeRule.onNodeWithTag("email_input").performScrollTo().performTextInput("developer@example.com")
+        composeRule.onNodeWithTag("password_input").performScrollTo().performTextInput("sensitive-password")
+        composeRule.onNodeWithTag("confirm_password_input").performScrollTo().performTextInput("sensitive-password")
+        composeRule.onNodeWithTag("auth_submit_button").performScrollTo().performClick()
         composeRule.waitForIdle()
 
         assertEquals(AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED, viewModel.actionState.value.successMessage)
         composeRule.onNodeWithText(context.getString(R.string.auth_success_email_confirmation))
+            .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithTag("password_input").assertTextEquals("")
-        composeRule.onNodeWithTag("confirm_password_input").assertTextEquals("")
+        composeRule.onNodeWithTag("password_input").performScrollTo().assertTextEquals("")
+        composeRule.onNodeWithTag("confirm_password_input").performScrollTo().assertTextEquals("")
     }
 
     @Test

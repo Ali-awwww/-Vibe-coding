@@ -197,8 +197,9 @@ class FixAssistantViewModelTest {
                 "getFixSuggestions" -> suggestionsFlow
                 "getVerificationsByCrash" -> verificationsFlow
                 method.name.takeIf { it.startsWith("generateFixSuggestion") } -> {
-                    val error = generateFixError ?: IllegalStateException("unavailable")
-                    Result.failure<FixSuggestion>(error)
+                    // Result is a Kotlin value class; a Java Proxy cannot safely box this suspend return.
+                    // Throwing exercises executeRepositoryResult's exception-to-Result boundary.
+                    throw (generateFixError ?: IllegalStateException("unavailable"))
                 }
                 "toString" -> "FixAssistantCrashRepositoryTestDouble"
                 "hashCode" -> System.identityHashCode(proxy)

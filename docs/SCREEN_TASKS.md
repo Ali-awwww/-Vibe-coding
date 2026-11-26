@@ -404,7 +404,8 @@ Append newest entries first. Each entry must state what changed, files/routes af
 |---|---|---|---|---|
 | 2026-11-27 | 9ac32aa74e600d2ebc9a404eab91e8b574feb5d4 | Refined Login field tokens and compact layout; made diagnostic details opt-in; cleared non-persisted credentials on auth-mode/success transitions; added four Compose regressions. | Android Lint succeeded; Debug and Release APKs built and uploaded; unit suite ran 453 tests with 4 failures and 4 skipped. Failure reports were inspected; no Login test result is inferred from this parent run. | Fix the confirmed test-isolation/proxy failures in the next row, then inspect the new run and complete device RTL/LTR/IME/accessibility review. Live Supabase Auth remains blocked by project read permission. |
 | 2026-11-27 | f7ac8e3b57a90d2c5553d7ec2313b761d4e14fb4 | Fixed three verified unit-test failure causes: Kotlin Result-mangled proxy dispatch, FirebaseAuthException's Android TextUtils dependency, and accidental implicit Firestore discovery in a no-backend test. | Follow-up unit compile still failed only on three explicit Compose test imports; no unit tests executed on this head. | Correct Compose test imports, rerun the full suite, and verify the four prior failures are resolved. |
-| 2026-11-27 | 0798a0b63454b92c7c8f4561ae952c69d896d850 | Corrected Login Compose test imports to match the existing screen-test API surface. | Import correction committed; CI queued/in progress and not yet verified. | Run the full unit suite and verify the new Login UI and session-restoration tests; continue to keep Login open pending device/Supabase checks. |
+| 2026-11-27 | 0798a0b63454b92c7c8f4561ae952c69d896d850 | Corrected Login Compose test imports to match the existing screen-test API surface. | Unit suite executed 457 tests: 5 failed, 4 skipped. The import issue was resolved; remaining failures were 2 Kotlin Result proxy boxing failures and 3 Login UI test assumptions (off-screen diagnostics plus auth-mode transition). | Correct the proxy fake to throw through the ViewModel boundary; make diagnostic assertions scroll-aware and prevent the initial empty recovery state from overwriting a selected auth mode. |
+| 2026-11-27 | same main commit | Fixed the Login initial recovery-state race, made diagnostic/form Compose tests scroll-aware, and corrected the FixAssistant proxy fake to exercise exception handling without boxing Kotlin Result. | Source/test changes committed; fresh CI pending. | Inspect the full unit suite and lint/APK runs to terminal status; fix only remaining failures supported by JUnit logs. |
 | 2026-11-27 | same main commit | Added a MainViewModel regression proving a provider-restored identity is the initial session and sign-out clears the observed identity. | Test added; not yet executed. | Inspect terminal unit/lint/APK results, then validate real auth restoration and sign-out on Android. |
 
 | 2026-11-05 | — | Approved cybernetic space / cyberpunk / engineering direction with strong effects. Added global design-system and 28-route visual backlog to this task register. | Documentation update only; no screen implementation, Gradle build, UI test or device verification performed in this entry. | Implement shared Compose design tokens/components, then migrate screens incrementally without changing their real behavior. |
@@ -3899,3 +3900,22 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the current main-head Unit Tests, Lint and Debug/Release APK runs. Fix any failure from actual logs, then test cold-start restoration and sign-out transitions on Android before closing Login.
+
+
+### 2026-11-27 — Correct Login mode initialization and Compose test viewport assumptions
+
+**CI evidence**
+- Commit `0798a0b63454b92c7c8f4561ae952c69d896d850` executed 457 unit tests: 5 failed, 4 skipped. The explicit-import compile failure was resolved.
+- Three failures were in the new Login UI tests. The diagnostic panel and confirmation message were below the initial viewport, so the tests asserted visibility without scrolling. The sign-up mode fields/back action were not available when the initial empty recovery-state effect raced with the first mode change.
+- Two FixAssistant failures came from the Java Proxy returning a boxed Kotlin `Result` for a suspend value-class return; the JVM bridge expected the underlying value and raised `ClassCastException`.
+
+**Fix**
+- `LoginScreen.kt`: the initial default recovery state (generation zero, not ready) is now a no-op. Only an actual recovery-link generation/readiness transition can change the auth mode, so an initial effect cannot overwrite a user's sign-up choice.
+- `LoginScreenTest.kt`: diagnostics, mode controls, fields and success text are explicitly scrolled into view before interaction/assertion.
+- `FixAssistantViewModelTest.kt`: the proxy throws the configured failure through the ViewModel's existing exception-to-Result boundary instead of returning a boxed Kotlin `Result` through Java reflection.
+
+**Verification boundary**
+- These fixes are committed to `main`; no test result is claimed until the new CI run completes. The viewport changes are test mechanics only; device-rendered review remains open.
+
+**Next exact step**
+- Inspect the latest Unit Tests, Lint and Debug/Release APK runs. If the auth-mode tests still fail, inspect the resulting UI state and event ordering rather than weakening the acceptance assertions.

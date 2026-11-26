@@ -244,6 +244,10 @@ fun LoginScreen(
     )
 
     LaunchedEffect(passwordRecoveryState.linkGeneration, passwordRecoveryState.isReadyForNewPassword) {
+        // The initial empty state is not a recovery event; do not overwrite a user's mode choice.
+        if (passwordRecoveryState.linkGeneration == 0L && !passwordRecoveryState.isReadyForNewPassword) {
+            return@LaunchedEffect
+        }
         authMode = resolvePasswordRecoveryMode(authMode, passwordRecoveryState.isReadyForNewPassword)
         validationError = null
     }
