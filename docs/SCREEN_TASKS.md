@@ -402,7 +402,8 @@ Append newest entries first. Each entry must state what changed, files/routes af
 
 | Date | Commit / PR | Work completed | Verification | Remaining work |
 |---|---|---|---|---|
-| 2026-11-27 | same main commit | Refined Login field tokens and compact layout; made diagnostic details opt-in; cleared non-persisted credentials on auth-mode/success transitions; added four Compose regressions. | Tests added, not yet executed; CI pending. No emulator/device visual sign-off. | Check terminal CI, fix failures, then verify rendered RTL/LTR, IME and accessibility; live Supabase Auth remains blocked by read-only project permission. |
+| 2026-11-27 | 9ac32aa74e600d2ebc9a404eab91e8b574feb5d4 | Refined Login field tokens and compact layout; made diagnostic details opt-in; cleared non-persisted credentials on auth-mode/success transitions; added four Compose regressions. | Android Lint succeeded; Debug and Release APKs built and uploaded; unit suite ran 453 tests with 4 failures and 4 skipped. Failure reports were inspected; no Login test result is inferred from this parent run. | Fix the confirmed test-isolation/proxy failures in the next row, then inspect the new run and complete device RTL/LTR/IME/accessibility review. Live Supabase Auth remains blocked by project read permission. |
+| 2026-11-27 | same main commit | Fixed three verified unit-test failure causes: Kotlin Result-mangled proxy dispatch, FirebaseAuthException's Android TextUtils dependency, and accidental implicit Firestore discovery in a no-backend test. | Source and regression-test changes committed; CI for this commit pending. | Inspect all test/lint/APK runs to terminal status; keep Login and the Identity prerequisite open until device and Supabase verification pass. |
 | 2026-11-05 | — | Approved cybernetic space / cyberpunk / engineering direction with strong effects. Added global design-system and 28-route visual backlog to this task register. | Documentation update only; no screen implementation, Gradle build, UI test or device verification performed in this entry. | Implement shared Compose design tokens/components, then migrate screens incrementally without changing their real behavior. |
 
 ### Mandatory update protocol
@@ -3839,3 +3840,25 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect this commit's Unit Tests, Lint and Debug/Release APK runs to terminal status; fix any source/test failure, then complete rendered Login RTL/LTR and IME/accessibility review when an Android device/emulator and Supabase read access are available.
+
+
+### 2026-11-27 — Isolate confirmed full-suite CI failures
+
+**CI evidence**
+- Parent Login batch `9ac32aa74e600d2ebc9a404eab91e8b574feb5d4`: Android Lint succeeded; Debug and Release APK builds and artifact uploads succeeded. The unit job executed 453 tests, with 4 failures and 4 skipped.
+- Failure reports identify two `FixAssistantViewModelTest` failures caused by the Java proxy test double matching the unmangled Kotlin name `generateFixSuggestion`, while the JVM exposes the `Result`-returning method with a generated suffix. The proxy threw `AssertionError` before the ViewModel could finish its generation state transition.
+- `MainViewModelAuthMessageTest` constructed `FirebaseAuthException` under the plain JVM runner; Firebase's constructor calls Android `TextUtils`, producing the documented “not mocked” runtime exception.
+- `AIModelTeamRepositoryImplTest` intended to simulate a missing remote backend, but CI's configured Firebase resources caused the repository to auto-discover Firestore and wait for a live snapshot, timing out after 60 seconds.
+
+**Fix**
+- `FixAssistantViewModelTest.kt`: match the generated method-name prefix so the fake returns the intended failure result and exercises the ViewModel's completion path.
+- `MainViewModelAuthMessageTest.kt`: run under Robolectric API 34 so Firebase's Android-dependent exception constructor is supported.
+- `AIModelTeamRepositoryImpl.kt`: added an opt-out for implicit Firebase service discovery while preserving the existing production default and explicitly injected service instances.
+- `AIModelTeamRepositoryImplTest.kt`: disables implicit discovery for the test that asserts fail-closed behavior when no backend is supplied.
+
+**Verification boundary**
+- These are source/test corrections based on the downloaded failing-test reports. They have not yet been executed. The newer Login commit's unit/lint/APK workflows were still in progress at the time of this follow-up.
+- No live Firestore request, Supabase mutation or production configuration change was made.
+
+**Next exact step**
+- Inspect the follow-up commit's Actions runs, including the four previously failing tests and the four new Login Compose tests. Fix any remaining failure from its actual report rather than changing assertions speculatively.

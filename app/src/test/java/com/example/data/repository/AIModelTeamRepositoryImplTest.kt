@@ -205,7 +205,8 @@ class AIModelTeamRepositoryImplTest {
             firebaseAuth = null,
             aiProviderDaoOverride = aiProviderDao,
             currentUserIdProvider = { activeUserId },
-            enableRemoteBackend = true
+            enableRemoteBackend = true,
+            allowImplicitFirebaseServiceDiscovery = false
         )
 
         val result = productionRepository.createTeam(

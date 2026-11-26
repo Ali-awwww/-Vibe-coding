@@ -196,7 +196,7 @@ class FixAssistantViewModelTest {
                 }
                 "getFixSuggestions" -> suggestionsFlow
                 "getVerificationsByCrash" -> verificationsFlow
-                "generateFixSuggestion" -> {
+                method.name.takeIf { it.startsWith("generateFixSuggestion") } -> {
                     val error = generateFixError ?: IllegalStateException("unavailable")
                     Result.failure<FixSuggestion>(error)
                 }
