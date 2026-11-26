@@ -437,6 +437,7 @@ private fun crashDetailSourceText(source: IntegrationType?): String {
         IntegrationType.WEBHOOK -> stringResource(R.string.crashes_source_webhook)
         IntegrationType.CUSTOM -> stringResource(R.string.crashes_source_custom)
         IntegrationType.INTERNAL_QA -> stringResource(R.string.crashes_source_internal_qa)
+        IntegrationType.ON_DEVICE_WATCHER -> stringResource(R.string.crashes_source_on_device_watcher)
     }
     return stringResource(R.string.crashes_source_label, sourceName)
 }

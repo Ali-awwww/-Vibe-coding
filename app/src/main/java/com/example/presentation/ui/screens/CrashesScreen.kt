@@ -107,6 +107,16 @@ fun CrashesScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { navController.navigate(Screen.CrashWatcher) },
+                        modifier = Modifier.testTag("crashes_open_watcher_button")
+                    ) {
+                        Icon(
+                            Icons.Default.Visibility,
+                            contentDescription = stringResource(R.string.crash_watcher_title),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(onClick = { showFilters = true }) {
                         Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.crashes_filter))
                     }
@@ -342,22 +352,41 @@ fun CrashesScreen(
                                 textAlign = TextAlign.Center
                             )
                             Spacer(Modifier.height(16.dp))
-                            FilledTonalButton(
-                                onClick = {
-                                    navController.navigate(
-                                        Screen.SetupGuide(
-                                            projectId = projectId ?: "default",
-                                            applicationId = applicationId ?: "default"
-                                        )
-                                    )
-                                },
-                                modifier = Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .testTag("crashes_open_setup_guide_button")
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Build, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.crashes_open_setup_guide))
+                                FilledTonalButton(
+                                    onClick = {
+                                        navController.navigate(
+                                            Screen.SetupGuide(
+                                                projectId = projectId ?: "default",
+                                                applicationId = applicationId ?: "default"
+                                            )
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("crashes_open_setup_guide_button")
+                                ) {
+                                    Icon(Icons.Default.Build, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.crashes_open_setup_guide))
+                                }
+                                Button(
+                                    onClick = { navController.navigate(Screen.CrashWatcher) },
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("crashes_empty_open_watcher_button"),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = VibeDesignTokens.Color.Cyan,
+                                        contentColor = VibeDesignTokens.Color.OnCyan
+                                    )
+                                ) {
+                                    Icon(Icons.Default.Visibility, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.crash_watcher_title))
+                                }
                             }
                         }
                         if (uiState.canLoadMore || uiState.loadMoreError != null) {
@@ -381,6 +410,9 @@ fun CrashesScreen(
                             crash = crash,
                             onClick = {
                                 navController.navigate(Screen.CrashDetail(crash.id))
+                            },
+                            onAnalyzeClick = {
+                                navController.navigate(Screen.FixAssistant(crash.id))
                             }
                         )
                     }
@@ -540,6 +572,7 @@ private fun LoadMoreCrashesButton(
 @Composable
 fun DetailedCrashCard(
     crash: CrashReport,
+    onAnalyzeClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
@@ -683,6 +716,29 @@ fun DetailedCrashCard(
                     }
                 }
             }
+
+            Button(
+                onClick = onAnalyzeClick ?: onClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("crash_card_analyze_gemini_${crash.id}"),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = VibeDesignTokens.Color.Cyan,
+                    contentColor = VibeDesignTokens.Color.OnCyan
+                ),
+                shape = RoundedCornerShape(VibeDesignTokens.Shape.Control)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.crash_watcher_analyze_gemini),
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -696,6 +752,7 @@ private fun crashSourceLabel(source: IntegrationType?): String = when (source) {
     IntegrationType.WEBHOOK -> stringResource(R.string.crashes_source_webhook)
     IntegrationType.CUSTOM -> stringResource(R.string.crashes_source_custom)
     IntegrationType.INTERNAL_QA -> stringResource(R.string.crashes_source_internal_qa)
+    IntegrationType.ON_DEVICE_WATCHER -> stringResource(R.string.crashes_source_on_device_watcher)
     null -> stringResource(R.string.crashes_source_unavailable)
 }
 

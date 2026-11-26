@@ -331,6 +331,14 @@ fun AppNavigation(
                 viewModel = qualityViewModel
             )
         }
+
+        composable<Screen.CrashWatcher> {
+            val crashWatcherViewModel: CrashWatcherViewModel = viewModel()
+            CrashWatcherScreen(
+                navController = navController,
+                viewModel = crashWatcherViewModel
+            )
+        }
     }
 }
 

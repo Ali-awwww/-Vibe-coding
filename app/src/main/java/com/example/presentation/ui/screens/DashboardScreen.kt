@@ -319,6 +319,14 @@ internal fun DashboardScreenContent(
                             Spacer(Modifier.height(10.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 DashboardToolCard(
+                                    title = stringResource(R.string.crash_watcher_title),
+                                    subtitle = stringResource(R.string.crash_watcher_desc),
+                                    icon = Icons.Default.Visibility,
+                                    accent = VibeDesignTokens.Color.Cyan,
+                                    tag = "dashboard_tool_crash_watcher",
+                                    onClick = { onNavigate(Screen.CrashWatcher) }
+                                )
+                                DashboardToolCard(
                                     title = "AI Vibe Studio",
                                     subtitle = "بيئة تطوير ذكية لبناء التطبيقات باللغة الطبيعية (Vibe Coding)",
                                     icon = Icons.Default.AutoAwesome,

@@ -275,7 +275,7 @@ data class Integration(
 )
 
 enum class IntegrationType {
-    FIREBASE_CRASHLYTICS, SENTRY, BUGSNAG, WEBHOOK, CUSTOM, INTERNAL_QA
+    FIREBASE_CRASHLYTICS, SENTRY, BUGSNAG, WEBHOOK, CUSTOM, INTERNAL_QA, ON_DEVICE_WATCHER
 }
 
 enum class IntegrationStatus {
@@ -335,7 +335,11 @@ class Converters {
     fun fromIntegrationType(value: IntegrationType): String = value.name
 
     @TypeConverter
-    fun toIntegrationType(value: String): IntegrationType = IntegrationType.valueOf(value)
+    fun toIntegrationType(value: String): IntegrationType = try {
+        IntegrationType.valueOf(value)
+    } catch (_: Exception) {
+        IntegrationType.CUSTOM
+    }
 
     @TypeConverter
     fun fromIntegrationStatus(value: IntegrationStatus): String = value.name

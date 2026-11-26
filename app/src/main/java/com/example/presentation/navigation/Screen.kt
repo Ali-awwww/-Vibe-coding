@@ -66,5 +66,7 @@ sealed class Screen {
     data object TeamValidation : Screen()
     @Serializable
     data object ProductQualityCenter : Screen()
+    @Serializable
+    data object CrashWatcher : Screen()
 }
 
