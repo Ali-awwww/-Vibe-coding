@@ -3938,3 +3938,33 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the new main-head unit, lint and APK runs. Once all local tests/build checks pass, mark the unavailable live Supabase Auth and device visual criteria BLOCKED with their evidence and move to Dashboard's first executable audit item.
+
+
+### 2026-11-27 — Correct signed-out password-recovery completion
+
+**Confirmed defect**
+- Firebase `confirmPasswordReset` changes the password using a one-time code; it does not create an authenticated session. The previous repository implementation treated a successful reset as a failure whenever `FirebaseAuth.currentUser` was null. That is the normal state when a user opens a recovery email after signing out.
+- The Login screen also reused the sign-in success callback for password recovery. If a repository returned success, this callback could navigate to Dashboard even though a password reset is not authentication.
+
+**Implementation**
+- Changed `AuthRepository.completePasswordRecovery` to return `Result<Unit>`, accurately separating credential reset from session creation.
+- `FirebaseAuthRepository` now reports success only after the configured password-reset confirmer completes. The production default still calls Firebase `confirmPasswordReset`; an injected confirmer enables deterministic no-session regression coverage. No authenticated user is fabricated or required.
+- `LoginScreen` now returns to sign-in after a successful reset instead of invoking the authenticated-session navigation callback. The existing auth-mode transition clears the password fields.
+- Updated all discovered repository fakes and added repository, ViewModel and Compose regressions for signed-out completion, success feedback, secret clearing and no Dashboard navigation. Removed a duplicate JUnit import found in the Login Compose test.
+- Main commits: `a018e40896686879d3303c1af880410bd60dd3b2`, `69e9c1062db5d8adcbcf20200089323baa825e31`, `7d9328943b22f7d8dc2bb2379fa33829fb58ba82`, `e15b94e356f4baf21ec788573772f718716d13d7`, `49d4d620bda7af22264f1a70f4bee65772a13a30`, `39f674e287b6ddc7da83f2616221929d965de354`, `56b2f9abe0543c7922a91754afd0a25fe04bce91`, `9298d9acf4adf3e28d5b975e716f92cc5e95d234`.
+
+**Verification and status**
+- All eight changed source/test files were re-fetched from `main` after their writes; blob SHAs and expected content checks matched. The four principal implementation/test diffs were reviewed.
+- Regression tests are **added, not executed**. This runtime has Java 21 but no Gradle executable or Android SDK/ADB. A local clone attempt failed because `github.com` could not be resolved.
+- The repository's push workflows were inspected: Android Unit Tests, Android Code Quality/Lint, and Debug/Release APK build/artifact upload are configured for pushes to `main`. The available workflow-run lookup is PR-only and returned no runs for this push commit; combined commit status returned no status checks. Therefore CI terminal state, tests, lint and APK builds remain **BLOCKED / unverified**, not PASS.
+- No Android emulator/device is attached (`adb` is unavailable); no rendered screenshot, RTL/LTR device review, IME or accessibility verification is claimed.
+- Supabase live Auth verification remains **BLOCKED** by the previously recorded read-only project-access permission denial. No production DDL/DML, Auth, RLS, key or data changes were attempted. No `AGENTS.md` or `agents.md` was found (root path fetches returned 404 and repository code search returned no matches).
+
+**Criterion state**
+- Login signed-out password-reset contract and navigation correction: **IN_PROGRESS** — implementation and regression tests are committed; execution evidence is still required.
+- Login Supabase Auth lifecycle, session refresh/deep-link verification, and provider integration: **BLOCKED** pending authorized read access to the dedicated project.
+- Login rendered visual redesign and device verification (RTL/LTR, compact viewport, IME and accessibility): **BLOCKED** pending an Android device/emulator.
+- CI terminal verification for the current `main` head: **BLOCKED** because push-run enumeration is not exposed by the connected GitHub Actions operations.
+
+**Next exact step**
+- At the next meaningful verification point, inspect the Unit Tests, Lint and Debug/Release APK runs for `9298d9acf4adf3e28d5b975e716f92cc5e95d234` using a run-list-capable GitHub Actions endpoint; do not repeat the current PR-only lookup unless its capabilities change. Fix only failures evidenced by those logs. Then exercise recovery with a signed-out account and complete rendered Login RTL/LTR, IME and accessibility review on an Android device. Keep Login open until its design and functional gates are verified; do not mark it complete or advance to Dashboard while those gates remain open.
