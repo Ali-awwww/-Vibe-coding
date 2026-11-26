@@ -24,6 +24,7 @@ import java.util.Locale
 
 import androidx.compose.ui.platform.testTag
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -32,6 +33,7 @@ fun SettingsScreen(
     navController: NavController
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showSignOutDialog by remember { mutableStateOf(false) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
@@ -213,6 +215,8 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(16.dp))
 
+            // تطبيقاتنا
+            Button(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://apps-showcase.pages.dev")).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }, modifier = Modifier.fillMaxWidth().testTag("settings_open_our_apps")) { Icon(Icons.Default.Apps, null); Spacer(Modifier.width(8.dp)); Text("تطبيقاتنا") }
             // Sign Out Button
             Button(
                 onClick = { showSignOutDialog = true },
