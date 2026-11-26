@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Firebase Authentication repository supporting Google Sign-In, Email/Password sign-in & sign-up,
@@ -34,7 +35,12 @@ import kotlinx.coroutines.withContext
 class FirebaseAuthRepository(
     private val context: Context,
     private val firestoreProvider: () -> FirebaseFirestore?,
-    private val firebaseAuthProvider: () -> FirebaseAuth?
+    private val firebaseAuthProvider: () -> FirebaseAuth?,
+    private val credentialStateCleaner: suspend () -> Unit = {
+        CredentialManager.create(context.applicationContext)
+            .clearCredentialState(ClearCredentialStateRequest())
+    },
+    private val firebaseSignOutAction: (FirebaseAuth?) -> Unit = { it?.signOut() }
 ) : AuthRepository {
 
     private val auth: FirebaseAuth?
@@ -230,12 +236,22 @@ class FirebaseAuthRepository(
         withContext(NonCancellable) {
             setCrashlyticsUserId("")
             try {
-                CredentialManager.create(context.applicationContext)
-                    .clearCredentialState(ClearCredentialStateRequest())
-            } catch (e: Exception) {
-                Log.w(TAG, "Unable to clear Credential Manager state on sign-out", e)
+                val cleared = withTimeoutOrNull(CREDENTIAL_STATE_CLEAR_TIMEOUT_MS) {
+                    credentialStateCleaner()
+                    true
+                } == true
+                if (!cleared) {
+                    Log.w(TAG, "Credential Manager cleanup timed out; continuing sign-out")
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to clear Credential Manager state on sign-out", error)
+            } finally {
+                // Authentication sign-out must not be skipped when Credential Manager is slow
+                // or unavailable.
+                firebaseSignOutAction(auth)
             }
-            auth?.signOut()
         }
     }
 
@@ -314,5 +330,6 @@ class FirebaseAuthRepository(
 
     private companion object {
         const val TAG = "FirebaseAuthRepo"
+        const val CREDENTIAL_STATE_CLEAR_TIMEOUT_MS = 2_000L
     }
 }
