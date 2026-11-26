@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -201,18 +202,58 @@ fun LoginScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     var silentSignInJob by remember { mutableStateOf<Job?>(null) }
 
-    var authMode by remember { mutableStateOf(AuthMode.SIGN_IN) }
-    var email by remember { mutableStateOf("") }
+    var authMode by rememberSaveable { mutableStateOf(AuthMode.SIGN_IN) }
+    var email by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var displayName by remember { mutableStateOf("") }
-    var organization by remember { mutableStateOf("") }
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var organization by rememberSaveable { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf<AuthFormValidationError?>(null) }
+
+    val authFieldShape = RoundedCornerShape(VibeDesignTokens.Shape.Control)
+    val authFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = VibeDesignTokens.Color.TextPrimary,
+        unfocusedTextColor = VibeDesignTokens.Color.TextPrimary,
+        focusedContainerColor = Color.Transparent,
+        unfocusedContainerColor = Color.Transparent,
+        focusedBorderColor = CyberCyan,
+        unfocusedBorderColor = MutedText.copy(alpha = 0.55f),
+        errorBorderColor = VibeDesignTokens.Color.Error,
+        focusedLabelColor = CyberCyan,
+        unfocusedLabelColor = MutedText,
+        errorLabelColor = VibeDesignTokens.Color.Error,
+        cursorColor = CyberCyan,
+        errorCursorColor = VibeDesignTokens.Color.Error
+    )
 
     LaunchedEffect(passwordRecoveryState.linkGeneration, passwordRecoveryState.isReadyForNewPassword) {
         authMode = resolvePasswordRecoveryMode(authMode, passwordRecoveryState.isReadyForNewPassword)
         validationError = null
+    }
+
+    LaunchedEffect(authMode) {
+        // Passwords are deliberately not saveable and never survive a mode transition.
+        password = ""
+        confirmPassword = ""
+        passwordVisible = false
+    }
+
+    LaunchedEffect(actionState.successMessage) {
+        if (actionState.successMessage == AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED) {
+            password = ""
+            confirmPassword = ""
+            passwordVisible = false
+        }
+    }
+
+    val completeAuthentication: (Boolean) -> Unit = { success ->
+        if (success) {
+            password = ""
+            confirmPassword = ""
+            passwordVisible = false
+            onAuthSuccess()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -268,23 +309,18 @@ fun LoginScreen(
             if (error == null) {
                 viewModel.clearMessages()
                 when (authMode) {
-                    AuthMode.SIGN_IN -> viewModel.signIn(email.trim(), password) { success ->
-                        if (success) onAuthSuccess()
-                    }
+                    AuthMode.SIGN_IN -> viewModel.signIn(email.trim(), password, completeAuthentication)
                     AuthMode.SIGN_UP -> viewModel.signUp(
                         email = email.trim(),
                         password = password,
                         displayName = displayName.trim(),
-                        organization = organization.trim()
-                    ) { success ->
-                        if (success) onAuthSuccess()
-                    }
+                        organization = organization.trim(),
+                        onComplete = completeAuthentication
+                    )
                     AuthMode.RECOVER_PASSWORD -> viewModel.requestPasswordRecovery(email.trim()) { success ->
                         if (success) authMode = AuthMode.SIGN_IN
                     }
-                    AuthMode.SET_NEW_PASSWORD -> viewModel.completePasswordRecovery(password) { success ->
-                        if (success) onAuthSuccess()
-                    }
+                    AuthMode.SET_NEW_PASSWORD -> viewModel.completePasswordRecovery(password, completeAuthentication)
                 }
             }
         }
@@ -350,6 +386,7 @@ fun LoginScreen(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
+            .testTag("login_root")
             .background(
                 Brush.verticalGradient(
                     colors = listOf(Color(0xFF09162A), SpaceBackground, Color(0xFF080D1A))
@@ -448,6 +485,7 @@ fun LoginScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .testTag("auth_form_card")
                     .border(
                         1.dp,
                         Brush.linearGradient(listOf(CyberCyan.copy(alpha = 0.65f), CyberViolet.copy(alpha = 0.48f), CyberCyan.copy(alpha = 0.18f))),
@@ -458,7 +496,7 @@ fun LoginScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(if (compactWidth) 16.dp else 20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     val cardTitleRes = when (authMode) {
@@ -711,6 +749,8 @@ fun LoginScreen(
                             },
                             label = { Text(stringResource(R.string.auth_developer_name)) },
                             singleLine = true,
+                            shape = authFieldShape,
+                            colors = authFieldColors,
                             isError = validationError?.field == AuthFormField.DISPLAY_NAME,
                             supportingText = validationError?.takeIf { it.field == AuthFormField.DISPLAY_NAME }?.let { err ->
                                 { Text(stringResource(err.messageRes)) }
@@ -727,6 +767,8 @@ fun LoginScreen(
                             onValueChange = { organization = it },
                             label = { Text(stringResource(R.string.auth_organization_optional)) },
                             singleLine = true,
+                            shape = authFieldShape,
+                            colors = authFieldColors,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                             modifier = Modifier
@@ -744,6 +786,8 @@ fun LoginScreen(
                             },
                             label = { Text(stringResource(R.string.auth_email)) },
                             singleLine = true,
+                            shape = authFieldShape,
+                            colors = authFieldColors,
                             isError = validationError?.field == AuthFormField.EMAIL,
                             supportingText = validationError?.takeIf { it.field == AuthFormField.EMAIL }?.let { err ->
                                 { Text(stringResource(err.messageRes)) }
@@ -781,11 +825,15 @@ fun LoginScreen(
                             },
                             label = { Text(stringResource(passwordLabelRes)) },
                             singleLine = true,
+                            shape = authFieldShape,
+                            colors = authFieldColors,
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(
                                     onClick = { passwordVisible = !passwordVisible },
-                                    modifier = Modifier.size(48.dp)
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .testTag("auth_password_visibility_button")
                                 ) {
                                     Icon(
                                         imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
@@ -832,6 +880,8 @@ fun LoginScreen(
                             },
                             label = { Text(stringResource(confirmLabelRes)) },
                             singleLine = true,
+                            shape = authFieldShape,
+                            colors = authFieldColors,
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             isError = validationError?.field == AuthFormField.CONFIRM_PASSWORD,
                             supportingText = validationError?.takeIf { it.field == AuthFormField.CONFIRM_PASSWORD }?.let { err ->
@@ -957,7 +1007,7 @@ fun LoginScreen(
 @Composable
 private fun AuthDiagnosticPanel(diagnostic: AuthDiagnosticInfo) {
     val clipboardManager = LocalClipboardManager.current
-    var expanded by remember(diagnostic) { mutableStateOf(true) }
+    var expanded by remember(diagnostic) { mutableStateOf(false) }
     var copied by remember(diagnostic) { mutableStateOf(false) }
 
     val vpnLabel = when (diagnostic.vpnActive) {

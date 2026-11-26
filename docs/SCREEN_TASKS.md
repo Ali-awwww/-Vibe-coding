@@ -402,6 +402,7 @@ Append newest entries first. Each entry must state what changed, files/routes af
 
 | Date | Commit / PR | Work completed | Verification | Remaining work |
 |---|---|---|---|---|
+| 2026-11-27 | same main commit | Refined Login field tokens and compact layout; made diagnostic details opt-in; cleared non-persisted credentials on auth-mode/success transitions; added four Compose regressions. | Tests added, not yet executed; CI pending. No emulator/device visual sign-off. | Check terminal CI, fix failures, then verify rendered RTL/LTR, IME and accessibility; live Supabase Auth remains blocked by read-only project permission. |
 | 2026-11-05 | — | Approved cybernetic space / cyberpunk / engineering direction with strong effects. Added global design-system and 28-route visual backlog to this task register. | Documentation update only; no screen implementation, Gradle build, UI test or device verification performed in this entry. | Implement shared Compose design tokens/components, then migrate screens incrementally without changing their real behavior. |
 
 ### Mandatory update protocol
@@ -3814,3 +3815,27 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Required behavior: discover Shizuku under Android package-visibility rules; distinguish installed/running/authorized states; select monitored applications; confirm the privileged logcat process before showing active monitoring; stop cleanly when the process ends; persist captured reports only under the current authenticated account.
 - Acceptance: no app-UID fallback for privileged logcat commands; monitoring is active only while a Shizuku process is running; process-start/stream failures are visible and actionable; unauthenticated capture is not persisted; stop/restart does not leave stale active state.
 - Visual target: on-device diagnostic console with an explicit preparation state, permission state and process-backed monitoring indicator. Visual and device verification remain required before closure.
+
+
+### 2026-11-27 — Login credential lifecycle and access-console refinement
+
+**Observed design and interaction issues**
+- The five authentication fields relied on implicit Material 3 defaults rather than an explicit Vibe control treatment; the low-level diagnostic panel expanded automatically and could displace the actionable authentication message on compact screens.
+- Switching between sign-in, sign-up and recovery modes retained password/confirmation values and could leave password visibility enabled. Email/name fields also reset on configuration recreation despite being non-secret form context.
+
+**Implementation**
+- `LoginScreen.kt`: applied explicit shared Vibe field shape, focus/outline/text/error colors and compact card insets; added stable screen/card semantics tags for UI regression coverage.
+- Diagnostic details now start collapsed and are expanded only on explicit request. The primary localized error remains visible without immediately exposing technical metadata.
+- Non-secret mode/email/name/organization state survives configuration recreation with `rememberSaveable`. Password and confirmation remain deliberately non-saveable; both are cleared and visibility is reset whenever the auth mode changes, after successful authentication, and after an email-confirmation-required signup result.
+- Existing repository callbacks, validation, recovery-link behavior and provider operations remain the source of truth; no backend success state was introduced.
+
+**Regression coverage added**
+- `LoginScreenTest.kt`: diagnostics are collapsed until expanded; mode switches clear secrets and reset visibility; email-confirmation-required signup clears both password fields; the form card remains within a 320 dp viewport in LTR and RTL.
+
+**Verification boundary**
+- Tests were added but have not yet been executed in this run. GitHub Actions for this single main commit must reach terminal status before any test/build/lint success is claimed.
+- No emulator/device screenshot, TalkBack review or rendered RTL/LTR sign-off is claimed. Login remains unchecked and incomplete.
+- Read-only `get_project` access for the dedicated Supabase project `hgfgbjomwhogpswpqusk` returned permission denied. No project wake, database, Auth, schema, RLS, key or production-data mutation was attempted; live Auth integration verification remains BLOCKED.
+
+**Next exact step**
+- Inspect this commit's Unit Tests, Lint and Debug/Release APK runs to terminal status; fix any source/test failure, then complete rendered Login RTL/LTR and IME/accessibility review when an Android device/emulator and Supabase read access are available.
