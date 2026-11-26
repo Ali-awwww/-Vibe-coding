@@ -347,7 +347,7 @@ private class RecordingAuthRepository : AuthRepository {
     var signInResult: Result<UserAccount> = Result.failure(IllegalStateException("sign-in failed"))
     var signUpResult: Result<UserAccount> = Result.failure(IllegalStateException("sign-up failed"))
     var recoveryRequestResult: Result<Unit> = Result.success(Unit)
-    var recoveryCompletionResult: Result<UserAccount> =
+    var recoveryCompletionResult: Result<Unit> =
         Result.failure(IllegalStateException("password recovery failed"))
     var resetPasswordResult: Result<Unit> = Result.failure(IllegalStateException("password update failed"))
     var requestedRecoveryEmail: String? = null
@@ -376,7 +376,7 @@ private class RecordingAuthRepository : AuthRepository {
     override suspend fun completePasswordRecovery(
         credentials: PasswordRecoveryCredentials,
         newPassword: String
-    ): Result<UserAccount> = recoveryCompletionResult
+    ): Result<Unit> = recoveryCompletionResult
 
     override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =
         resetPasswordResult
