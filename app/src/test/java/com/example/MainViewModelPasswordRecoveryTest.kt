@@ -3,6 +3,7 @@ package com.example
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.PasswordRecoveryCredentials
+import com.example.presentation.viewmodel.AuthUiMessage
 import com.example.presentation.viewmodel.MainViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,30 @@ class MainViewModelPasswordRecoveryTest {
             advanceUntilIdle()
 
             assertEquals("second-one-time-hash", repository.lastCompletedCredentials?.tokenHash)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun successfulPasswordResetReportsSuccessWithoutRestoringASession() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val repository = RecordingAuthRepository().apply {
+                completionResult = Result.success(Unit)
+            }
+            val viewModel = MainViewModel(repository)
+            var completed: Boolean? = null
+
+            viewModel.acceptPasswordRecoveryLink(recoveryLink("successful-one-time-hash"))
+            viewModel.completePasswordRecovery("new-secure-password") { completed = it }
+            advanceUntilIdle()
+
+            assertEquals(true, completed)
+            assertEquals(AuthUiMessage.PASSWORD_UPDATED, viewModel.actionState.value.successMessage)
+            assertFalse(viewModel.passwordRecoveryState.value.isReadyForNewPassword)
+            assertNull(viewModel.currentUser.value)
+            assertEquals("successful-one-time-hash", repository.lastCompletedCredentials?.tokenHash)
         } finally {
             Dispatchers.resetMain()
         }
@@ -113,6 +138,7 @@ class MainViewModelPasswordRecoveryTest {
     private class RecordingAuthRepository : AuthRepository {
         override val currentUser: Flow<UserAccount?> = flowOf(null)
         var lastCompletedCredentials: PasswordRecoveryCredentials? = null
+        var completionResult: Result<Unit> = Result.failure(UnsupportedOperationException("Test capture only"))
         val firstAttemptStarted = kotlinx.coroutines.CompletableDeferred<Unit>()
         var firstAttemptCancelled = false
 
@@ -135,7 +161,7 @@ class MainViewModelPasswordRecoveryTest {
         override suspend fun completePasswordRecovery(
             credentials: PasswordRecoveryCredentials,
             newPassword: String
-        ): Result<UserAccount> {
+        ): Result<Unit> {
             lastCompletedCredentials = credentials
             if (credentials.tokenHash == "first-one-time-hash") {
                 firstAttemptStarted.complete(Unit)
@@ -146,7 +172,7 @@ class MainViewModelPasswordRecoveryTest {
                     throw cancelled
                 }
             }
-            return Result.failure(UnsupportedOperationException("Test capture only"))
+            return completionResult
         }
 
         override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =
