@@ -19,12 +19,12 @@ import com.example.R
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
+import com.example.domain.repository.PasswordRecoveryCredentials
 import com.example.presentation.viewmodel.AuthUiMessage
 import com.example.presentation.viewmodel.MainViewModel
 import com.example.ui.theme.CrashIntelligenceTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -134,6 +134,44 @@ class LoginScreenTest {
     }
 
     @Test
+    fun successfulPasswordRecoveryReturnsToSignInWithoutNavigatingToDashboard() {
+        val repository = LoginScreenAuthRepository(
+            passwordRecoveryOutcome = Result.success(Unit)
+        )
+        val viewModel = MainViewModel(repository)
+        var authSuccessCalls = 0
+        val context = appContext()
+        viewModel.acceptPasswordRecoveryLink(
+            "com.aistudio.crashintelligence.vyfrip://auth/recovery?mode=resetPassword&oobCode=valid-oob"
+        )
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                LoginScreen(viewModel = viewModel, onAuthSuccess = { authSuccessCalls++ })
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("password_input")
+            .performScrollTo()
+            .performTextInput("new-secure-password")
+        composeRule.onNodeWithTag("confirm_password_input")
+            .performScrollTo()
+            .performTextInput("new-secure-password")
+        composeRule.onNodeWithTag("auth_submit_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(AuthUiMessage.PASSWORD_UPDATED, viewModel.actionState.value.successMessage)
+        assertEquals(0, authSuccessCalls)
+        composeRule.onNodeWithText(context.getString(R.string.auth_success_password_updated))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("display_name_input").assertDoesNotExist()
+        composeRule.onNodeWithTag("password_input").performScrollTo()
+        assertEditableTextEquals("password_input", "")
+    }
+
+    @Test
     fun authFormRemainsWithinCompactViewportInLtrAndRtl() {
         val layoutDirection = mutableStateOf(LayoutDirection.Ltr)
         val viewModel = MainViewModel(LoginScreenAuthRepository())
@@ -179,7 +217,9 @@ class LoginScreenTest {
 
 private class LoginScreenAuthRepository(
     private val signUpOutcome: Result<UserAccount> =
-        Result.failure(UnsupportedOperationException("No sign-up response configured."))
+        Result.failure(UnsupportedOperationException("No sign-up response configured.")),
+    private val passwordRecoveryOutcome: Result<Unit> =
+        Result.failure(UnsupportedOperationException("No password recovery response configured."))
 ) : AuthRepository {
     override val currentUser: Flow<UserAccount?> = flowOf(null)
 
@@ -196,6 +236,11 @@ private class LoginScreenAuthRepository(
         Result.failure(UnsupportedOperationException("Sign-in is not part of this UI test."))
 
     override suspend fun signOut() = Unit
+
+    override suspend fun completePasswordRecovery(
+        credentials: PasswordRecoveryCredentials,
+        newPassword: String
+    ): Result<Unit> = passwordRecoveryOutcome
 
     override suspend fun resetPassword(email: String, newPassword: String): Result<Unit> =
         Result.failure(UnsupportedOperationException("Password reset is not part of this UI test."))
