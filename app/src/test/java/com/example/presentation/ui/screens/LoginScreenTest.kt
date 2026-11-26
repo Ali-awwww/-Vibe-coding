@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.LayoutDirection
@@ -23,6 +24,7 @@ import com.example.presentation.viewmodel.MainViewModel
 import com.example.ui.theme.CrashIntelligenceTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -87,7 +89,8 @@ class LoginScreenTest {
         composeRule.onNodeWithTag("toggle_auth_mode_button").performScrollTo().performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("password_input").performScrollTo().assertTextEquals("")
+        composeRule.onNodeWithTag("password_input").performScrollTo()
+        assertEditableTextEquals("password_input", "")
         composeRule.onNodeWithContentDescription(context.getString(R.string.auth_show_password))
             .assertExists()
         composeRule.onNodeWithContentDescription(context.getString(R.string.auth_hide_password))
@@ -124,8 +127,10 @@ class LoginScreenTest {
         composeRule.onNodeWithText(context.getString(R.string.auth_success_email_confirmation))
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithTag("password_input").performScrollTo().assertTextEquals("")
-        composeRule.onNodeWithTag("confirm_password_input").performScrollTo().assertTextEquals("")
+        composeRule.onNodeWithTag("password_input").performScrollTo()
+        assertEditableTextEquals("password_input", "")
+        composeRule.onNodeWithTag("confirm_password_input").performScrollTo()
+        assertEditableTextEquals("confirm_password_input", "")
     }
 
     @Test
@@ -159,6 +164,14 @@ class LoginScreenTest {
         assertCardContained()
         composeRule.onNodeWithTag("email_input").assertExists()
         composeRule.onNodeWithTag("auth_submit_button").assertExists()
+    }
+
+    private fun assertEditableTextEquals(tag: String, expected: String) {
+        val actual = composeRule.onNodeWithTag(tag)
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.EditableText]
+            .text
+        assertEquals(expected, actual)
     }
 
     private fun appContext(): Context = ApplicationProvider.getApplicationContext()

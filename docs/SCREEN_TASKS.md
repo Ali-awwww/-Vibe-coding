@@ -405,7 +405,8 @@ Append newest entries first. Each entry must state what changed, files/routes af
 | 2026-11-27 | 9ac32aa74e600d2ebc9a404eab91e8b574feb5d4 | Refined Login field tokens and compact layout; made diagnostic details opt-in; cleared non-persisted credentials on auth-mode/success transitions; added four Compose regressions. | Android Lint succeeded; Debug and Release APKs built and uploaded; unit suite ran 453 tests with 4 failures and 4 skipped. Failure reports were inspected; no Login test result is inferred from this parent run. | Fix the confirmed test-isolation/proxy failures in the next row, then inspect the new run and complete device RTL/LTR/IME/accessibility review. Live Supabase Auth remains blocked by project read permission. |
 | 2026-11-27 | f7ac8e3b57a90d2c5553d7ec2313b761d4e14fb4 | Fixed three verified unit-test failure causes: Kotlin Result-mangled proxy dispatch, FirebaseAuthException's Android TextUtils dependency, and accidental implicit Firestore discovery in a no-backend test. | Follow-up unit compile still failed only on three explicit Compose test imports; no unit tests executed on this head. | Correct Compose test imports, rerun the full suite, and verify the four prior failures are resolved. |
 | 2026-11-27 | 0798a0b63454b92c7c8f4561ae952c69d896d850 | Corrected Login Compose test imports to match the existing screen-test API surface. | Unit suite executed 457 tests: 5 failed, 4 skipped. The import issue was resolved; remaining failures were 2 Kotlin Result proxy boxing failures and 3 Login UI test assumptions (off-screen diagnostics plus auth-mode transition). | Correct the proxy fake to throw through the ViewModel boundary; make diagnostic assertions scroll-aware and prevent the initial empty recovery state from overwriting a selected auth mode. |
-| 2026-11-27 | same main commit | Fixed the Login initial recovery-state race, made diagnostic/form Compose tests scroll-aware, and corrected the FixAssistant proxy fake to exercise exception handling without boxing Kotlin Result. | Source/test changes committed; fresh CI pending. | Inspect the full unit suite and lint/APK runs to terminal status; fix only remaining failures supported by JUnit logs. |
+| 2026-11-27 | 11e22a9e33cdf668c313ec2acb23c41e83b8a3e1 | Fixed the Login initial recovery-state race, made diagnostic/form Compose tests scroll-aware, and corrected the FixAssistant proxy fake to exercise exception handling without boxing Kotlin Result. | Android Lint succeeded; Debug APK built; 459 tests ran with 2 failures and 4 skips. Both failures were test assertions that compared merged Text+EditableText against an empty string; the JUnit nodes show EditableText was already empty. Release APK still running. | Assert the EditableText semantics property directly, keep the stale SET_NEW_PASSWORD process-restore guard, then rerun. |
+| 2026-11-27 | same main commit | Corrected password-empty UI assertions to read EditableText semantics and reset only a stale process-restored SET_NEW_PASSWORD mode when no recovery token exists. | Test/source correction committed; CI pending. | Inspect the new unit test, lint and Debug/Release APK runs to terminal status. |
 | 2026-11-27 | same main commit | Added a MainViewModel regression proving a provider-restored identity is the initial session and sign-out clears the observed identity. | Test added; not yet executed. | Inspect terminal unit/lint/APK results, then validate real auth restoration and sign-out on Android. |
 
 | 2026-11-05 | — | Approved cybernetic space / cyberpunk / engineering direction with strong effects. Added global design-system and 28-route visual backlog to this task register. | Documentation update only; no screen implementation, Gradle build, UI test or device verification performed in this entry. | Implement shared Compose design tokens/components, then migrate screens incrementally without changing their real behavior. |
@@ -3919,3 +3920,21 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the latest Unit Tests, Lint and Debug/Release APK runs. If the auth-mode tests still fail, inspect the resulting UI state and event ordering rather than weakening the acceptance assertions.
+
+
+### 2026-11-27 — Use editable-text semantics for password clearing assertions
+
+**CI evidence**
+- Commit `11e22a9e33cdf668c313ec2acb23c41e83b8a3e1` completed the unit suite: 459 tests, 2 failures, 4 skipped. Android Lint succeeded and the Debug APK build/upload succeeded; Release APK was still running.
+- Both failures were in the new Login UI assertions, not the password-clearing behavior. The Compose node reports `EditableText = ''` but also exposes the field's label as `Text = '[Password]'`; `assertTextEquals("")` incorrectly expected the merged Text + EditableText list to be empty.
+- The diagnostic-collapse test, session-restoration ViewModel test, helper guard tests, FixAssistant proxy tests and AIModelTeam no-backend test passed in this run.
+
+**Fix**
+- `LoginScreenTest.kt`: read `SemanticsProperties.EditableText` directly when asserting that password and confirmation fields are cleared.
+- `LoginScreen.kt`: a saved `SET_NEW_PASSWORD` mode is reset to sign-in if process restoration has no recovery token, while sign-up/recovery choices are preserved. The initial empty recovery state remains a no-op for other modes.
+
+**Verification boundary**
+- The assertion correction and stale-mode guard are committed; the new CI run is required. No screen is marked complete from the parent run.
+
+**Next exact step**
+- Inspect the new main-head unit, lint and APK runs. Once all local tests/build checks pass, mark the unavailable live Supabase Auth and device visual criteria BLOCKED with their evidence and move to Dashboard's first executable audit item.

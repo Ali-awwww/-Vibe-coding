@@ -246,6 +246,11 @@ fun LoginScreen(
     LaunchedEffect(passwordRecoveryState.linkGeneration, passwordRecoveryState.isReadyForNewPassword) {
         // The initial empty state is not a recovery event; do not overwrite a user's mode choice.
         if (passwordRecoveryState.linkGeneration == 0L && !passwordRecoveryState.isReadyForNewPassword) {
+            // A process-restored new-password mode has no recovery token to submit.
+            // Preserve sign-up/recovery choices, but fail closed for this stale mode.
+            if (authMode == AuthMode.SET_NEW_PASSWORD) {
+                authMode = AuthMode.SIGN_IN
+            }
             return@LaunchedEffect
         }
         authMode = resolvePasswordRecoveryMode(authMode, passwordRecoveryState.isReadyForNewPassword)
