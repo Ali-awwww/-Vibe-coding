@@ -155,7 +155,9 @@ class CrashWatcherService : Service() {
         )
 
         streamJob = serviceScope.launch {
-            if (!inspectRecentLogcatBuffer(packages)) {
+            val bufferInspected = inspectRecentLogcatBuffer(packages)
+            currentCoroutineContext().ensureActive()
+            if (!bufferInspected) {
                 failMonitoring(getString(R.string.crash_watcher_process_start_failed))
                 return@launch
             }
@@ -169,19 +171,35 @@ class CrashWatcherService : Service() {
             }
 
             activeProcess = process
-            CrashWatcherState.onProcessStartResult(
-                processStarted = true,
-                packages = packages,
-                startedAt = System.currentTimeMillis()
-            )
-            withContext(Dispatchers.Main) {
-                notificationManager.notify(
-                    ONGOING_NOTIFICATION_ID,
-                    buildServiceNotification(packages, isStarting = false)
+            try {
+                currentCoroutineContext().ensureActive()
+                CrashWatcherState.onProcessStartResult(
+                    processStarted = true,
+                    packages = packages,
+                    startedAt = System.currentTimeMillis()
                 )
-            }
+                withContext(Dispatchers.Main) {
+                    notificationManager.notify(
+                        ONGOING_NOTIFICATION_ID,
+                        buildServiceNotification(packages, isStarting = false)
+                    )
+                }
 
-            streamLogcatContinuously(packages, process)
+                streamLogcatContinuously(packages, process)
+            } finally {
+                if (activeProcess === process) {
+                    runCatching { process.destroy() }
+                    activeProcess = null
+                    if (isActive) {
+                        CrashWatcherState.onProcessStartResult(processStarted = false)
+                        CrashWatcherState.setError(getString(R.string.crash_watcher_stream_ended))
+                        withContext(Dispatchers.Main) {
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                            stopSelf()
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -244,9 +262,11 @@ class CrashWatcherService : Service() {
     private suspend fun inspectRecentLogcatBuffer(packages: Set<String>): Boolean = withContext(Dispatchers.IO) {
         val cmd = arrayOf("logcat", "-d", "-v", "threadtime", "-b", "crash", "-b", "main")
         val process = ShizukuManager.executeProcess(cmd) ?: return@withContext false
+        activeProcess = process
         try {
             val lines = process.inputStream.bufferedReader().use { it.readLines() }
             val exitCode = process.waitFor()
+            currentCoroutineContext().ensureActive()
             if (exitCode != 0) {
                 Log.w(TAG, "Recent logcat inspection failed with exit code $exitCode")
                 return@withContext false
@@ -263,6 +283,7 @@ class CrashWatcherService : Service() {
             false
         } finally {
             runCatching { process.destroy() }
+            if (activeProcess === process) activeProcess = null
         }
     }
 
