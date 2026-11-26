@@ -368,7 +368,9 @@ fun LoginScreen(
                     AuthMode.RECOVER_PASSWORD -> viewModel.requestPasswordRecovery(email.trim()) { success ->
                         if (success) authMode = AuthMode.SIGN_IN
                     }
-                    AuthMode.SET_NEW_PASSWORD -> viewModel.completePasswordRecovery(password, completeAuthentication)
+                    AuthMode.SET_NEW_PASSWORD -> viewModel.completePasswordRecovery(password) { success ->
+                        if (success) authMode = AuthMode.SIGN_IN
+                    }
                 }
             }
         }
