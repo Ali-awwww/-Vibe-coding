@@ -100,6 +100,30 @@ class AuthRepositoryPasswordRecoveryTest {
     }
 
     @Test
+    fun passwordResetCompletesWithoutAnAuthenticatedSession() = runTest {
+        var confirmedCode: String? = null
+        var confirmedPassword: String? = null
+        val repository = FirebaseAuthRepository(
+            context = context,
+            firestoreProvider = { null },
+            firebaseAuthProvider = { null },
+            passwordResetConfirmer = { code, password ->
+                confirmedCode = code
+                confirmedPassword = password
+            }
+        )
+
+        val result = repository.completePasswordRecovery(
+            credentials = PasswordRecoveryCredentials(oobCode = "valid-oob"),
+            newPassword = "new-secure-password"
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("valid-oob", confirmedCode)
+        assertEquals("new-secure-password", confirmedPassword)
+    }
+
+    @Test
     fun requestPasswordRecoveryRejectsBlankEmail() = runTest {
         val repository = FirebaseAuthRepository(
             context = context,
