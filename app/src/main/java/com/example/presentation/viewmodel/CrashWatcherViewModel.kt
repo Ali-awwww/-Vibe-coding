@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.R
 import com.example.domain.model.CrashReport
 import com.example.service.CrashWatcherService
 import com.example.service.CrashWatcherState

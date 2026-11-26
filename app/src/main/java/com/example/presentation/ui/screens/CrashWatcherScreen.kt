@@ -59,6 +59,7 @@ fun CrashWatcherScreen(
     val clipboardManager = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val adbCopiedMessage = stringResource(R.string.crash_watcher_adb_command_copied)
 
     LaunchedEffect(Unit) {
         viewModel.loadInstalledApps(context)
@@ -86,7 +87,7 @@ fun CrashWatcherScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "SHIZUKU / ON-DEVICE CRASH ENGINE",
+                            text = stringResource(R.string.crash_watcher_subtitle),
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = JetBrainsMono,
                             color = VibeDesignTokens.Color.Cyan
@@ -100,7 +101,7 @@ fun CrashWatcherScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "العودة",
+                            contentDescription = stringResource(R.string.crash_watcher_back),
                             tint = VibeDesignTokens.Color.Cyan
                         )
                     }
@@ -143,7 +144,7 @@ fun CrashWatcherScreen(
                     onCopyCommand = { cmd ->
                         clipboardManager.setText(AnnotatedString(cmd))
                         scope.launch {
-                            snackbarHostState.showSnackbar("تم نسخ أمر ADB إلى الحافظة")
+                            snackbarHostState.showSnackbar(adbCopiedMessage)
                         }
                     }
                 )
@@ -338,7 +339,7 @@ private fun ShizukuStatusSection(
                 IconButton(onClick = { expandedGuide = !expandedGuide }) {
                     Icon(
                         imageVector = if (expandedGuide) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = "دليل الإعداد",
+                        contentDescription = stringResource(R.string.crash_watcher_setup_guide),
                         tint = VibeDesignTokens.Color.TextMuted
                     )
                 }
@@ -464,7 +465,7 @@ private fun ShizukuStatusSection(
                                     ) {
                                         Icon(
                                             Icons.Default.ContentCopy,
-                                            contentDescription = "نسخ",
+                                            contentDescription = stringResource(R.string.crash_watcher_copy),
                                             tint = VibeDesignTokens.Color.Cyan,
                                             modifier = Modifier.size(16.dp)
                                         )
@@ -558,7 +559,11 @@ private fun MonitoringControlPanel(
                         )
                         if (uiState.isMonitoring) {
                             Text(
-                                text = "مدة المراقبة: ${uiState.elapsedDurationFormatted} · الأعطال الملتقطة: ${uiState.capturedCrashesCount}",
+                                text = stringResource(
+                                    R.string.crash_watcher_monitoring_summary,
+                                    uiState.elapsedDurationFormatted,
+                                    uiState.capturedCrashesCount
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = JetBrainsMono,
                                 color = VibeDesignTokens.Color.Success
@@ -649,7 +654,7 @@ private fun LastCapturedCrashBanner(
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "تم التقاط عطل حقيقي جديد!",
+                    text = stringResource(R.string.crash_watcher_new_crash_captured),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = VibeDesignTokens.Color.Error
@@ -688,7 +693,7 @@ private fun LastCapturedCrashBanner(
                     modifier = Modifier.testTag("crash_watcher_captured_details_button"),
                     border = BorderStroke(1.dp, VibeDesignTokens.Color.Cyan.copy(alpha = 0.5f))
                 ) {
-                    Text("التفاصيل", color = VibeDesignTokens.Color.Cyan)
+                    Text(stringResource(R.string.crash_watcher_details), color = VibeDesignTokens.Color.Cyan)
                 }
             }
         }
@@ -718,7 +723,7 @@ private fun AppPickerHeader(
             trailingIcon = {
                 if (uiState.searchQuery.isNotBlank()) {
                     IconButton(onClick = { onQueryChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = "مسح")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.crash_watcher_clear))
                     }
                 }
             },
@@ -766,10 +771,10 @@ private fun AppPickerHeader(
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = { onSelectAll(true) }) {
-                    Text("تحديد الكل", fontSize = 12.sp, color = VibeDesignTokens.Color.Cyan)
+                    Text(stringResource(R.string.crash_watcher_select_all), fontSize = 12.sp, color = VibeDesignTokens.Color.Cyan)
                 }
                 TextButton(onClick = { onSelectAll(false) }) {
-                    Text("إلغاء", fontSize = 12.sp, color = VibeDesignTokens.Color.TextMuted)
+                    Text(stringResource(R.string.crash_watcher_deselect_all), fontSize = 12.sp, color = VibeDesignTokens.Color.TextMuted)
                 }
             }
         }

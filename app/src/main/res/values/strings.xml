@@ -782,4 +782,17 @@
     <string name="crash_watcher_stream_ended">The Shizuku logcat stream ended unexpectedly. Monitoring has stopped.</string>
     <string name="crash_watcher_apps_load_failed">Installed applications could not be loaded. Check device access and try again.</string>
     <string name="crash_watcher_retry">Try again</string>
+    <string name="crash_watcher_subtitle">SHIZUKU / ON-DEVICE CRASH ENGINE</string>
+    <string name="crash_watcher_back">Back</string>
+    <string name="crash_watcher_adb_command_copied">ADB command copied to clipboard</string>
+    <string name="crash_watcher_setup_guide">Setup guide</string>
+    <string name="crash_watcher_copy">Copy</string>
+    <string name="crash_watcher_monitoring_summary">Monitoring duration: %1$s · Captured crashes: %2$d</string>
+    <string name="crash_watcher_new_crash_captured">A new crash was captured</string>
+    <string name="crash_watcher_details">Details</string>
+    <string name="crash_watcher_clear">Clear</string>
+    <string name="crash_watcher_select_all">Select all</string>
+    <string name="crash_watcher_deselect_all">Clear selection</string>
+    <string name="crash_watcher_select_app_first">Select at least one application to monitor.</string>
+    <string name="crash_watcher_shizuku_permission_required">Grant Shizuku permission before starting monitoring.</string>
 </resources>
