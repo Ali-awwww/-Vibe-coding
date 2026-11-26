@@ -77,7 +77,8 @@ fun AppNavigation(
             val dashboardViewModel: DashboardViewModel = viewModel {
                 DashboardViewModel(
                     DependencyProvider.provideCrashRepository(context),
-                    DependencyProvider.provideAuthRepository(context)
+                    DependencyProvider.provideAuthRepository(context),
+                    com.example.util.isFirebaseConfigured(context)
                 )
             }
             DashboardScreen(
@@ -96,7 +97,8 @@ fun AppNavigation(
             val projectsViewModel: ProjectsViewModel = viewModel {
                 ProjectsViewModel(
                     DependencyProvider.provideCrashRepository(context),
-                    DependencyProvider.provideAuthRepository(context)
+                    DependencyProvider.provideAuthRepository(context),
+                    com.example.util.isFirebaseConfigured(context)
                 )
             }
             ProjectsScreen(navController = navController, viewModel = projectsViewModel)
@@ -107,7 +109,8 @@ fun AppNavigation(
             val projectsViewModel: ProjectsViewModel = viewModel {
                 ProjectsViewModel(
                     DependencyProvider.provideCrashRepository(context),
-                    DependencyProvider.provideAuthRepository(context)
+                    DependencyProvider.provideAuthRepository(context),
+                    com.example.util.isFirebaseConfigured(context)
                 )
             }
             androidx.compose.runtime.LaunchedEffect(route.projectId) {

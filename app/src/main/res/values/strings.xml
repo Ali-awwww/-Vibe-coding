@@ -269,9 +269,10 @@
     <string name="auth_forgot_password">Forgot password?</string>
     <string name="auth_create_account">Create account</string>
     <string name="auth_back_to_sign_in">Back to sign in</string>
-    <string name="auth_provider_label">AUTH PROVIDER • FIREBASE GOOGLE AUTH</string>
+    <string name="auth_provider_label">AUTH PROVIDER • FIREBASE AUTH</string>
     <string name="auth_google_sign_in">Continue with Google</string>
-    <string name="auth_google_subtitle">Sign in once with Google to sync projects, crashes, and AI workspaces via Firebase</string>
+    <string name="auth_or_email">OR CONTINUE WITH EMAIL</string>
+    <string name="auth_google_subtitle">Sign in with Google or Email &amp; Password to sync projects, crashes, and AI workspaces via Firebase</string>
     <string name="auth_vpn_notice">VPN active: if Google sign-in fails immediately, verify Private DNS, split-tunneling, or SHA-1/Play Services connectivity.</string>
     <string name="auth_network_status_prefix">Network:</string>
     <string name="auth_validation_email">Enter a valid email address.</string>
@@ -279,12 +280,11 @@
     <string name="auth_validation_password_mismatch">The passwords do not match.</string>
     <string name="auth_validation_name">Enter your developer name.</string>
     <string name="auth_validation_password_required">Enter your password.</string>
-    <string name="auth_error_sign_in">We couldn\'t complete Google Sign-In with Firebase. Check your connection or account and try again.</string>
+    <string name="auth_error_sign_in">We couldn\'t complete Firebase Sign-In. Check your email, password, or Google account and try again.</string>
     <string name="auth_error_sign_up">We couldn\'t create your account. Check your details and try again.</string>
     <string name="auth_error_recovery_request">We couldn\'t request a password recovery link. Try again.</string>
     <string name="auth_error_password_recovery">We couldn\'t update your password with this recovery link. It may have expired; request a new link.</string>
     <string name="auth_error_password_update">We couldn\'t update your password. Sign in again and retry.</string>
-    <string name="auth_error_supabase_unconfigured">Authentication server is not configured. Add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in AI Studio Secrets.</string>
     <string name="auth_error_firebase_unconfigured">Firebase Authentication is not configured in this build.</string>
     <string name="auth_error_google_cancelled">Google Sign-In was cancelled before completion.</string>
     <string name="auth_error_google_no_credential">No Google account credential was returned. Add a Google account on this device or check Google Play Services and Web Client ID configuration.</string>
@@ -720,4 +720,9 @@
 
     <string name="crash_detail_occurred_at">Occurred %1$s</string>
     <string name="crash_detail_timestamp_unavailable">Occurrence time unavailable</string>
+    <string name="crashes_not_connected_title">Not connected yet</string>
+    <string name="crashes_not_connected_desc">No real crash source is connected or no real crash reports have arrived yet. Connect Sentry or Bugsnag or follow the setup guide for your app.</string>
+    <string name="crashes_open_setup_guide">Open setup guide</string>
+    <string name="fix_assistant_unavailable_error">تعذّر الوصول إلى المساعد الآن، حاول لاحقاً</string>
+    <string name="fix_assistant_quota_exhausted_note">Daily Gemini quota reached; automatic retries stopped.</string>
 </resources>

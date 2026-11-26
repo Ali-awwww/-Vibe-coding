@@ -288,4 +288,14 @@ class CrashesViewModelTest {
         assertEquals("page-25", viewModel.uiState.value.crashes.first().id)
         assertEquals("page-0", viewModel.uiState.value.crashes.last().id)
     }
+
+    @Test
+    fun hasConnectedCrashSourceIsFalseWhenNoCrashesAndNoIntegrationsExist() = runTest {
+        val viewModel = CrashesViewModel(repository = repository, initialProjectId = "p1")
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.crashes.isEmpty())
+        assertFalse(viewModel.uiState.value.hasConnectedCrashSource)
+    }
 }

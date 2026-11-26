@@ -8,8 +8,10 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.recaptcha.RecaptchaAppCheckProviderFactory
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 private const val TAG = "AppCheckInit"
+private const val CRASHLYTICS_TAG = "CrashlyticsInit"
 
 private const val DEBUG_TOKEN_EXTRA = "FIREBASE_APPCHECK_DEBUG_TOKEN"
 private const val DEBUG_STORE_PREFIX = "com.google.firebase.appcheck.debug.store."
@@ -37,6 +39,34 @@ fun isFirebaseConfigured(context: Context): Boolean {
     return !projectId.isNullOrBlank() &&
         projectId != "remixed-project-id" &&
         projectId != "placeholder"
+}
+
+fun configureCrashlytics(context: Context) {
+    runCatching {
+        if (ensureFirebaseInitialized(context) == null) return@runCatching
+        val crashlytics = FirebaseCrashlytics.getInstance()
+        crashlytics.isCrashlyticsCollectionEnabled = true
+        crashlytics.setCustomKey("app_version", BuildConfig.VERSION_NAME)
+        crashlytics.setCustomKey("application_id", BuildConfig.APPLICATION_ID)
+    }.onFailure { error ->
+        Log.w(CRASHLYTICS_TAG, "Crashlytics initialization skipped: ${error.message}")
+    }
+}
+
+fun setCrashlyticsUserId(userId: String?) {
+    runCatching {
+        FirebaseCrashlytics.getInstance().setUserId(userId.orEmpty())
+    }
+}
+
+fun recordCrashlyticsNonFatal(error: Throwable, contextMessage: String? = null) {
+    runCatching {
+        val crashlytics = FirebaseCrashlytics.getInstance()
+        if (!contextMessage.isNullOrBlank()) {
+            crashlytics.log(contextMessage)
+        }
+        crashlytics.recordException(error)
+    }
 }
 
 fun configureAppCheck(context: Context, intent: Intent?) {

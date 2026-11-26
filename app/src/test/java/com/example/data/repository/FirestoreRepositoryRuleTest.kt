@@ -90,7 +90,6 @@ class FirestoreRepositoryRuleTest : FirestoreEmulatorTestBase() {
             aiModelRepository = aiModelRepo,
             auth = auth,
             authRepository = fakeAuthRepo,
-            supabaseProjectDataSource = null,
             currentUserIdProvider = { auth.currentUser?.uid }
         )
 

@@ -593,7 +593,7 @@ class TeamValidationEngineImpl(
                     base.copy(
                         status = ValidationStatus.PASSED,
                         durationMs = elapsed(startTime),
-                        evidence = "The local AIModelRepository returned the temporary provider to its owner and returned null for an unrelated user ID; the provider was removed afterwards. This does not verify Supabase RLS or Firestore security rules.",
+                        evidence = "The local AIModelRepository returned the temporary provider to its owner and returned null for an unrelated user ID; the provider was removed afterwards. This does not verify Firestore security rules.",
                         modelsInvolved = listOf("AIModelRepository local query scope")
                     )
                 }
@@ -792,7 +792,7 @@ class TeamValidationEngineImpl(
 
             - **Free Only enforcement:** $freeOnly
             - **Local provider ownership query scope:** $localIsolation
-            - **Supabase RLS / Firestore rules isolation:** $backendIsolation
+            - **Firestore rules isolation:** $backendIsolation
             - **Executable Vibe and crash sandboxes:** $sandboxes
             - **Model inference calls:** none recorded by this validation run.
             - **Conflict and rate-limit events:** none recorded by this validation run.

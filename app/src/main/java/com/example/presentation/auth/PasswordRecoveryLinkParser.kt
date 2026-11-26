@@ -1,8 +1,8 @@
 package com.example.presentation.auth
 
+import com.example.auth.APP_AUTH_REDIRECT_HOST
+import com.example.auth.APP_AUTH_REDIRECT_SCHEME
 import com.example.domain.repository.PasswordRecoveryCredentials
-import com.example.auth.SUPABASE_AUTH_REDIRECT_SCHEME
-import com.example.auth.SUPABASE_AUTH_REDIRECT_HOST
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -13,9 +13,9 @@ internal sealed interface PasswordRecoveryLinkResult {
 }
 
 /**
- * Accepts only the app's password-recovery callback. Supabase may return either a
- * token_hash query parameter or an already verified access/refresh-token pair in
- * the URI fragment. Credentials are never included in diagnostic messages.
+ * Accepts only the app's Firebase/deep-link password-recovery callback.
+ * Supports Firebase Auth `oobCode` (mode=resetPassword) as well as legacy recovery payloads.
+ * Credentials are never included in diagnostic messages.
  */
 internal fun parsePasswordRecoveryLink(
     rawLink: String,
@@ -27,8 +27,8 @@ internal fun parsePasswordRecoveryLink(
         return PasswordRecoveryLinkResult.Rejected("رابط الاستعادة غير صالح أو منتهي الصلاحية.")
     }
 
-    if (!uri.scheme.equals(SUPABASE_AUTH_REDIRECT_SCHEME, ignoreCase = true) ||
-        !uri.host.equals(SUPABASE_AUTH_REDIRECT_HOST, ignoreCase = true) ||
+    if (!uri.scheme.equals(APP_AUTH_REDIRECT_SCHEME, ignoreCase = true) ||
+        !uri.host.equals(APP_AUTH_REDIRECT_HOST, ignoreCase = true) ||
         uri.path != PASSWORD_RECOVERY_PATH
     ) {
         return PasswordRecoveryLinkResult.Rejected("وجهة رابط الاستعادة لا تطابق التطبيق.")
@@ -38,6 +38,15 @@ internal fun parsePasswordRecoveryLink(
     if (!parameters["error"].isNullOrBlank()) {
         return PasswordRecoveryLinkResult.Rejected("رابط الاستعادة غير صالح أو منتهي الصلاحية.")
     }
+
+    val oobCode = parameters["oobCode"]?.takeIf(String::isNotBlank)
+    val mode = parameters["mode"]
+    if (oobCode != null && (mode == null || mode.equals("resetPassword", ignoreCase = true))) {
+        return PasswordRecoveryLinkResult.Ready(
+            PasswordRecoveryCredentials(oobCode = oobCode)
+        )
+    }
+
     if (!parameters["type"].equals("recovery", ignoreCase = true)) {
         return PasswordRecoveryLinkResult.Rejected("الرابط المستلم ليس رابط استعادة كلمة مرور.")
     }

@@ -8,9 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
+import com.example.domain.repository.FirebaseAuthNotConfiguredException
 import com.example.domain.repository.PasswordRecoveryCredentials
-import com.example.domain.repository.SupabaseHttpException
-import com.example.domain.repository.SupabaseUnconfiguredException
 import com.example.presentation.auth.PasswordRecoveryLinkResult
 import com.example.presentation.auth.isVerifiedEmailConfirmationLink
 import com.example.presentation.auth.parsePasswordRecoveryLink
@@ -44,7 +43,6 @@ enum class AuthUiMessage {
     PASSWORD_RECOVERY_REQUEST_FAILED,
     PASSWORD_RECOVERY_FAILED,
     PASSWORD_UPDATE_FAILED,
-    SUPABASE_NOT_CONFIGURED,
     FIREBASE_NOT_CONFIGURED,
     GOOGLE_SIGN_IN_CANCELLED,
     GOOGLE_NO_CREDENTIAL,
@@ -171,7 +169,7 @@ class MainViewModel(
         _networkSnapshot.value = snapshot
         val causeChain = collectCauseChain(error)
 
-        val unconfigured = causeChain.filterIsInstance<SupabaseUnconfiguredException>().firstOrNull()
+        val firebaseUnconfigured = causeChain.filterIsInstance<FirebaseAuthNotConfiguredException>().firstOrNull()
         val credentialCancelled = causeChain.filterIsInstance<GetCredentialCancellationException>().firstOrNull()
         val noCredential = causeChain.filterIsInstance<NoCredentialException>().firstOrNull()
         val dnsError = causeChain.filterIsInstance<UnknownHostException>().firstOrNull()
@@ -182,17 +180,16 @@ class MainViewModel(
         val genericIoError = causeChain.filterIsInstance<IOException>().firstOrNull()
         val credentialError = causeChain.filterIsInstance<GetCredentialException>().firstOrNull()
         val firebaseAuthError = causeChain.filterIsInstance<FirebaseAuthException>().firstOrNull()
-        val httpError = causeChain.filterIsInstance<SupabaseHttpException>().firstOrNull()
 
         val message: AuthUiMessage
         val code: String
         val reportedException: Throwable?
 
         when {
-            unconfigured != null -> {
-                message = AuthUiMessage.SUPABASE_NOT_CONFIGURED
-                code = "SUPABASE_UNCONFIGURED"
-                reportedException = unconfigured
+            firebaseUnconfigured != null -> {
+                message = AuthUiMessage.FIREBASE_NOT_CONFIGURED
+                code = "FIREBASE_UNCONFIGURED"
+                reportedException = firebaseUnconfigured
             }
             credentialCancelled != null -> {
                 message = AuthUiMessage.GOOGLE_SIGN_IN_CANCELLED
@@ -252,11 +249,6 @@ class MainViewModel(
                 code = "FIREBASE_${firebaseAuthError.errorCode}"
                 reportedException = firebaseAuthError
             }
-            httpError != null -> {
-                message = fallback
-                code = "AUTH_HTTP_${httpError.statusCode}"
-                reportedException = httpError
-            }
             else -> {
                 message = fallback
                 code = "AUTH_REJECTED"
@@ -264,8 +256,7 @@ class MainViewModel(
             }
         }
 
-        val resolvedHost = unconfigured?.endpointHost?.takeIf(String::isNotBlank)
-            ?: snapshot.endpointHost
+        val resolvedHost = snapshot.endpointHost
         val credentialException = credentialCancelled ?: noCredential ?: credentialError
         val credentialErrorType = credentialException?.type?.takeIf(String::isNotBlank)
         val sdkDetailException: Throwable? = when {
@@ -290,7 +281,7 @@ class MainViewModel(
                 vpnActive = snapshot.vpnActive,
                 networkValidated = snapshot.networkValidated,
                 transportSummary = snapshot.transportSummary,
-                httpStatusCode = httpError?.statusCode,
+                httpStatusCode = null,
                 appPackageName = snapshot.appPackageName,
                 signingSha1 = snapshot.signingSha1,
                 playServicesStatus = snapshot.playServicesStatus,
@@ -434,10 +425,18 @@ class MainViewModel(
                 )
                 onComplete(true)
             } else {
-                _actionState.value = resolveFailureState(
-                    result.exceptionOrNull(),
-                    AuthUiMessage.SIGN_IN_FAILED
-                )
+                val failure = result.exceptionOrNull()
+                if (failure is EmailConfirmationRequiredException) {
+                    _actionState.value = AuthActionState(
+                        isLoading = false,
+                        successMessage = AuthUiMessage.EMAIL_CONFIRMATION_REQUIRED
+                    )
+                } else {
+                    _actionState.value = resolveFailureState(
+                        failure,
+                        AuthUiMessage.SIGN_IN_FAILED
+                    )
+                }
                 onComplete(false)
             }
         }

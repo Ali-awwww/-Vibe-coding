@@ -244,7 +244,7 @@ internal fun DeveloperSessionHeader(
     isCloudConfigured: Boolean
 ) {
     val badgeColor = if (isCloudConfigured) VibeDesignTokens.Color.Success else VibeDesignTokens.Color.Warning
-    val badgeLabel = if (isCloudConfigured) "SUPABASE SYNC" else "LOCAL CACHE • CLOUD UNCONFIGURED"
+    val badgeLabel = if (isCloudConfigured) "FIREBASE SYNC" else "LOCAL CACHE • CLOUD UNCONFIGURED"
 
     DashboardPanel(
         modifier = Modifier

@@ -2,7 +2,6 @@ package com.example.data.repository
 
 import com.example.BuildConfig
 import com.example.data.local.CrashDao
-import com.example.data.remote.supabase.SupabaseProjectDataSource
 import com.example.data.remote.*
 import com.example.domain.model.*
 import com.example.domain.repository.AuthRepository
@@ -105,11 +104,27 @@ class CrashRepositoryImpl(
     private val aiModelRepository: com.example.domain.repository.AIModelRepository,
     private val auth: FirebaseAuth? = null,
     private val authRepository: AuthRepository? = null,
-    private val supabaseProjectDataSource: SupabaseProjectDataSource? = null,
     private val currentUserIdProvider: (() -> String?)? = null
 ) : CrashRepository {
 
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+
+    private fun extractJsonObject(raw: String): String {
+        val trimmed = raw.trim()
+        val withoutFence = if (trimmed.startsWith("```")) {
+            trimmed
+                .removePrefix("```json")
+                .removePrefix("```JSON")
+                .removePrefix("```")
+                .removeSuffix("```")
+                .trim()
+        } else {
+            trimmed
+        }
+        val start = withoutFence.indexOf('{')
+        val end = withoutFence.lastIndexOf('}')
+        return if (start >= 0 && end > start) withoutFence.substring(start, end + 1) else withoutFence
+    }
 
     private fun requireUserId(): String = try {
         currentUserIdProvider?.invoke()?.takeIf { it.isNotBlank() }
@@ -121,17 +136,11 @@ class CrashRepositoryImpl(
         throw IllegalStateException("Unable to verify the authenticated user.", error)
     }
     private fun requireProjectUserId(requestedUserId: String? = null): String {
-        val uid = ProjectIdentityGuard.requireSupabaseUserId(
-            currentUserId = authRepository?.getCurrentUserSync()?.id,
-            requestedUserId = requestedUserId
+        return ProjectIdentityGuard.requireAuthenticatedUserId(
+            currentUserId = authRepository?.getCurrentUserSync()?.id ?: currentUserIdProvider?.invoke(),
+            requestedUserId = requestedUserId,
+            firebaseUserId = if (firestore != null) auth?.currentUser?.uid else null
         )
-        if (firestore != null) {
-            ProjectIdentityGuard.requireLegacyFirebaseIdentityMatch(
-                supabaseUserId = uid,
-                firebaseUserId = auth?.currentUser?.uid
-            )
-        }
-        return uid
     }
     private suspend fun currentUserProjectIds(): Set<String> =
         getProjectsForUser(requireProjectUserId()).first().map { it.id }.toSet()
@@ -145,7 +154,7 @@ class CrashRepositoryImpl(
     }
 
     override fun getProjects(): Flow<List<Project>> = flow {
-        val currentUserId = authRepository?.getCurrentUserSync()?.id
+        val currentUserId = (authRepository?.getCurrentUserSync()?.id ?: currentUserIdProvider?.invoke())
             ?.takeIf { it.isNotBlank() }
         if (currentUserId == null) {
             emit(emptyList())
@@ -153,10 +162,6 @@ class CrashRepositoryImpl(
         }
 
         val uid = requireProjectUserId(currentUserId)
-        supabaseProjectDataSource?.let {
-            emit(it.getProjectsForUser(uid))
-            return@flow
-        }
         val fs = firestore
         if (fs != null) {
             emitAll(
@@ -171,10 +176,6 @@ class CrashRepositoryImpl(
     }
     override fun getProjectsForUser(userId: String): Flow<List<Project>> = flow {
         val uid = requireProjectUserId(userId)
-        supabaseProjectDataSource?.let {
-            emit(it.getProjectsForUser(uid))
-            return@flow
-        }
         val fs = firestore
         if (fs != null) {
             emitAll(
@@ -189,11 +190,6 @@ class CrashRepositoryImpl(
     }
     override suspend fun getProjectById(projectId: String): Project? {
         val uid = requireProjectUserId()
-        supabaseProjectDataSource?.let {
-            val project = it.getProjectById(projectId)
-            project?.let { row -> crashDao.insertProject(row) }
-            return project
-        }
         val fs = firestore
         if (fs != null) {
             val remoteProject = fs.collection("users").document(uid).collection("projects")
@@ -209,10 +205,6 @@ class CrashRepositoryImpl(
         }
         val id = if (project.id.isEmpty()) UUID.randomUUID().toString() else project.id
         val newProject = project.copy(id = id, ownerId = uid)
-        supabaseProjectDataSource?.let {
-            crashDao.insertProject(it.createProject(newProject))
-            return
-        }
 
         firestore?.let { fs ->
             val projectPath = "users/$uid/projects/$id"
@@ -250,11 +242,6 @@ class CrashRepositoryImpl(
         val project = getProjectById(projectId) ?: throw Exception("Project not found")
         // Note: Security rules enforce that only the owner can delete, but we check here too.
         if (project.ownerId != uid) throw SecurityException("غير مصرح لك بحذف هذا المشروع.")
-        supabaseProjectDataSource?.let {
-            it.deleteProject(projectId)
-            crashDao.deleteProject(projectId)
-            return@runCatching
-        }
 
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)?.delete()?.await()
         
@@ -279,10 +266,6 @@ class CrashRepositoryImpl(
             emit(emptyList())
             return@flow
         }
-        supabaseProjectDataSource?.let {
-            emit(it.getApplications(projectId))
-            return@flow
-        }
         val fs = firestore
         if (fs != null) {
             val uid = requireProjectUserId()
@@ -300,10 +283,6 @@ class CrashRepositoryImpl(
     override fun getAllApplications(): Flow<List<Application>> = flow {
         val uid = requireProjectUserId()
         val projectIds = currentUserProjectIds()
-        supabaseProjectDataSource?.let {
-            emit(it.getAllApplications().filter { application -> application.projectId in projectIds })
-            return@flow
-        }
         val fs = firestore
         if (fs != null) {
             emitAll(
@@ -333,10 +312,6 @@ class CrashRepositoryImpl(
 
         val id = if (application.id.isEmpty()) UUID.randomUUID().toString() else application.id
         val newApp = application.copy(id = id, ownerId = uid)
-        supabaseProjectDataSource?.let {
-            crashDao.insertApplication(it.createApplication(newApp))
-            return
-        }
 
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(application.projectId)
             ?.collection("applications")?.document(id)?.set(newApp)?.await()
@@ -347,11 +322,6 @@ class CrashRepositoryImpl(
         val uid = requireProjectUserId()
         val applications = getAllApplications().first()
         val app = applications.find { it.id == applicationId } ?: return
-        supabaseProjectDataSource?.let {
-            it.deleteApplication(applicationId)
-            crashDao.deleteApplication(applicationId)
-            return
-        }
 
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(app.projectId)
             ?.collection("applications")?.document(applicationId)?.delete()?.await()
@@ -765,57 +735,53 @@ class CrashRepositoryImpl(
             ""
         }
 
-        // 3. Prepare AI Prompt
+        // 3. Prepare AI Prompt (Arabic explanation & root cause analysis)
         val prompt = """
-            You are a Senior Android Engineer and Crash Expert. Analyze this crash report and provide a detailed diagnosis.
-            
-            CRASH DETAILS:
+            أنت مهندس أندرويد أول وخبير تحليل الأعطال. حلّل تقرير العطل الحقيقي التالي وقدّم تشخيصاً دقيقاً باللغة العربية.
+
+            تفاصيل العطل:
             Type: ${authorizedCrash.exceptionType}
             Message: ${authorizedCrash.message}
             Severity: ${authorizedCrash.severity}
             Device: ${authorizedCrash.deviceModel} (Android ${authorizedCrash.osVersion})
             App Version: ${authorizedCrash.appVersion}
-            
+
             STACK TRACE:
             $stackTraceToUse
             $sourceContext
-            
-            INSTRUCTIONS:
-            1. Identify the root cause precisely.
-            2. Explain why it happened.
-            3. Provide a clear solution.
-            4. If possible, suggest the specific code fix.
-            5. Categorize the error.
-            6. Provide a summary in Arabic.
-            7. Output raw JSON ONLY matching the schema.
-            
+
+            التعليمات:
+            1. حدّد السبب الجذري الفعلي بناءً على نوع الاستثناء وتتبع المكدس (stack trace).
+            2. اشرح سبب حدوثه وكيفية إصلاحه باللغة العربية الواضحة.
+            3. إذا أمكن، اقترح مقتطف كود عملي للإصلاح.
+            4. أعد JSON خاماً فقط دون أي نص إضافي خارج JSON.
+
             JSON SCHEMA:
             {
-              "summary": "Short Arabic summary",
-              "rootCause": "Technical root cause",
+              "summary": "ملخص دقيق ومختصر بالعربية",
+              "rootCause": "السبب الجذري التقني بالعربية",
               "certainty": "CONFIRMED | HIGHLY_LIKELY | POSSIBLE",
               "sourceLocation": "File.kt:line (method)",
-              "whyItHappened": "Reasoning",
-              "solution": "How to fix",
-              "suggestedCode": "Optional code snippet",
-              "category": "NULL_POINTER_EXCEPTION | OUT_OF_MEMORY | etc",
+              "whyItHappened": "تفسير واضح لسبب الحدوث بالعربية",
+              "solution": "خطوات الإصلاح العملية بالعربية",
+              "suggestedCode": "مقتطف كود اختياري",
+              "category": "NULL_POINTER_EXCEPTION | OUT_OF_MEMORY | NETWORK_ERROR | RUNTIME_EXCEPTION | FATAL_EXCEPTION | UNKNOWN_ERROR",
               "confidence": 0.9
             }
         """.trimIndent()
 
-        // 4. Generate Response
-        val defaultModel = aiModelRepository.getDefaultModel(uid) ?: throw Exception("No AI model configured for this user")
-        val response = aiModelRepository.generateResponse(
+        // 4. Generate Response via Firebase AI Logic chain
+        val (usedModelId, response) = aiModelRepository.generateWithFirebaseAiChain(
             userId = uid,
-            modelId = defaultModel.id,
             prompt = prompt,
-            systemInstruction = "You are an AI Crash Diagnostic Assistant. Provide accurate, production-grade root cause analysis.",
+            systemInstruction = "أنت خبير تشخيص أعطال أندرويد. قدّم تحليلاً دقيقاً لسبب العطل باللغة العربية وبصيغة JSON خام فقط.",
             taskId = authorizedCrash.id,
             taskType = AITaskType.ROOT_CAUSE_DIAGNOSIS
         ).getOrThrow()
 
-        val json = response.removeSurrounding("```json", "```").trim()
-        val parsed = moshi.adapter(AIDiagnosisResponse::class.java).fromJson(json) ?: throw Exception("Failed to parse diagnosis response")
+        val json = extractJsonObject(response)
+        val parsed = moshi.adapter(AIDiagnosisResponse::class.java).fromJson(json)
+            ?: throw Exception("Failed to parse diagnosis response")
 
         val diagnosis = AIDiagnosis(
             crashId = authorizedCrash.id,
@@ -828,9 +794,9 @@ class CrashRepositoryImpl(
             suggestedCode = parsed.suggestedCode,
             category = try { ErrorCategory.valueOf(parsed.category) } catch (e: Exception) { ErrorCategory.UNKNOWN_ERROR },
             confidence = parsed.confidence,
-            modelId = defaultModel.id,
-            modelName = defaultModel.name,
-            providerName = "AI Hub"
+            modelId = usedModelId,
+            modelName = usedModelId,
+            providerName = "Firebase AI Logic"
         )
 
         // 5. Save
@@ -1238,11 +1204,6 @@ class CrashRepositoryImpl(
         require(retentionDays in 1..3650) { "Retention must be between 1 and 3650 days." }
         val uid = requireProjectUserId(callerUserId)
         requireOwnedProject(projectId, uid)
-        supabaseProjectDataSource?.let {
-            it.updateProjectSettings(projectId, retentionDays, piiScrubbing)
-            crashDao.updateProjectSecurityPolicy(projectId, retentionDays, piiScrubbing)
-            return@runCatching
-        }
         firestore?.collection("users")?.document(uid)?.collection("projects")?.document(projectId)
             ?.update(mapOf(
                 "dataRetentionDays" to retentionDays,
@@ -1491,9 +1452,50 @@ class CrashRepositoryImpl(
 
     // AI Fix Assistant Implementation
     override fun getFixSuggestions(crashId: String): Flow<List<FixSuggestion>> = flow {
-        if (getCrashDetails(crashId).first() == null) { emit(emptyList()); return@flow }
-        emitAll(crashDao.getFixSuggestions(crashId))
+        val authorizedCrash = getCrashDetails(crashId).first()
+        if (authorizedCrash == null) {
+            emit(emptyList())
+            return@flow
+        }
+        val fs = firestore
+        if (fs != null) {
+            val uid = requireUserId()
+            val collectionPath = "users/$uid/projects/${authorizedCrash.projectId}/fix_suggestions"
+            emitAll(
+                fs.collection("users").document(uid)
+                    .collection("projects").document(authorizedCrash.projectId)
+                    .collection("fix_suggestions")
+                    .whereEqualTo("crashId", crashId)
+                    .snapshots()
+                    .map { snapshot ->
+                        snapshot.toObjects(FixSuggestion::class.java)
+                            .sortedByDescending { it.createdAt }
+                    }
+                    .catch { e ->
+                        handleFirestoreError(e, OperationType.LIST, collectionPath)
+                        throw e
+                    }
+            )
+        } else {
+            emitAll(crashDao.getFixSuggestions(crashId))
+        }
     }
+
+    private fun fixSuggestionToFirestoreMap(fix: FixSuggestion): Map<String, Any?> = buildMap {
+        put("id", fix.id)
+        put("crashId", fix.crashId)
+        put("originalCode", fix.originalCode)
+        put("suggestedCode", fix.suggestedCode)
+        put("explanation", fix.explanation)
+        put("potentialSideEffects", fix.potentialSideEffects)
+        put("filePath", fix.filePath)
+        put("branchName", fix.branchName)
+        fix.githubPrUrl?.let { put("githubPrUrl", it) }
+        put("status", fix.status.name)
+        fix.testResults?.let { put("testResults", it) }
+        put("createdAt", fix.createdAt)
+    }
+
     override suspend fun generateFixSuggestion(
         crashReport: CrashReport,
         diagnosis: AIDiagnosis
@@ -1506,130 +1508,214 @@ class CrashRepositoryImpl(
 
         val mapping = crashDao.getRepositoryMapping(authorizedCrash.applicationId)
             ?.takeIf { it.projectId == authorizedCrash.projectId }
-            ?: throw IllegalStateException("يجب ربط مستودع GitHub بهذا التطبيق أولاً.")
-        require(mapping.repoOwner.isNotBlank() && mapping.repoName.isNotBlank() && mapping.defaultBranch.isNotBlank()) {
-            "بيانات ربط مستودع GitHub غير مكتملة."
-        }
+        val fixId = UUID.randomUUID().toString()
 
-        val rawLocation = resolveVerifiedCrashSourceLocation(
-            diagnosisLocation = diagnosis.sourceLocation,
-            rawStackTrace = authorizedCrash.stackTrace,
-            symbolicatedFrames = emptyList()
-        ) ?: run {
-            val frames = symbolicationRepository.symbolicate(authorizedCrash).getOrNull()?.frames.orEmpty()
-            resolveVerifiedCrashSourceLocation(
+        val fixSuggestion = if (mapping != null) {
+            require(mapping.repoOwner.isNotBlank() && mapping.repoName.isNotBlank() && mapping.defaultBranch.isNotBlank()) {
+                "بيانات ربط مستودع GitHub غير مكتملة."
+            }
+
+            val rawLocation = resolveVerifiedCrashSourceLocation(
                 diagnosisLocation = diagnosis.sourceLocation,
                 rawStackTrace = authorizedCrash.stackTrace,
-                symbolicatedFrames = frames
-            )
-        } ?: throw IllegalStateException(
-            "موضع المصدر في التشخيص غير مثبت في تتبع الانهيار أو الإطارات المفكوكة؛ لم يتم البحث عن ملف أو إنشاء اقتراح."
-        )
-
-        val searchResults = githubRepository.searchCode(
-            userId = uid,
-            owner = mapping.repoOwner,
-            repo = mapping.repoName,
-            query = "filename:${rawLocation.fileName}",
-            ref = mapping.defaultBranch
-        ).getOrThrow()
-        val filePath = selectUniqueCrashSourcePath(searchResults, rawLocation)
-            ?: throw IllegalStateException(
-                "تعذر تحديد ملف مصدر واحد مطابق لموضع الانهيار؛ لم يتم اختيار أول نتيجة عشوائياً."
+                symbolicatedFrames = emptyList()
+            ) ?: run {
+                val frames = symbolicationRepository.symbolicate(authorizedCrash).getOrNull()?.frames.orEmpty()
+                resolveVerifiedCrashSourceLocation(
+                    diagnosisLocation = diagnosis.sourceLocation,
+                    rawStackTrace = authorizedCrash.stackTrace,
+                    symbolicatedFrames = frames
+                )
+            } ?: throw IllegalStateException(
+                "موضع المصدر في التشخيص غير مثبت في تتبع الانهيار أو الإطارات المفكوكة؛ لم يتم البحث عن ملف أو إنشاء اقتراح."
             )
 
-        val originalCode = githubRepository.fetchFileContent(
-            userId = uid,
-            owner = mapping.repoOwner,
-            repo = mapping.repoName,
-            path = filePath,
-            ref = mapping.defaultBranch
-        ).getOrThrow()
-        if (originalCode.isBlank()) {
-            throw IllegalStateException("ملف المصدر المرتبط بالانهيار فارغ؛ لم يتم إنشاء اقتراح إصلاح.")
-        }
-        if (rawLocation.lineNumber > originalCode.lineSequence().count()) {
-            throw IllegalStateException("تغير ملف المصدر ولم يعد يحتوي على سطر الانهيار؛ أعد تحميل التشخيص قبل إنشاء اقتراح.")
-        }
+            val searchResults = githubRepository.searchCode(
+                uid,
+                mapping.repoOwner,
+                mapping.repoName,
+                "filename:${rawLocation.fileName}",
+                mapping.defaultBranch
+            ).getOrThrow()
+            val filePath = selectUniqueCrashSourcePath(searchResults, rawLocation)
+                ?: throw IllegalStateException(
+                    "تعذر تحديد ملف مصدر واحد مطابق لموضع الانهيار؛ لم يتم اختيار أول نتيجة عشوائياً."
+                )
 
-        val prompt = """
-            You are an AI Fix Assistant. Propose a code-level fix for this crash.
-            
-            DIAGNOSIS:
-            ${diagnosis.summary}
-            Root Cause: ${diagnosis.rootCause}
-            Why it happened: ${diagnosis.whyItHappened}
-            
-            SOURCE CODE (${filePath}):
-            ${originalCode}
-            
-            INSTRUCTIONS:
-            1. Analyze the original code and the diagnosis.
-            2. Propose a clean, idiomatic fix that addresses the root cause.
-            3. Do not just hide the error; fix the logic.
-            4. Identify potential side effects.
-            5. Provide a detailed explanation for the change.
-            6. Output raw JSON ONLY.
-            7. suggestedCode MUST contain the complete updated file, including every unchanged line. Never return a partial block, patch fragment, or excerpt.
-            8. Set fullFileContent=true only when the complete file is present. Otherwise set false and do not propose a change.
-            
-            JSON SCHEMA:
-            {
-              "suggestedCode": "Complete updated file content, including unchanged lines",
-              "explanation": "Why this fix works",
-              "potentialSideEffects": "What to watch out for",
-              "fullFileContent": true
+            val originalCode = githubRepository.fetchFileContent(
+                uid,
+                mapping.repoOwner,
+                mapping.repoName,
+                filePath,
+                mapping.defaultBranch
+            ).getOrThrow()
+            if (originalCode.isBlank()) {
+                throw IllegalStateException("ملف المصدر المرتبط بالانهيار فارغ؛ لم يتم إنشاء اقتراح إصلاح.")
             }
-        """.trimIndent()
+            if (rawLocation.lineNumber > originalCode.lineSequence().count()) {
+                throw IllegalStateException("تغير ملف المصدر ولم يعد يحتوي على سطر الانهيار؛ أعد تحميل التشخيص قبل إنشاء اقتراح.")
+            }
 
-        val userId = uid
-        val defaultModel = aiModelRepository.getDefaultModel(userId) ?: throw Exception("No AI model configured for this user")
-        val responseText = aiModelRepository.generateResponse(
-            userId = userId,
-            modelId = defaultModel.id,
-            prompt = prompt,
-            systemInstruction = "You are an AI Fix Assistant. Propose high-quality code fixes for application crashes.",
-            taskId = authorizedCrash.id,
-            taskType = AITaskType.CODE_FIX_SUGGESTION
-        ).getOrThrow()
+            val prompt = """
+                أنت مساعد إصلاح الأعطال في أندرويد. حلّل الكود المصدري وتقرير العطل واقترح إصلاحاً حقيقياً باللغة العربية.
 
-        val jsonText = responseText.removeSurrounding("```json", "```").trim()
-        
-        val fixResult = moshi.adapter(FixResultResponse::class.java).fromJson(jsonText)
-            ?: throw IllegalStateException("فشل تحليل استجابة الذكاء الاصطناعي.")
-        val completeFile = requireCompleteFixFile(fixResult)
-        if (completeFile == originalCode) {
-            throw IllegalStateException("لم يقترح النموذج أي تغيير في ملف المصدر؛ لم يتم حفظ اقتراح فارغ.")
+                CRASH:
+                Type: ${authorizedCrash.exceptionType}
+                Message: ${authorizedCrash.message}
+
+                DIAGNOSIS:
+                ${diagnosis.summary}
+                Root Cause: ${diagnosis.rootCause}
+                Why it happened: ${diagnosis.whyItHappened}
+
+                SOURCE CODE (${filePath}):
+                $originalCode
+
+                التعليمات:
+                1. حلّل الكود الأصلي والتشخيص واقترح إصلاحاً عملياً يعالج السبب الجذري.
+                2. اكتب explanation و potentialSideEffects باللغة العربية الواضحة.
+                3. أعد JSON خاماً فقط دون أي نص خارج JSON.
+                4. يجب أن يحتوي suggestedCode على الملف الكامل المحدّث متضمناً كل السطور غير المتغيرة.
+                5. اجعل fullFileContent=true فقط عند تضمين الملف الكامل.
+
+                JSON SCHEMA:
+                {
+                  "suggestedCode": "محتوى الملف الكامل المحدّث",
+                  "explanation": "شرح السبب والإصلاح بالعربية",
+                  "potentialSideEffects": "الآثار الجانبية المحتملة بالعربية",
+                  "fullFileContent": true
+                }
+            """.trimIndent()
+
+            val (_, responseText) = aiModelRepository.generateWithFirebaseAiChain(
+                userId = uid,
+                prompt = prompt,
+                systemInstruction = "أنت مساعد إصلاح الأعطال في أندرويد. اقترح إصلاحات حقيقية للكود واشرح السبب باللغة العربية، وأعد JSON خاماً فقط.",
+                taskId = authorizedCrash.id,
+                taskType = AITaskType.CODE_FIX_SUGGESTION
+            ).getOrThrow()
+
+            val jsonText = extractJsonObject(responseText)
+            val fixResult = moshi.adapter(FixResultResponse::class.java).fromJson(jsonText)
+                ?: throw IllegalStateException("فشل تحليل استجابة الذكاء الاصطناعي.")
+            val completeFile = requireCompleteFixFile(fixResult)
+            if (completeFile == originalCode) {
+                throw IllegalStateException("لم يقترح النموذج أي تغيير في ملف المصدر؛ لم يتم حفظ اقتراح فارغ.")
+            }
+
+            val exceptionSlug = authorizedCrash.exceptionType.lowercase()
+                .replace(Regex("[^a-z0-9.-]+"), "-")
+                .take(48)
+                .trim('-', '.')
+                .ifBlank { "crash" }
+            FixSuggestion(
+                id = fixId,
+                crashId = authorizedCrash.id,
+                originalCode = originalCode,
+                suggestedCode = completeFile,
+                explanation = fixResult.explanation,
+                potentialSideEffects = fixResult.potentialSideEffects,
+                filePath = filePath,
+                branchName = "fix/${exceptionSlug}-${fixId.take(5)}",
+                status = FixStatus.PROPOSED,
+                testResults = null
+            )
+        } else {
+            val symbolication = symbolicationRepository.symbolicate(authorizedCrash).getOrNull()
+            val stackTraceToUse = if (symbolication != null && symbolication.frames.isNotEmpty()) {
+                symbolication.frames.joinToString("\n") { frame ->
+                    "${frame.methodName ?: "unknown"}(${frame.fileName ?: "unknown"}:${frame.lineNumber ?: 0})"
+                }
+            } else {
+                authorizedCrash.stackTrace
+            }
+            val prompt = """
+                أنت مساعد إصلاح الأعطال في أندرويد. حلّل العطل الحقيقي التالي واقترح إصلاحاً عملياً باللغة العربية.
+
+                تفاصيل العطل:
+                Exception Type: ${authorizedCrash.exceptionType}
+                Message: ${authorizedCrash.message}
+                Device: ${authorizedCrash.deviceModel} (Android ${authorizedCrash.osVersion})
+                App Version: ${authorizedCrash.appVersion}
+
+                STACK TRACE:
+                $stackTraceToUse
+
+                التشخيص المتاح:
+                ${diagnosis.summary}
+                السبب الجذري: ${diagnosis.rootCause}
+                التفسير: ${diagnosis.whyItHappened}
+
+                التعليمات:
+                1. حلّل نوع الاستثناء وتتبع المكدس الحقيقيين وحدّد السبب الفعلي واقتراح الإصلاح العملي بالعربية.
+                2. اكتب explanation و potentialSideEffects باللغة العربية الواضحة.
+                3. ضع في suggestedCode مقتطف الكود المقترح لإصلاح العطل.
+                4. اجعل fullFileContent=false لأنه تحليل مبني على stack trace دون استبدال ملف كامل.
+                5. أعد JSON خاماً فقط دون أي نص خارج JSON.
+
+                JSON SCHEMA:
+                {
+                  "suggestedCode": "الكود المقترح للإصلاح",
+                  "explanation": "سبب العطل وتفاصيل الإصلاح بالعربية",
+                  "potentialSideEffects": "تنبيهات أو آثار جانبية محتملة بالعربية",
+                  "fullFileContent": false
+                }
+            """.trimIndent()
+
+            val (_, responseText) = aiModelRepository.generateWithFirebaseAiChain(
+                userId = uid,
+                prompt = prompt,
+                systemInstruction = "أنت مساعد إصلاح الأعطال في أندرويد. حلّل الاستثناء وتتبع المكدس وقدّم سبباً حقيقياً واقتراح إصلاح بالعربية بصيغة JSON خام فقط.",
+                taskId = authorizedCrash.id,
+                taskType = AITaskType.CODE_FIX_SUGGESTION
+            ).getOrThrow()
+
+            val jsonText = extractJsonObject(responseText)
+            val fixResult = moshi.adapter(FixResultResponse::class.java).fromJson(jsonText)
+                ?: throw IllegalStateException("فشل تحليل استجابة الذكاء الاصطناعي.")
+            if (fixResult.suggestedCode.isBlank() || fixResult.explanation.isBlank()) {
+                throw IllegalStateException("أعاد النموذج اقتراح إصلاح فارغاً.")
+            }
+
+            val locationLabel = diagnosis.sourceLocation
+                .takeIf { it.isNotBlank() && !it.equals("Unknown", ignoreCase = true) }
+                ?: "تحليل Stack Trace"
+            FixSuggestion(
+                id = fixId,
+                crashId = authorizedCrash.id,
+                originalCode = "",
+                suggestedCode = fixResult.suggestedCode,
+                explanation = fixResult.explanation,
+                potentialSideEffects = fixResult.potentialSideEffects,
+                filePath = locationLabel,
+                branchName = "",
+                status = FixStatus.PROPOSED,
+                testResults = null
+            )
         }
 
-        val fixId = UUID.randomUUID().toString()
-        val exceptionSlug = authorizedCrash.exceptionType.lowercase()
-            .replace(Regex("[^a-z0-9.-]+"), "-")
-            .take(48)
-            .trim('-', '.')
-            .ifBlank { "crash" }
-        val fixSuggestion = FixSuggestion(
-            id = fixId,
-            crashId = authorizedCrash.id,
-            originalCode = originalCode,
-            suggestedCode = completeFile,
-            explanation = fixResult.explanation,
-            potentialSideEffects = fixResult.potentialSideEffects,
-            filePath = filePath,
-            branchName = "fix/${exceptionSlug}-${fixId.take(5)}",
-            status = FixStatus.PROPOSED,
-            testResults = null // Compilation, static analysis, and unit tests have not been executed here.
-        )
-        
+        firestore?.let { fs ->
+            val fixRef = fs.collection("users").document(uid)
+                .collection("projects").document(authorizedCrash.projectId)
+                .collection("fix_suggestions").document(fixId)
+            try {
+                fixRef.set(fixSuggestionToFirestoreMap(fixSuggestion)).await()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                handleFirestoreError(error, OperationType.CREATE, fixRef.path)
+                throw error
+            }
+        }
+
         crashDao.insertFixSuggestion(fixSuggestion)
 
-        // System notification
-        crashDao.insertNotification(
+        addNotification(
             SystemNotification(
                 id = UUID.randomUUID().toString(),
                 projectId = authorizedCrash.projectId,
                 title = "اقتراح إصلاح كود جاهز للمراجعة",
-                message = "اكتمل تحليل واقتراح تصحيح لـ ${authorizedCrash.exceptionType} في $filePath",
+                message = "اكتمل تحليل واقتراح تصحيح لـ ${authorizedCrash.exceptionType} في ${fixSuggestion.filePath}",
                 type = NotificationType.FIX_READY,
                 targetCrashId = authorizedCrash.id
             )
@@ -1701,6 +1787,23 @@ class CrashRepositoryImpl(
             ).getOrThrow().takeIf { it.isNotBlank() }
                 ?: throw IllegalStateException("لم يُرجع GitHub رابط Pull Request صالحاً؛ لم يتم تسجيل نجاح النشر.")
             crashDao.updateFixStatus(fixId, FixStatus.PR_CREATED, prUrl)
+            firestore?.collection("users")?.document(uid)
+                ?.collection("projects")?.document(crash.projectId)
+                ?.collection("fix_suggestions")?.document(fixId)?.let { ref ->
+                    try {
+                        ref.update(
+                            mapOf(
+                                "status" to FixStatus.PR_CREATED.name,
+                                "githubPrUrl" to prUrl
+                            )
+                        ).await()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        handleFirestoreError(error, OperationType.UPDATE, ref.path)
+                        throw error
+                    }
+                }
             addNotification(SystemNotification(
                 id = UUID.randomUUID().toString(), projectId = crash.projectId,
                 title = "تم إنشاء Pull Request على GitHub بنجاح",

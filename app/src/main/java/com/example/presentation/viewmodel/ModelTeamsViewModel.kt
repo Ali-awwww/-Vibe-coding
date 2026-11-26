@@ -2,7 +2,6 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.remote.supabase.SupabaseConfig
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
 import com.example.domain.repository.AIModelTeamRepository
@@ -15,7 +14,7 @@ import java.util.UUID
 
 data class ModelTeamsUiState(
     val isAuthenticated: Boolean = false,
-    val isCloudConfigured: Boolean = SupabaseConfig.isConfigured(),
+    val isCloudConfigured: Boolean = true,
     val teams: List<ModelTeam> = emptyList(),
     val availableModels: List<AIModel> = emptyList(),
     val connectedProviderIds: Set<String> = emptySet(),
@@ -40,10 +39,11 @@ data class ModelTeamsUiState(
 class ModelTeamsViewModel(
     private val teamRepository: AIModelTeamRepository,
     private val aiModelRepository: AIModelRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    isCloudConfigured: Boolean = true
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ModelTeamsUiState())
+    private val _uiState = MutableStateFlow(ModelTeamsUiState(isCloudConfigured = isCloudConfigured))
     val uiState: StateFlow<ModelTeamsUiState> = _uiState.asStateFlow()
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }

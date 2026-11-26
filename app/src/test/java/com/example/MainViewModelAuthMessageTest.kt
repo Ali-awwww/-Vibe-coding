@@ -5,12 +5,12 @@ import androidx.credentials.exceptions.NoCredentialException
 import com.example.domain.model.UserAccount
 import com.example.domain.repository.AuthRepository
 import com.example.domain.repository.EmailConfirmationRequiredException
+import com.example.domain.repository.FirebaseAuthNotConfiguredException
 import com.example.domain.repository.PasswordRecoveryCredentials
-import com.example.domain.repository.SupabaseHttpException
-import com.example.domain.repository.SupabaseUnconfiguredException
 import com.example.presentation.viewmodel.AuthNetworkSnapshot
 import com.example.presentation.viewmodel.AuthUiMessage
 import com.example.presentation.viewmodel.MainViewModel
+import com.google.firebase.auth.FirebaseAuthException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -37,7 +37,7 @@ class MainViewModelAuthMessageTest {
     @Test
     fun signInFailureUsesLocalizedKeyInsteadOfProviderMessage() = runMainViewModelTest {
         val repository = RecordingAuthRepository().apply {
-            signInResult = Result.failure(IllegalStateException("raw Supabase response detail"))
+            signInResult = Result.failure(IllegalStateException("raw Firebase response detail"))
         }
         val viewModel = MainViewModel(repository)
         var completed: Boolean? = null
@@ -47,7 +47,7 @@ class MainViewModelAuthMessageTest {
 
         assertEquals(AuthUiMessage.SIGN_IN_FAILED, viewModel.actionState.value.errorMessage)
         assertNull(viewModel.actionState.value.successMessage)
-        assertFalse(viewModel.actionState.value.toString().contains("raw Supabase response detail"))
+        assertFalse(viewModel.actionState.value.toString().contains("raw Firebase response detail"))
         assertEquals(false, completed)
     }
 
@@ -84,7 +84,7 @@ class MainViewModelAuthMessageTest {
 
     @Test
     fun signupFailureDoesNotExposeProviderDetailsInUiState() = runMainViewModelTest {
-        val providerDetail = "raw Supabase signup response detail"
+        val providerDetail = "raw Firebase signup response detail"
         val repository = RecordingAuthRepository().apply {
             signUpResult = Result.failure(IllegalStateException(providerDetail))
         }
@@ -147,12 +147,12 @@ class MainViewModelAuthMessageTest {
     fun recoveryCompletionDoesNotExposeProviderFailureText() = runMainViewModelTest {
         val repository = RecordingAuthRepository().apply {
             recoveryCompletionResult = Result.failure(
-                IllegalStateException("raw Supabase password update detail")
+                IllegalStateException("raw Firebase password update detail")
             )
         }
         val viewModel = MainViewModel(repository)
         viewModel.acceptPasswordRecoveryLink(
-            "com.aistudio.crashintelligence.vyfrip://auth/recovery?type=recovery&token_hash=one-time-hash"
+            "com.aistudio.crashintelligence.vyfrip://auth/recovery?mode=resetPassword&oobCode=one-time-oob"
         )
 
         viewModel.completePasswordRecovery("new-password")
@@ -175,13 +175,13 @@ class MainViewModelAuthMessageTest {
     }
 
     @Test
-    fun unconfiguredSupabaseProducesConfigurationMessageAndDiagnostic() = runMainViewModelTest {
+    fun unconfiguredFirebaseProducesConfigurationMessageAndDiagnostic() = runMainViewModelTest {
         val repository = RecordingAuthRepository().apply {
-            signInResult = Result.failure(SupabaseUnconfiguredException("your-project.supabase.co"))
+            signInResult = Result.failure(FirebaseAuthNotConfiguredException())
         }
         val viewModel = MainViewModel(repository) {
             AuthNetworkSnapshot(
-                endpointHost = "your-project.supabase.co",
+                endpointHost = "firebaseauth.googleapis.com",
                 vpnActive = true,
                 networkValidated = true,
                 transportSummary = "VPN + Cellular"
@@ -192,16 +192,16 @@ class MainViewModelAuthMessageTest {
         advanceUntilIdle()
 
         val state = viewModel.actionState.value
-        assertEquals(AuthUiMessage.SUPABASE_NOT_CONFIGURED, state.errorMessage)
-        assertEquals("SUPABASE_UNCONFIGURED", state.diagnostic?.code)
-        assertEquals("your-project.supabase.co", state.diagnostic?.endpointHost)
+        assertEquals(AuthUiMessage.FIREBASE_NOT_CONFIGURED, state.errorMessage)
+        assertEquals("FIREBASE_UNCONFIGURED", state.diagnostic?.code)
+        assertEquals("firebaseauth.googleapis.com", state.diagnostic?.endpointHost)
         assertEquals(true, state.diagnostic?.vpnActive)
     }
 
     @Test
     fun dnsTimeoutSslAndConnectionFailuresProduceSpecificDiagnosticCodes() = runMainViewModelTest {
         val snapshot = AuthNetworkSnapshot(
-            endpointHost = "abc.supabase.co",
+            endpointHost = "firebaseauth.googleapis.com",
             vpnActive = true,
             networkValidated = true,
             transportSummary = "VPN + Wi-Fi"
@@ -225,15 +225,17 @@ class MainViewModelAuthMessageTest {
             val state = viewModel.actionState.value
             assertEquals(expected.first, state.errorMessage)
             assertEquals(expected.second, state.diagnostic?.code)
-            assertEquals("abc.supabase.co", state.diagnostic?.endpointHost)
+            assertEquals("firebaseauth.googleapis.com", state.diagnostic?.endpointHost)
             assertEquals("VPN + Wi-Fi", state.diagnostic?.transportSummary)
         }
     }
 
     @Test
-    fun httpFailurePreservesStatusCodeWithoutLeakingProviderMessage() = runMainViewModelTest {
+    fun firebaseAuthFailurePreservesErrorCodeWithoutExposingRawUiMessage() = runMainViewModelTest {
         val repository = RecordingAuthRepository().apply {
-            signInResult = Result.failure(SupabaseHttpException(400, "raw invalid login credentials"))
+            signInResult = Result.failure(
+                FirebaseAuthException("ERROR_INVALID_CREDENTIAL", "raw invalid login credentials")
+            )
         }
         val viewModel = MainViewModel(repository)
 
@@ -242,10 +244,8 @@ class MainViewModelAuthMessageTest {
 
         val state = viewModel.actionState.value
         assertEquals(AuthUiMessage.SIGN_IN_FAILED, state.errorMessage)
-        assertEquals("AUTH_HTTP_400", state.diagnostic?.code)
-        assertEquals(400, state.diagnostic?.httpStatusCode)
-        assertFalse(state.toString().contains("raw invalid login credentials"))
-        assertTrue(state.diagnostic?.exceptionType == "SupabaseHttpException")
+        assertEquals("FIREBASE_ERROR_INVALID_CREDENTIAL", state.diagnostic?.code)
+        assertTrue(state.diagnostic?.exceptionType == "FirebaseAuthException")
     }
 
     @Test

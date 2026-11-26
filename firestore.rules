@@ -31,6 +31,7 @@ service cloud.firestore {
              data.userId == request.auth.uid &&
              data.email is string && data.email.size() >= 1 && data.email.size() <= 200 &&
              (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('organization' in data) || (data.organization is string && data.organization.size() <= 120)) &&
              (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
@@ -42,7 +43,7 @@ service cloud.firestore {
       allow update: if isOwner(userId) && isValidUser(incoming(), userId) &&
                        incoming().userId == existing().userId &&
                        incoming().createdAt == existing().createdAt &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'photoUrl', 'updatedAt']);
+                       incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'organization', 'photoUrl', 'updatedAt']);
     }
 
     // ---------------------------------------------------------
@@ -99,6 +100,16 @@ service cloud.firestore {
              data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 5000 &&
              data.rootCause is string && data.rootCause.size() >= 1 && data.rootCause.size() <= 5000 &&
              data.certainty is string &&
+             isEpochMillis(data.createdAt);
+    }
+
+    function isValidFixSuggestion(data, fixId) {
+      return data.id == fixId &&
+             isValidId(data.id) &&
+             data.crashId is string && isValidId(data.crashId) &&
+             data.suggestedCode is string && data.suggestedCode.size() >= 1 && data.suggestedCode.size() <= 100000 &&
+             data.explanation is string && data.explanation.size() <= 10000 &&
+             data.status is string &&
              isEpochMillis(data.createdAt);
     }
 
@@ -167,6 +178,16 @@ service cloud.firestore {
         allow list, get: if isOwner(userId);
         allow create: if isOwner(userId) && isValidId(crashId) && isValidDiagnosis(incoming(), crashId);
         allow update: if isOwner(userId) && isValidDiagnosis(incoming(), crashId) &&
+                         incoming().crashId == existing().crashId &&
+                         incoming().createdAt == existing().createdAt;
+        allow delete: if isOwner(userId);
+      }
+
+      match /fix_suggestions/{fixId} {
+        allow list, get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(fixId) && isValidFixSuggestion(incoming(), fixId);
+        allow update: if isOwner(userId) && isValidFixSuggestion(incoming(), fixId) &&
+                         incoming().id == existing().id &&
                          incoming().crashId == existing().crashId &&
                          incoming().createdAt == existing().createdAt;
         allow delete: if isOwner(userId);

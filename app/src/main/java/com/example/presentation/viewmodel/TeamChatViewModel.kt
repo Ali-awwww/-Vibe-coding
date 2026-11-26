@@ -2,7 +2,6 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.remote.supabase.SupabaseConfig
 import com.example.domain.agent.TeamOrchestrator
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
@@ -26,7 +25,7 @@ enum class TeamChatTab(val labelAr: String, val labelEn: String) {
 
 data class TeamChatUiState(
     val isAuthenticated: Boolean = false,
-    val isCloudConfigured: Boolean = SupabaseConfig.isConfigured(),
+    val isCloudConfigured: Boolean = true,
     val isLoading: Boolean = false,
     val teams: List<ModelTeam> = emptyList(),
     val selectedTeam: ModelTeam? = null,
@@ -61,10 +60,11 @@ class TeamChatViewModel(
     private val teamOrchestrator: TeamOrchestrator,
     private val crashRepository: CrashRepository,
     private val aiModelRepository: AIModelRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    isCloudConfigured: Boolean = true
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(TeamChatUiState())
+    private val _uiState = MutableStateFlow(TeamChatUiState(isCloudConfigured = isCloudConfigured))
     val uiState: StateFlow<TeamChatUiState> = _uiState.asStateFlow()
 
     private val refreshTrigger = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }

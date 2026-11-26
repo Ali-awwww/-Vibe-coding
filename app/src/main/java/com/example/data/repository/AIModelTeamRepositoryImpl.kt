@@ -7,8 +7,6 @@ import com.example.di.DependencyProvider
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelTeamRepository
 import com.example.domain.repository.AuthRepository
-import com.example.data.remote.supabase.SupabaseTeamDataSource
-import com.example.data.remote.supabase.SupabaseIdentityLinkProvider
 import com.example.util.OperationType
 import com.example.util.handleFirestoreError
 import com.google.firebase.auth.FirebaseAuth
@@ -34,8 +32,6 @@ class AIModelTeamRepositoryImpl(
     private val firebaseAuth: FirebaseAuth? = null,
     private val aiProviderDaoOverride: AIProviderDao? = null,
     private val currentUserIdProvider: (() -> String?)? = null,
-    private val supabaseTeamDataSource: SupabaseTeamDataSource? = null,
-    private val supabaseIdentityLinkProvider: SupabaseIdentityLinkProvider? = null,
     private val enableRemoteBackend: Boolean = true
 ) : AIModelTeamRepository {
 
@@ -81,51 +77,17 @@ class AIModelTeamRepositoryImpl(
             ?: authRepository?.getCurrentUserSync()?.id?.takeIf { it.isNotBlank() }
             ?: activeFirebaseAuth?.currentUser?.uid?.takeIf { it.isNotBlank() }
 
-        return ProjectIdentityGuard.requireSupabaseUserId(
+        return ProjectIdentityGuard.requireAuthenticatedUserId(
             currentUserId = activeUserId,
-            requestedUserId = requestedUserId
-        )
-    }
-
-    private suspend fun resolveSupabaseUserId(firebaseUserId: String): String? {
-        val supabaseUserId = supabaseIdentityLinkProvider
-            ?.getSupabaseUserId(firebaseUserId)
-            ?.takeIf(String::isNotBlank)
-            ?: return null
-        val source = supabaseTeamDataSource ?: return null
-        return supabaseUserId.takeIf { source.isAuthenticatedAs(it) }
-    }
-
-    private fun requireLegacyFirebaseIdentity(uid: String) {
-        ProjectIdentityGuard.requireLegacyFirebaseIdentityMatch(
-            supabaseUserId = uid,
-            firebaseUserId = activeFirebaseAuth?.currentUser?.uid
+            requestedUserId = requestedUserId,
+            firebaseUserId = if (currentUserIdProvider == null) activeFirebaseAuth?.currentUser?.uid else activeUserId
         )
     }
 
     override fun getTeams(userId: String): Flow<List<ModelTeam>> = flow {
         val uid = resolveAuthenticatedUserId(userId)
-        val supabaseUid = resolveSupabaseUserId(uid)
-        if (supabaseUid != null) {
-            val remoteTeams = requireNotNull(supabaseTeamDataSource).getTeams(supabaseUid)
-            if (remoteTeams.any { it.ownerId != supabaseUid }) {
-                throw SecurityException("Supabase returned a team outside the linked account.")
-            }
-            val appTeams = remoteTeams.map { it.copy(ownerId = uid) }
-            localTeamsState.update { current ->
-                current.filterValues { it.ownerId != uid } + appTeams.associateBy { it.id }
-            }
-            emitAll(
-                localTeamsState.map { map ->
-                    map.values.filter { it.ownerId == uid }.sortedByDescending { it.createdAt }
-                }
-            )
-            return@flow
-        }
-
         val firestoreDb = db
         if (firestoreDb != null) {
-            requireLegacyFirebaseIdentity(uid)
             val collectionPath = "users/$uid/model_teams"
             emitAll(
                 firestoreDb.collection("users").document(uid).collection("model_teams")
@@ -148,7 +110,7 @@ class AIModelTeamRepositoryImpl(
         }
 
         if (enableRemoteBackend) {
-            throw IllegalStateException("No authenticated remote backend is available for team data.")
+            throw IllegalStateException("No authenticated Firebase backend is available for team data.")
         }
 
         emitAll(
@@ -160,20 +122,8 @@ class AIModelTeamRepositoryImpl(
 
     override suspend fun getTeamById(teamId: String): ModelTeam? {
         val uid = resolveAuthenticatedUserId()
-        val supabaseUid = resolveSupabaseUserId(uid)
-        if (supabaseUid != null) {
-            val remote = requireNotNull(supabaseTeamDataSource).getTeamById(teamId)
-            if (remote != null && remote.ownerId != supabaseUid) {
-                throw SecurityException("Team access denied for the linked Supabase account.")
-            }
-            val appTeam = remote?.copy(ownerId = uid)
-            if (appTeam != null) localTeamsState.update { it + (teamId to appTeam) }
-            return appTeam
-        }
-
         val firestoreDb = db
         if (firestoreDb != null) {
-            requireLegacyFirebaseIdentity(uid)
             localTeamsState.value[teamId]?.let { cached ->
                 if (cached.ownerId == uid) return cached
                 throw SecurityException("Team access denied for the current account.")
@@ -207,7 +157,7 @@ class AIModelTeamRepositoryImpl(
             }
         }
 
-        throw IllegalStateException("Team data is unavailable because no authenticated remote backend is configured.")
+        throw IllegalStateException("Team data is unavailable because Firebase Firestore is not configured.")
     }
 
     override suspend fun createTeam(team: ModelTeam): Result<String> = runCatching {
@@ -223,20 +173,9 @@ class AIModelTeamRepositoryImpl(
             updatedAt = now
         )
 
-        val supabaseUid = resolveSupabaseUserId(uid)
-        val useSupabase = supabaseUid != null
-        val firestoreDb = if (useSupabase) null else db
+        val firestoreDb = db
         val persistedTeam = when {
-            useSupabase -> {
-                val saved = requireNotNull(supabaseTeamDataSource)
-                    .createTeam(finalTeam.copy(ownerId = requireNotNull(supabaseUid)))
-                if (saved.ownerId != supabaseUid) {
-                    throw SecurityException("Supabase saved a team outside the linked account.")
-                }
-                saved.copy(ownerId = uid)
-            }
             firestoreDb != null -> {
-                requireLegacyFirebaseIdentity(uid)
                 firestoreDb.collection("users").document(uid)
                     .collection("model_teams").document(id)
                     .set(finalTeam)
@@ -244,7 +183,7 @@ class AIModelTeamRepositoryImpl(
                 finalTeam
             }
             !enableRemoteBackend -> finalTeam
-            else -> throw IllegalStateException("Team creation was not saved because no authenticated remote backend is available.")
+            else -> throw IllegalStateException("Team creation was not saved because Firebase Firestore is unavailable.")
         }
 
         localTeamsState.update { it + (persistedTeam.id to persistedTeam) }
@@ -265,20 +204,9 @@ class AIModelTeamRepositoryImpl(
             updatedAt = System.currentTimeMillis()
         )
 
-        val supabaseUid = resolveSupabaseUserId(uid)
-        val useSupabase = supabaseUid != null
-        val firestoreDb = if (useSupabase) null else db
+        val firestoreDb = db
         val persistedTeam = when {
-            useSupabase -> {
-                val saved = requireNotNull(supabaseTeamDataSource)
-                    .updateTeam(updated.copy(ownerId = requireNotNull(supabaseUid)))
-                if (saved.ownerId != supabaseUid) {
-                    throw SecurityException("Supabase updated a team outside the linked account.")
-                }
-                saved.copy(ownerId = uid)
-            }
             firestoreDb != null -> {
-                requireLegacyFirebaseIdentity(uid)
                 firestoreDb.collection("users").document(uid)
                     .collection("model_teams").document(team.id)
                     .set(updated)
@@ -286,7 +214,7 @@ class AIModelTeamRepositoryImpl(
                 updated
             }
             !enableRemoteBackend -> updated
-            else -> throw IllegalStateException("Team update was not saved because no authenticated remote backend is available.")
+            else -> throw IllegalStateException("Team update was not saved because Firebase Firestore is unavailable.")
         }
 
         localTeamsState.update { it + (team.id to persistedTeam) }
@@ -299,20 +227,16 @@ class AIModelTeamRepositoryImpl(
             throw SecurityException("Cannot delete a team owned by another user.")
         }
 
-        val supabaseUid = resolveSupabaseUserId(uid)
-        val useSupabase = supabaseUid != null
-        val firestoreDb = if (useSupabase) null else db
+        val firestoreDb = db
         when {
-            useSupabase -> requireNotNull(supabaseTeamDataSource).deleteTeam(teamId)
             firestoreDb != null -> {
-                requireLegacyFirebaseIdentity(uid)
                 firestoreDb.collection("users").document(uid)
                     .collection("model_teams").document(teamId)
                     .delete()
                     .await()
             }
             !enableRemoteBackend -> Unit
-            else -> throw IllegalStateException("Team deletion was not saved because no authenticated remote backend is available.")
+            else -> throw IllegalStateException("Team deletion was not saved because Firebase Firestore is unavailable.")
         }
 
         localTeamsState.update { it - teamId }
@@ -320,26 +244,8 @@ class AIModelTeamRepositoryImpl(
 
     override fun getTeamExecutions(teamId: String): Flow<List<TeamExecution>> = flow {
         val uid = resolveAuthenticatedUserId()
-        val supabaseUid = resolveSupabaseUserId(uid)
-        if (supabaseUid != null) {
-            val remote = requireNotNull(supabaseTeamDataSource).getTeamExecutions(teamId)
-            if (remote.any { it.userId != supabaseUid }) {
-                throw SecurityException("Execution access denied for the linked Supabase account.")
-            }
-            val appExecutions = remote.map { it.copy(userId = uid) }
-            localExecutionsState.update { current -> current + appExecutions.associateBy { it.id } }
-            emitAll(
-                localExecutionsState.map { map ->
-                    map.values.filter { it.teamId == teamId && it.userId == uid }
-                        .sortedByDescending { it.startedAt }
-                }
-            )
-            return@flow
-        }
-
         val firestoreDb = db
         if (firestoreDb != null) {
-            requireLegacyFirebaseIdentity(uid)
             val collectionPath = "users/$uid/team_executions"
             emitAll(
                 firestoreDb.collection("users").document(uid).collection("team_executions")
@@ -362,7 +268,7 @@ class AIModelTeamRepositoryImpl(
         }
 
         if (enableRemoteBackend) {
-            throw IllegalStateException("Execution history is unavailable because no authenticated remote backend is configured.")
+            throw IllegalStateException("Execution history is unavailable because Firebase Firestore is not configured.")
         }
 
         emitAll(
@@ -375,20 +281,8 @@ class AIModelTeamRepositoryImpl(
 
     override suspend fun getExecutionById(executionId: String): TeamExecution? {
         val uid = resolveAuthenticatedUserId()
-        val supabaseUid = resolveSupabaseUserId(uid)
-        if (supabaseUid != null) {
-            val remote = requireNotNull(supabaseTeamDataSource).getExecutionById(executionId)
-            if (remote != null && remote.userId != supabaseUid) {
-                throw SecurityException("Execution access denied for the linked Supabase account.")
-            }
-            val appExecution = remote?.copy(userId = uid)
-            if (appExecution != null) localExecutionsState.update { it + (executionId to appExecution) }
-            return appExecution
-        }
-
         val firestoreDb = db
         if (firestoreDb != null) {
-            requireLegacyFirebaseIdentity(uid)
             localExecutionsState.value[executionId]?.let { cached ->
                 if (cached.userId == uid) return cached
                 throw SecurityException("Execution access denied for the current account.")
@@ -422,7 +316,7 @@ class AIModelTeamRepositoryImpl(
             }
         }
 
-        throw IllegalStateException("Execution data is unavailable because no authenticated remote backend is configured.")
+        throw IllegalStateException("Execution data is unavailable because Firebase Firestore is not configured.")
     }
 
     override suspend fun logExecution(execution: TeamExecution): Result<Unit> = runCatching {
@@ -432,20 +326,9 @@ class AIModelTeamRepositoryImpl(
         val id = if (execution.id.isBlank()) UUID.randomUUID().toString() else execution.id
         val finalExec = execution.copy(id = id, userId = uid)
 
-        val supabaseUid = resolveSupabaseUserId(uid)
-        val useSupabase = supabaseUid != null
-        val firestoreDb = if (useSupabase) null else db
+        val firestoreDb = db
         val persistedExecution = when {
-            useSupabase -> {
-                val saved = requireNotNull(supabaseTeamDataSource)
-                    .logExecution(finalExec.copy(userId = requireNotNull(supabaseUid)))
-                if (saved.userId != supabaseUid) {
-                    throw SecurityException("Supabase saved an execution outside the linked account.")
-                }
-                saved.copy(userId = uid)
-            }
             firestoreDb != null -> {
-                requireLegacyFirebaseIdentity(uid)
                 firestoreDb.collection("users").document(uid)
                     .collection("team_executions").document(id)
                     .set(finalExec)
@@ -453,7 +336,7 @@ class AIModelTeamRepositoryImpl(
                 finalExec
             }
             !enableRemoteBackend -> finalExec
-            else -> throw IllegalStateException("Execution was not saved because no authenticated remote backend is available.")
+            else -> throw IllegalStateException("Execution was not saved because Firebase Firestore is unavailable.")
         }
 
         localExecutionsState.update { it + (id to persistedExecution) }
@@ -512,20 +395,14 @@ class AIModelTeamRepositoryImpl(
         )
         val scopedRecord = record.copy(userId = uid)
 
-        if (resolveSupabaseUserId(uid) == null) {
-            val firestoreDb = db
-            if (firestoreDb != null) {
-                requireLegacyFirebaseIdentity(uid)
-                firestoreDb.collection("users").document(uid)
-                    .collection("team_usage_records").document(scopedRecord.id)
-                    .set(scopedRecord)
-                    .await()
-            }
+        val firestoreDb = db
+        if (firestoreDb != null) {
+            firestoreDb.collection("users").document(uid)
+                .collection("team_usage_records").document(scopedRecord.id)
+                .set(scopedRecord)
+                .await()
         }
 
-        // Team usage remains a local Room ledger until a versioned remote usage table exists.
         aiProviderDao.insertTeamUsageRecord(scopedRecord)
     }.onFailure { if (it is CancellationException) throw it }
-
-
 }

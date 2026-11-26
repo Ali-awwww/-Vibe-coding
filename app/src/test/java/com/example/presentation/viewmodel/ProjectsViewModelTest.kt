@@ -80,7 +80,7 @@ class ProjectsViewModelTest {
     @Test
     fun `mutation failure surfaces error without crashing`() = runTest {
         authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
-        crashRepo.failNextWrite = IllegalStateException("Supabase timeout")
+        crashRepo.failNextWrite = IllegalStateException("Firestore timeout")
 
         val viewModel = ProjectsViewModel(crashRepo, authRepo, isCloudConfigured = true)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
@@ -88,7 +88,7 @@ class ProjectsViewModelTest {
         viewModel.addProject("Fail Project", "Desc")
         val state = viewModel.uiState.value
         assertFalse(state.isMutating)
-        assertEquals("Supabase timeout", state.error)
+        assertEquals("Firestore timeout", state.error)
         assertNull(state.message)
     }
 }

@@ -12,6 +12,7 @@ plugins {
 // Apply the Google Services plugin only when app/google-services.json exists.
 if (file("google-services.json").exists()) {
   apply(plugin = "com.google.gms.google-services")
+  apply(plugin = "com.google.firebase.crashlytics")
 }
 
 android {
@@ -22,8 +23,8 @@ android {
     applicationId = "com.aistudio.crashintelligence.vyfrip"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.0.2"
+    versionCode = 3
+    versionName = "1.0.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -159,6 +160,7 @@ dependencies {
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.firebase.ai)
+  implementation(libs.firebase.crashlytics)
   implementation(libs.firebase.appcheck.recaptcha)
   implementation(libs.firebase.appcheck.debug)
   implementation(libs.androidx.credentials)

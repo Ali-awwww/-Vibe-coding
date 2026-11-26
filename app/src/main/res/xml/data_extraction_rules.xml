@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Supabase session ciphertext is bound to the local Android Keystore key. -->
-        <exclude domain="sharedpref" path="supabase_secure_session.xml" />
-        <exclude domain="sharedpref" path="supabase_identity_link.xml" />
+        <!-- Local encrypted tokens bound to Android Keystore should stay device-only. -->
+        <exclude domain="sharedpref" path="github_secure_prefs.xml" />
     </cloud-backup>
     <device-transfer>
-        <!-- Do not transfer an encrypted session without its non-exportable Keystore key. -->
-        <exclude domain="sharedpref" path="supabase_secure_session.xml" />
+        <exclude domain="sharedpref" path="github_secure_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>

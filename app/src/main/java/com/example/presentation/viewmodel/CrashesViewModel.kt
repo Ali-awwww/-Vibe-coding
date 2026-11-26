@@ -3,6 +3,7 @@ package com.example.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.CrashReport
+import com.example.domain.model.IntegrationStatus
 import com.example.domain.repository.CrashPageCursor
 import com.example.domain.repository.CrashRepository
 import kotlinx.coroutines.CancellationException
@@ -30,7 +31,8 @@ data class CrashesUiState(
     val error: String? = null,
     val isLoadingMore: Boolean = false,
     val loadMoreError: String? = null,
-    val canLoadMore: Boolean = false
+    val canLoadMore: Boolean = false,
+    val hasConnectedCrashSource: Boolean = true
 )
 
 private data class CrashPagingState(
@@ -69,6 +71,7 @@ class CrashesViewModel(
     private val _error = MutableStateFlow<String?>(null)
     private val _loadMoreError = MutableStateFlow<String?>(null)
     private val _nextCursor = MutableStateFlow<CrashPageCursor?>(null)
+    private val _hasConnectedCrashSource = MutableStateFlow(true)
 
     private var loadJob: Job? = null
     private var loadGeneration = 0
@@ -83,7 +86,7 @@ class CrashesViewModel(
         CrashPagingState(isLoading, error, isLoadingMore, loadMoreError, nextCursor)
     }
 
-    val uiState: StateFlow<CrashesUiState> = combine(_crashes, _filter, pagingState) { crashes, filter, paging ->
+    val uiState: StateFlow<CrashesUiState> = combine(_crashes, _filter, pagingState, _hasConnectedCrashSource) { crashes, filter, paging, hasConnectedSource ->
         val filtered = if (paging.error != null && crashes.isEmpty()) {
             emptyList()
         } else {
@@ -118,7 +121,8 @@ class CrashesViewModel(
             error = paging.error,
             isLoadingMore = paging.isLoadingMore,
             loadMoreError = paging.loadMoreError,
-            canLoadMore = paging.nextCursor != null
+            canLoadMore = paging.nextCursor != null,
+            hasConnectedCrashSource = hasConnectedSource
         )
     }.stateIn(
         viewModelScope,
@@ -188,6 +192,17 @@ class CrashesViewModel(
 
                 if (replace) {
                     _crashes.value = page.crashes
+                    val integrations = runCatching {
+                        if (initialProjectId != null) {
+                            repository.getIntegrations(initialProjectId).firstOrNull().orEmpty()
+                        } else {
+                            repository.getProjects().firstOrNull().orEmpty().flatMap { project ->
+                                repository.getIntegrations(project.id).firstOrNull().orEmpty()
+                            }
+                        }
+                    }.getOrElse { emptyList() }
+                    _hasConnectedCrashSource.value =
+                        page.crashes.isNotEmpty() || integrations.any { it.status == IntegrationStatus.CONNECTED }
                 } else {
                     _crashes.update { existing ->
                         (existing + page.crashes)

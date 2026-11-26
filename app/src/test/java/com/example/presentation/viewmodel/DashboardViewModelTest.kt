@@ -90,7 +90,7 @@ class DashboardViewModelTest {
     fun `stream failure emits user safe error and refresh recovers`() = runTest {
         authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
         crashRepo.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "user-1"))
-        crashRepo.failNextProjectsLoad = IllegalStateException("Supabase HTTP 500 internal trace secret")
+        crashRepo.failNextProjectsLoad = IllegalStateException("Firestore HTTP 500 internal trace secret")
 
         val viewModel = DashboardViewModel(crashRepo, authRepo, isCloudConfigured = true)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }

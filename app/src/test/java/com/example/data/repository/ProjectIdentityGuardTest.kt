@@ -5,13 +5,13 @@ import org.junit.Test
 
 class ProjectIdentityGuardTest {
     @Test(expected = IllegalStateException::class)
-    fun missingSupabaseIdentityIsRejected() {
-        ProjectIdentityGuard.requireSupabaseUserId(currentUserId = null)
+    fun missingAuthenticatedIdentityIsRejected() {
+        ProjectIdentityGuard.requireAuthenticatedUserId(currentUserId = null)
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun blankRequestedIdentityIsRejected() {
-        ProjectIdentityGuard.requireSupabaseUserId(
+        ProjectIdentityGuard.requireAuthenticatedUserId(
             currentUserId = "user-a",
             requestedUserId = " "
         )
@@ -19,7 +19,7 @@ class ProjectIdentityGuardTest {
 
     @Test(expected = SecurityException::class)
     fun anotherAccountsProjectScopeIsRejected() {
-        ProjectIdentityGuard.requireSupabaseUserId(
+        ProjectIdentityGuard.requireAuthenticatedUserId(
             currentUserId = "user-a",
             requestedUserId = "user-b"
         )
@@ -29,34 +29,29 @@ class ProjectIdentityGuardTest {
     fun activeAccountScopeIsReturned() {
         assertEquals(
             "user-a",
-            ProjectIdentityGuard.requireSupabaseUserId(
+            ProjectIdentityGuard.requireAuthenticatedUserId(
                 currentUserId = "user-a",
                 requestedUserId = "user-a"
             )
         )
     }
 
-    @Test(expected = IllegalStateException::class)
-    fun missingFirebaseIdentityCannotAuthorizeLegacyFirestore() {
-        ProjectIdentityGuard.requireLegacyFirebaseIdentityMatch(
-            supabaseUserId = "user-a",
-            firebaseUserId = null
-        )
-    }
-
-    @Test(expected = IllegalStateException::class)
-    fun differentFirebaseIdentityCannotAuthorizeLegacyFirestore() {
-        ProjectIdentityGuard.requireLegacyFirebaseIdentityMatch(
-            supabaseUserId = "supabase-user",
-            firebaseUserId = "firebase-user"
+    @Test(expected = SecurityException::class)
+    fun mismatchedFirebaseIdentityCannotAuthorizeFirestore() {
+        ProjectIdentityGuard.requireAuthenticatedUserId(
+            currentUserId = "user-a",
+            firebaseUserId = "user-b"
         )
     }
 
     @Test
-    fun matchingFirebaseIdentityAllowsLegacyFirestoreBoundary() {
-        ProjectIdentityGuard.requireLegacyFirebaseIdentityMatch(
-            supabaseUserId = "user-a",
-            firebaseUserId = "user-a"
+    fun matchingFirebaseIdentityAllowsFirestoreBoundary() {
+        assertEquals(
+            "user-a",
+            ProjectIdentityGuard.requireAuthenticatedUserId(
+                currentUserId = "user-a",
+                firebaseUserId = "user-a"
+            )
         )
     }
 }

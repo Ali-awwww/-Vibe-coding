@@ -10,7 +10,9 @@ import com.example.data.remote.ChatMessage
 import com.example.data.remote.OpenRouterModelData
 import com.example.domain.model.*
 import com.example.domain.repository.AIModelRepository
+import com.example.domain.repository.GeminiDailyQuotaExceededException
 import com.example.util.SecurityUtils
+import com.example.util.recordCrashlyticsNonFatal
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
@@ -557,6 +559,191 @@ class AIModelRepositoryImpl internal constructor(
             throw cancelled
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    override suspend fun generateWithFirebaseAiChain(
+        userId: String,
+        prompt: String,
+        systemInstruction: String?,
+        taskId: String?,
+        taskType: AITaskType
+    ): Result<Pair<String, String>> {
+        if (prompt.isBlank()) {
+            return Result.failure(IllegalArgumentException("Prompt cannot be empty"))
+        }
+        if (!enablePlatformFirebaseAi && firebaseAiRunner == null) {
+            val defaultModel = getDefaultModel(userId)
+                ?: return Result.failure(IllegalStateException("Firebase AI Logic is not configured"))
+            return generateResponse(
+                userId = userId,
+                modelId = defaultModel.id,
+                prompt = prompt,
+                systemInstruction = systemInstruction,
+                taskId = taskId,
+                taskType = taskType
+            ).map { text -> defaultModel.apiId to text }
+        }
+
+        val modelChain = listOf(
+            GeminiModelCatalog.CONNECTION_MODEL_ID,
+            FirebaseAiModelCatalog.LITE_MODEL_ID
+        )
+        val providerId = FirebaseAiModelCatalog.platformProviderId(userId)
+        val catalogByApiId = FirebaseAiModelCatalog.models(providerId).associateBy { it.apiId }
+
+        var lastError: Exception? = null
+        for (modelName in modelChain) {
+            val modelMeta = catalogByApiId[modelName]
+            val modelId = modelMeta?.id ?: "$providerId:$modelName"
+            val result = invokeFirebaseAiWithOverloadRetry(
+                userId = userId,
+                modelId = modelId,
+                modelMeta = modelMeta,
+                modelName = modelName,
+                prompt = prompt,
+                systemInstruction = systemInstruction,
+                taskId = taskId,
+                taskType = taskType
+            )
+            if (result.isSuccess) {
+                return Result.success(modelName to result.getOrThrow())
+            }
+            val failure = result.exceptionOrNull() as? Exception
+                ?: IllegalStateException("Firebase AI Logic failed")
+            if (failure is GeminiDailyQuotaExceededException) {
+                return Result.failure(failure)
+            }
+            lastError = failure
+        }
+
+        return Result.failure(
+            lastError ?: IllegalStateException("Firebase AI Logic models failed")
+        )
+    }
+
+    private suspend fun invokeFirebaseAiWithOverloadRetry(
+        userId: String,
+        modelId: String,
+        modelMeta: AIModel?,
+        modelName: String,
+        prompt: String,
+        systemInstruction: String?,
+        taskId: String?,
+        taskType: AITaskType
+    ): Result<String> {
+        val maxOverloadRetries = 2
+        var attempt = 0
+        while (true) {
+            try {
+                val output = invokeFirebaseAi(modelName, prompt, systemInstruction)
+                val estimatedCost = modelMeta?.let {
+                    estimateCostOrUnknown(it, output.inputTokens, output.outputTokens)
+                } ?: AIUsageLog.UNKNOWN_COST
+                logUsage(
+                    AIUsageLog(
+                        id = UUID.randomUUID().toString(),
+                        userId = userId,
+                        modelId = modelId,
+                        taskId = taskId ?: "",
+                        tokensInput = output.inputTokens ?: 0,
+                        tokensOutput = output.outputTokens ?: 0,
+                        estimatedCost = estimatedCost,
+                        taskType = taskType,
+                        isSuccess = true
+                    )
+                )
+                return Result.success(output.text)
+            } catch (cancelled: CancellationException) {
+                if (cancelled is TimeoutCancellationException) {
+                    logUsage(
+                        AIUsageLog(
+                            id = UUID.randomUUID().toString(),
+                            userId = userId,
+                            modelId = modelId,
+                            taskId = taskId ?: "",
+                            estimatedCost = AIUsageLog.UNKNOWN_COST,
+                            taskType = taskType,
+                            isSuccess = false,
+                            errorMessage = cancelled.message ?: "Request timed out"
+                        )
+                    )
+                    return Result.failure(cancelled)
+                }
+                throw cancelled
+            } catch (e: Exception) {
+                if (isDailyQuotaExhausted(e)) {
+                    val quotaError = GeminiDailyQuotaExceededException(
+                        message = "تم استنفاد الحصة اليومية لـ Gemini؛ تم إيقاف المحاولات.",
+                        cause = e
+                    )
+                    logUsage(
+                        AIUsageLog(
+                            id = UUID.randomUUID().toString(),
+                            userId = userId,
+                            modelId = modelId,
+                            taskId = taskId ?: "",
+                            estimatedCost = 0.0,
+                            taskType = taskType,
+                            isSuccess = false,
+                            errorMessage = quotaError.message
+                        )
+                    )
+                    recordCrashlyticsNonFatal(quotaError, "Gemini daily quota reached on $modelName")
+                    return Result.failure(quotaError)
+                }
+
+                val isOverload = isHttp503Overload(e)
+                if (isOverload && attempt < maxOverloadRetries) {
+                    val backoffMs = 800L * (1 shl attempt)
+                    attempt += 1
+                    rateLimitDelay(backoffMs)
+                    continue
+                }
+
+                logUsage(
+                    AIUsageLog(
+                        id = UUID.randomUUID().toString(),
+                        userId = userId,
+                        modelId = modelId,
+                        taskId = taskId ?: "",
+                        estimatedCost = AIUsageLog.UNKNOWN_COST,
+                        taskType = taskType,
+                        isSuccess = false,
+                        errorMessage = e.message
+                    )
+                )
+                recordCrashlyticsNonFatal(e, "Firebase AI Logic error on $modelName")
+                return Result.failure(e)
+            }
+        }
+    }
+
+    private fun isDailyQuotaExhausted(error: Throwable): Boolean {
+        val causes = generateSequence(error) { it.cause }.toList()
+        if (causes.any { it is GeminiDailyQuotaExceededException }) return true
+        if (causes.any { it is HttpException && it.code() == 429 }) return true
+        return causes.any { cause ->
+            val typeName = cause.javaClass.simpleName.lowercase()
+            val msg = cause.message.orEmpty().lowercase()
+            typeName.contains("quota") ||
+                msg.contains("resource_exhausted") ||
+                msg.contains("quota") ||
+                msg.contains("daily limit") ||
+                msg.contains("429")
+        }
+    }
+
+    private fun isHttp503Overload(error: Throwable): Boolean {
+        val causes = generateSequence(error) { it.cause }.toList()
+        if (causes.any { it is HttpException && it.code() == 503 }) return true
+        return causes.any { cause ->
+            val msg = cause.message.orEmpty().lowercase()
+            msg.contains("503") ||
+                msg.contains("service_unavailable") ||
+                msg.contains("overloaded") ||
+                msg.contains("high demand") ||
+                msg.contains("temporarily unavailable")
         }
     }
 

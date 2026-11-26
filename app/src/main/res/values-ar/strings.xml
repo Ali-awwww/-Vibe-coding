@@ -269,9 +269,10 @@
     <string name="auth_forgot_password">نسيت كلمة المرور؟</string>
     <string name="auth_create_account">إنشاء حساب</string>
     <string name="auth_back_to_sign_in">العودة لتسجيل الدخول</string>
-    <string name="auth_provider_label">مزود المصادقة • FIREBASE GOOGLE AUTH</string>
+    <string name="auth_provider_label">مزود المصادقة • FIREBASE AUTH</string>
     <string name="auth_google_sign_in">المتابعة باستخدام Google</string>
-    <string name="auth_google_subtitle">سجّل دخولك عبر Google لمزامنة المشاريع والأعطال وفرق الذكاء الاصطناعي على Firebase</string>
+    <string name="auth_or_email">أو المتابعة بالبريد الإلكتروني</string>
+    <string name="auth_google_subtitle">سجّل دخولك عبر Google أو البريد الإلكتروني وكلمة المرور لمزامنة المشاريع والأعطال وفرق الذكاء الاصطناعي على Firebase</string>
     <string name="auth_vpn_notice">تم رصد VPN مفعّل: إذا فشل تسجيل الدخول فورًا، تحقّق من Private DNS أو استثناء التطبيق من الـ VPN أو اتصال خدمات Google Play.</string>
     <string name="auth_network_status_prefix">حالة الشبكة:</string>
     <string name="auth_validation_email">أدخل بريدًا إلكترونيًا صحيحًا.</string>
@@ -279,12 +280,11 @@
     <string name="auth_validation_password_mismatch">كلمتا المرور غير متطابقتين.</string>
     <string name="auth_validation_name">أدخل اسم المطور.</string>
     <string name="auth_validation_password_required">أدخل كلمة المرور.</string>
-    <string name="auth_error_sign_in">تعذر إتمام تسجيل الدخول عبر Google وFirebase. تحقق من اتصالك أو حسابك ثم حاول مجددًا.</string>
+    <string name="auth_error_sign_in">تعذر إتمام تسجيل الدخول عبر Firebase. تحقق من البريد وكلمة المرور أو حساب Google ثم حاول مجددًا.</string>
     <string name="auth_error_sign_up">تعذر إنشاء الحساب. راجع البيانات المدخلة ثم حاول مجددًا.</string>
     <string name="auth_error_recovery_request">تعذر طلب رابط استعادة كلمة المرور. حاول مجددًا.</string>
     <string name="auth_error_password_recovery">تعذر تحديث كلمة المرور باستخدام رابط الاستعادة. قد يكون منتهي الصلاحية؛ اطلب رابطًا جديدًا.</string>
     <string name="auth_error_password_update">تعذر تحديث كلمة المرور. سجّل الدخول مجددًا ثم حاول.</string>
-    <string name="auth_error_supabase_unconfigured">إعدادات خادم المصادقة غير مهيأة (تستخدم قيمًا افتراضية). أضف SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY في إعدادات الأسرار.</string>
     <string name="auth_error_firebase_unconfigured">مصادقة Firebase غير مهيأة في هذه النسخة.</string>
     <string name="auth_error_google_cancelled">تم إلغاء تسجيل الدخول عبر Google قبل اكتماله.</string>
     <string name="auth_error_google_no_credential">لم يرجع أي حساب Google صالح. أضف حساب Google على الجهاز أو تحقق من Google Play Services وبصمة SHA-1.</string>
@@ -720,4 +720,9 @@
 
     <string name="crash_detail_occurred_at">وقت الحدوث: %1$s</string>
     <string name="crash_detail_timestamp_unavailable">وقت الحدوث غير متاح</string>
+    <string name="crashes_not_connected_title">غير متصل بعد</string>
+    <string name="crashes_not_connected_desc">لا يوجد مصدر أعطال حقيقي متصل أو لم تصل تقارير أعطال حقيقية بعد. اربط Sentry أو Bugsnag أو افتح دليل الإعداد لتهيئة تطبيقك.</string>
+    <string name="crashes_open_setup_guide">دليل الإعداد</string>
+    <string name="fix_assistant_unavailable_error">تعذّر الوصول إلى المساعد الآن، حاول لاحقاً</string>
+    <string name="fix_assistant_quota_exhausted_note">تم بلوغ الحصة اليومية لـ Gemini؛ تم إيقاف المحاولات المتكررة.</string>
 </resources>

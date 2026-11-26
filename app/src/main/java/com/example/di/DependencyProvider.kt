@@ -1,54 +1,32 @@
 package com.example.di
 
 import android.content.Context
-import androidx.room.Room
-import com.example.data.local.AppDatabase
-import com.example.data.repository.AuthRepositoryImpl
-import com.example.data.repository.CrashRepositoryImpl
-import com.example.domain.repository.AuthRepository
-import com.example.domain.repository.CrashRepository
-
-import com.example.BuildConfig
-import com.example.R
-import com.example.data.remote.supabase.SupabaseAuthApi
-import com.example.data.remote.supabase.SupabaseConfig
-import com.example.data.remote.supabase.SupabasePostgrestApi
-import com.example.data.remote.supabase.SupabaseProjectDataSource
-import com.example.data.remote.supabase.SupabaseSessionStore
-import com.example.data.remote.supabase.SupabaseTeamDataSource
-import com.example.data.remote.supabase.EncryptedSupabaseIdentityLinkStore
-import com.example.data.remote.supabase.SupabaseIdentityLinkStore
-import com.example.data.remote.supabase.SupabaseTeamPostgrestApi
-import com.example.data.remote.*
-import com.example.data.repository.*
-import com.example.domain.repository.*
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import androidx.room.Room
+import com.example.R
+import com.example.data.local.AppDatabase
+import com.example.data.remote.*
+import com.example.data.repository.*
+import com.example.domain.repository.*
 import com.example.presentation.viewmodel.AuthNetworkSnapshot
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import java.security.MessageDigest
-import okhttp3.ConnectionPool
-import okhttp3.Dns
-import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
-import java.net.Inet4Address
-import java.net.Inet6Address
-import java.util.concurrent.TimeUnit
+import java.security.MessageDigest
 
 object DependencyProvider {
     private var authRepository: AuthRepository? = null
-    private var firebaseAuthRepository: AuthRepository? = null
     private var crashRepository: CrashRepository? = null
-    private var liveTestingRepository: com.example.domain.repository.LiveTestingRepository? = null
-    private var sdkIntegrationRepository: com.example.domain.repository.SdkIntegrationRepository? = null
-    private var githubRepository: com.example.domain.repository.GitHubRepository? = null
-    private var symbolicationRepository: com.example.domain.repository.SymbolicationRepository? = null
+    private var liveTestingRepository: LiveTestingRepository? = null
+    private var sdkIntegrationRepository: SdkIntegrationRepository? = null
+    private var githubRepository: GitHubRepository? = null
+    private var symbolicationRepository: SymbolicationRepository? = null
     private var aiModelRepository: AIModelRepository? = null
     private var modelTeamRepository: AIModelTeamRepository? = null
     private var teamOrchestrator: com.example.domain.agent.TeamOrchestrator? = null
@@ -56,17 +34,12 @@ object DependencyProvider {
     private var database: AppDatabase? = null
     private var firestore: FirebaseFirestore? = null
     private var firebaseAuth: FirebaseAuth? = null
-    private var supabaseProjectDataSource: SupabaseProjectDataSource? = null
-    private var supabaseSessionStore: SupabaseSessionStore? = null
-    private var supabaseIdentityLinkStore: SupabaseIdentityLinkStore? = null
-    private var supabaseAuthRepository: AuthRepository? = null
-    private var supabaseTeamDataSource: SupabaseTeamDataSource? = null
 
     private fun getFirestore(context: Context): FirebaseFirestore? {
         return firestore ?: synchronized(this) {
             try {
                 if (!com.example.util.isFirebaseConfigured(context)) {
-                    android.util.Log.i("DependencyProvider", "Firebase unprovisioned: utilizing high-performance local storage")
+                    android.util.Log.i("DependencyProvider", "Firebase unprovisioned: utilizing local cache")
                     return@synchronized null
                 }
                 val dbId = try {
@@ -123,36 +96,6 @@ object DependencyProvider {
         .build()
 
     private const val FIREBASE_AUTH_ENDPOINT_HOST = "firebaseauth.googleapis.com"
-    private val supabaseBaseUrl = SupabaseConfig.normalizeBaseUrl(BuildConfig.SUPABASE_URL)
-
-    private val vpnResilientDns = object : Dns {
-        override fun lookup(hostname: String): List<java.net.InetAddress> {
-            val addresses = Dns.SYSTEM.lookup(hostname)
-            val ipv4 = addresses.filterIsInstance<Inet4Address>()
-            val ipv6 = addresses.filterIsInstance<Inet6Address>()
-            return if (ipv4.isNotEmpty()) ipv4 + ipv6 else addresses
-        }
-    }
-
-    private val supabaseOkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(25, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .callTimeout(45, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .connectionPool(ConnectionPool(4, 30, TimeUnit.SECONDS))
-        .dns(vpnResilientDns)
-        .build()
-
-    private val supabaseRetrofit = Retrofit.Builder()
-        .baseUrl(supabaseBaseUrl)
-        .client(supabaseOkHttpClient)
-        .addConverterFactory(MoshiConverterFactory.create())
-        .build()
-
-    private val supabaseAuthApi = supabaseRetrofit.create(SupabaseAuthApi::class.java)
-    private val supabasePostgrestApi = supabaseRetrofit.create(SupabasePostgrestApi::class.java)
-    private val supabaseTeamPostgrestApi = supabaseRetrofit.create(SupabaseTeamPostgrestApi::class.java)
 
     private val openRouterRetrofit = Retrofit.Builder()
         .baseUrl("https://openrouter.ai/api/v1/")
@@ -166,7 +109,7 @@ object DependencyProvider {
 
     private val sentryApi = sentryRetrofit.create(SentryApi::class.java)
     private val bugsnagApi = bugsnagRetrofit.create(BugsnagApi::class.java)
-    private val githubApi = githubRetrofit.create(com.example.data.remote.GitHubApi::class.java)
+    private val githubApi = githubRetrofit.create(GitHubApi::class.java)
     private val openRouterApi = openRouterRetrofit.create(OpenRouterApi::class.java)
     private val huggingFaceApi = huggingFaceRetrofit.create(HuggingFaceApi::class.java)
 
@@ -184,66 +127,13 @@ object DependencyProvider {
 
     fun provideDatabase(context: Context): AppDatabase = getDatabase(context)
 
-    private fun getSupabaseSessionStore(context: Context): SupabaseSessionStore {
-        val appContext = context.applicationContext
-        return supabaseSessionStore ?: synchronized(this) {
-            supabaseSessionStore ?: SupabaseSessionStore(appContext).also {
-                supabaseSessionStore = it
-            }
-        }
-    }
-
-    /**
-     * Dedicated Supabase identity/session repository for Supabase data sources.
-     * The composite app login establishes this session while retaining Firebase as the app-facing UID.
-     */
-    fun provideSupabaseAuthRepository(context: Context): AuthRepository {
-        val appContext = context.applicationContext
-        return supabaseAuthRepository ?: synchronized(this) {
-            supabaseAuthRepository ?: AuthRepositoryImpl(
-                api = supabaseAuthApi,
-                publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
-                sessionStore = getSupabaseSessionStore(appContext),
-                endpointHost = BuildConfig.SUPABASE_URL.substringAfter("://").substringBefore("/")
-                    .ifBlank { "unconfigured" },
-                isBackendConfigured = { SupabaseConfig.isConfigured() }
-            ).also { supabaseAuthRepository = it }
-        }
-    }
-
-    private fun provideFirebaseAuthRepository(context: Context): AuthRepository {
-        val appContext = context.applicationContext
-        return firebaseAuthRepository ?: synchronized(this) {
-            firebaseAuthRepository ?: FirebaseAuthRepository(
-                context = appContext,
-                firestoreProvider = { getFirestore(appContext) },
-                firebaseAuthProvider = { getFirebaseAuth(appContext) }
-            ).also { firebaseAuthRepository = it }
-        }
-    }
-
-    private fun getSupabaseIdentityLinkStore(context: Context): SupabaseIdentityLinkStore {
-        val appContext = context.applicationContext
-        return supabaseIdentityLinkStore ?: synchronized(this) {
-            supabaseIdentityLinkStore ?: EncryptedSupabaseIdentityLinkStore(appContext).also {
-                supabaseIdentityLinkStore = it
-            }
-        }
-    }
-
     fun provideAuthRepository(context: Context): AuthRepository {
         val appContext = context.applicationContext
         return authRepository ?: synchronized(this) {
-            authRepository ?: DualSessionAuthRepository(
-                firebaseRepository = provideFirebaseAuthRepository(appContext),
-                supabaseRepository = provideSupabaseAuthRepository(appContext),
-                identityLinkStore = getSupabaseIdentityLinkStore(appContext),
-                onSecondarySessionUnavailable = { error ->
-                    android.util.Log.w(
-                        "DualSessionAuth",
-                        "Supabase secondary session unavailable (${error.javaClass.simpleName})."
-                    )
-                }
+            authRepository ?: FirebaseAuthRepository(
+                context = appContext,
+                firestoreProvider = { getFirestore(appContext) },
+                firebaseAuthProvider = { getFirebaseAuth(appContext) }
             ).also { authRepository = it }
         }
     }
@@ -339,28 +229,6 @@ object DependencyProvider {
         }.getOrNull()
     }
 
-    fun provideSupabaseProjectDataSource(context: Context): SupabaseProjectDataSource {
-        return supabaseProjectDataSource ?: synchronized(this) {
-            supabaseProjectDataSource ?: SupabaseProjectDataSource(
-                api = supabasePostgrestApi,
-                authRepository = provideSupabaseAuthRepository(context),
-                sessionStore = getSupabaseSessionStore(context),
-                publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
-            ).also { supabaseProjectDataSource = it }
-        }
-    }
-
-    fun provideSupabaseTeamDataSource(context: Context): SupabaseTeamDataSource {
-        return supabaseTeamDataSource ?: synchronized(this) {
-            supabaseTeamDataSource ?: SupabaseTeamDataSource(
-                api = supabaseTeamPostgrestApi,
-                authRepository = provideSupabaseAuthRepository(context),
-                sessionStore = getSupabaseSessionStore(context),
-                publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY
-            ).also { supabaseTeamDataSource = it }
-        }
-    }
-
     fun provideCrashRepository(context: Context): CrashRepository {
         val appContext = context.applicationContext
         val db = getDatabase(appContext)
@@ -373,8 +241,7 @@ object DependencyProvider {
             symbolicationRepository = provideSymbolicationRepository(appContext),
             aiModelRepository = provideAIModelRepository(appContext),
             auth = getFirebaseAuth(appContext),
-            authRepository = provideAuthRepository(appContext),
-            supabaseProjectDataSource = null
+            authRepository = provideAuthRepository(appContext)
         ).also { crashRepository = it }
     }
 
@@ -394,9 +261,7 @@ object DependencyProvider {
             authRepository = provideAuthRepository(context),
             firestore = getFirestore(context),
             firebaseAuth = getFirebaseAuth(context),
-            aiProviderDaoOverride = getDatabase(context).aiProviderDao(),
-            supabaseTeamDataSource = provideSupabaseTeamDataSource(context),
-            supabaseIdentityLinkProvider = getSupabaseIdentityLinkStore(context)
+            aiProviderDaoOverride = getDatabase(context).aiProviderDao()
         ).also { modelTeamRepository = it }
     }
 
@@ -427,29 +292,29 @@ object DependencyProvider {
         ).also { teamOrchestrator = it }
     }
 
-    fun provideLiveTestingRepository(context: Context): com.example.domain.repository.LiveTestingRepository {
-        return liveTestingRepository ?: com.example.data.repository.LiveTestingRepositoryImpl(
+    fun provideLiveTestingRepository(context: Context): LiveTestingRepository {
+        return liveTestingRepository ?: LiveTestingRepositoryImpl(
             getDatabase(context).crashDao()
         ).also { liveTestingRepository = it }
     }
 
-    fun provideSdkIntegrationRepository(context: Context? = null): com.example.domain.repository.SdkIntegrationRepository {
+    fun provideSdkIntegrationRepository(context: Context? = null): SdkIntegrationRepository {
         val dao = context?.let { getDatabase(it).crashDao() } ?: database?.crashDao()
-        return sdkIntegrationRepository ?: com.example.data.repository.SdkIntegrationRepositoryImpl(dao).also { sdkIntegrationRepository = it }
+        return sdkIntegrationRepository ?: SdkIntegrationRepositoryImpl(dao).also { sdkIntegrationRepository = it }
     }
 
-    fun provideSetupGuideProgressStore(context: Context): com.example.domain.repository.SetupGuideProgressStore =
+    fun provideSetupGuideProgressStore(context: Context): SetupGuideProgressStore =
         com.example.data.local.SharedPreferencesSetupGuideProgressStore(context)
 
-    fun provideGitHubRepository(context: Context): com.example.domain.repository.GitHubRepository {
-        return githubRepository ?: com.example.data.repository.GitHubRepositoryImpl(
+    fun provideGitHubRepository(context: Context): GitHubRepository {
+        return githubRepository ?: GitHubRepositoryImpl(
             getDatabase(context).crashDao(),
             githubApi
         ).also { githubRepository = it }
     }
 
-    fun provideSymbolicationRepository(context: Context): com.example.domain.repository.SymbolicationRepository {
-        return symbolicationRepository ?: com.example.data.repository.SymbolicationRepositoryImpl(
+    fun provideSymbolicationRepository(context: Context): SymbolicationRepository {
+        return symbolicationRepository ?: SymbolicationRepositoryImpl(
             getDatabase(context).crashDao()
         ).also { symbolicationRepository = it }
     }
@@ -481,7 +346,8 @@ object DependencyProvider {
         return com.example.presentation.viewmodel.ModelTeamsViewModel(
             provideAIModelTeamRepository(context),
             provideAIModelRepository(context),
-            provideAuthRepository(context)
+            provideAuthRepository(context),
+            isCloudConfigured = com.example.util.isFirebaseConfigured(context)
         )
     }
 
@@ -503,7 +369,8 @@ object DependencyProvider {
             provideTeamOrchestrator(context),
             provideCrashRepository(context),
             provideAIModelRepository(context),
-            provideAuthRepository(context)
+            provideAuthRepository(context),
+            isCloudConfigured = com.example.util.isFirebaseConfigured(context)
         )
     }
 
@@ -582,4 +449,3 @@ object DependencyProvider {
         )
     }
 }
-

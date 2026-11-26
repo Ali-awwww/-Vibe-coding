@@ -1,27 +1,26 @@
 # Crash Intelligence AI — ذكاء الأعطال (Vibe Coding)
 
-> أداة أندرويد للمطوّرين لمراقبة الأعطال وتحليلها وحلّها، تعتمد على الذكاء الاصطناعي. بُني هذا المستودع بأسلوب Vibe Coding في Google AI Studio، حيث تُكتب الفكرة بالكلام، فيحوّلها الذكاء الاصطناعي إلى تطبيق يعمل.
+> أداة أندرويد للمطوّرين لمراقبة الأعطال وتحليلها وحلّها، تعتمد على الذكاء الاصطناعي. بُني هذا المستودع بأسلوب Vibe Coding في Google AI Studio.
 
 ## ما هو التطبيق؟
 
-«Crash Intelligence AI» تطبيق أندرويد أصلي (Native) يساعد مطوّري التطبيقات على فهم أعطال تطبيقاتهم بسرعة: يجمع تقارير الأعطال، ويحلّلها بالذكاء الاصطناعي، ويقترح سبب العطل وطريقة إصلاحه، بدل قراءة سجلات الأعطال الطويلة يدوياً.
+«Crash Intelligence AI» تطبيق أندرويد أصلي (Native) يساعد مطوّري التطبيقات على فهم أعطال تطبيقاتهم بسرعة: يربط مصادر الأعطال، ويحلّل الأسباب الجذرية بالذكاء الاصطناعي عبر Firebase AI Logic (Gemini)، ويقترح إصلاحات مدعومة بسياق المشروع.
 
 ## ماذا يفعل؟ وأهم الميزات
 
-- **مراقبة الأعطال:** جمع تقارير الأعطال من التطبيقات وعرضها في مكان واحد.
-- **تحليل بالذكاء الاصطناعي:** تحليل سبب العطل باستخدام واجهة Gemini API من جانب الخادم، مع اقتراحات للإصلاح.
-- **إدارة المهام:** تحويل الأعطال إلى مهام عمل يمكن تتبّعها حتى الإصلاح.
+- **مراقبة الأعطال:** ربط Sentry أو BugSnag أو مصادر التكامل الموثّقة لقراءة تقارير الأعطال، مع جمع أعطال التطبيق نفسه عبر Firebase Crashlytics.
+- **تحليل بالذكاء الاصطناعي:** تشخيص الأعطال واقتراح الإصلاحات عبر Firebase AI Logic (`gemini-3.8-flash` مع احتياطي `gemini-3.5-flash-lite` عند الازدحام 503).
+- **إدارة المهام والفرق:** تحويل الأعطال إلى مهام عمل، وإدارة فرق نماذج الذكاء الاصطناعي وسجل الاستخدام.
 - **لوحات وشاشات منظمة:** شاشات متعددة لعرض الأعطال والتفاصيل والمهام، موثّقة في مجلد `docs/`.
-- **تصميم «Vibe Engineering»:** نظام تصميم موحّد مبني حول فلسفة Vibe، مع مبدأ التصميم أولاً (Design-First) في التطبيق.
-- **خلفية سحابية:** Supabase لقاعدة البيانات، وFirebase للمصادقة والخدمات السحابية.
+- **تصميم «Vibe Engineering»:** نظام تصميم موحّد مبني حول فلسفة Vibe.
+- **خلفية سحابية:** Firebase Authentication (تسجيل الدخول بالبريد/كلمة المرور أو Google عبر Credential Manager) وCloud Firestore وFirebase Crashlytics وFirebase App Check، مع تخزين محلي عبر Room.
 
 ## التقنيات المستخدمة
 
-- **التطبيق:** أندرويد أصلي (Native Android) — انظر `app/`
-- **الذكاء الاصطناعي:** Gemini API من جانب الخادم
-- **الخلفية:** Supabase وFirebase (بما فيها Firestore)
+- **التطبيق:** أندرويد أصلي (Native Android — Kotlin / Jetpack Compose / Material 3) — انظر `app/`
+- **الذكاء الاصطناعي:** Firebase AI Logic (Gemini)
+- **الخلفية والمراقبة:** Firebase Authentication وCloud Firestore وFirebase Crashlytics وFirebase App Check
 - **البناء:** Gradle (باستخدام Kotlin DSL)
-- **أداة التطوير:** Google AI Studio بأسلوب Vibe Coding
 
 ## التثبيت والاستخدام
 
@@ -32,32 +31,18 @@ git clone https://github.com/Ali-awwww/-Vibe-coding.git
 cd -Vibe-coding
 ```
 
-1. افتح المشروع في Android Studio.
-2. انسخ ملف `.env.example` إلى `.env`، واملأ متغيرات البيئة المطلوبة، ومنها:
-   - `SUPABASE_URL` — رابط مشروع Supabase
-   - `SUPABASE_PUBLISHABLE_KEY` — المفتاح العام لمشروع Supabase
-   - مفتاح Gemini API في إعدادات الخادم
-3. ابنِ التطبيق وشغّله من Android Studio، أو من سطر الأوامر:
+1. افتح المشروع في Android Studio أو بيئة AI Studio Build.
+2. تأكد من وجود ملف إعدادات Firebase (`app/google-services.json` و`app/src/main/res/values/firebase_applet_config.xml`) المهيّأ للمشروع.
+3. ابنِ التطبيق وشغّله عبر Gradle:
 
 ```bash
-./gradlew assembleDebug
+gradle assembleDebug
 ```
-
-### للمستخدم
-
-ثبّت التطبيق على جهاز أندرويد، وسجّل الدخول، ثم تصفّح تقارير الأعطال، وافتح أي عطل لعرض تحليله بالذكاء الاصطناعي واقتراحات الإصلاح، وحوّله إلى مهمة عند الحاجة.
 
 ## بنية المشروع
 
 - `app/` — كود تطبيق أندرويد.
 - `docs/` — وثائق الشاشات والمهام ونظام التصميم.
-- `supabase/` — هجرات قاعدة بيانات Supabase.
-- `firebase.json` و`firestore.rules` — إعدادات Firebase وقواعد Firestore.
+- `firebase.json` و`firestore.rules` — إعدادات Firebase وقواعد Firestore الأمنية.
 - `.aistudio/` — ملفات Google AI Studio.
 - `metadata.json` — بيانات وصف المشروع.
-
-## الروابط
-
-- المستودع: https://github.com/Ali-awwww/-Vibe-coding
-- الإصدارات: https://github.com/Ali-awwww/-Vibe-coding/releases
-- المشكلات والاقتراحات: https://github.com/Ali-awwww/-Vibe-coding/issues

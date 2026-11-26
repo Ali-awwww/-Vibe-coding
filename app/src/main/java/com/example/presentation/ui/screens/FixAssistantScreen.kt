@@ -852,8 +852,10 @@ fun FixSuggestionCard(
 
             AnimatedVisibility(visible = expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Small)) {
-                    SectionHeader(stringResource(R.string.original_code))
-                    StackTraceCard(fix.originalCode)
+                    if (fix.originalCode.isNotBlank()) {
+                        SectionHeader(stringResource(R.string.original_code))
+                        StackTraceCard(fix.originalCode)
+                    }
                     SectionHeader(stringResource(R.string.proposed_changes))
                     StackTraceCard(fix.suggestedCode)
                 }
@@ -861,6 +863,7 @@ fun FixSuggestionCard(
 
             HorizontalDivider(color = VibeDesignTokens.Color.Grid)
 
+            val hasRepoContext = fix.originalCode.isNotBlank() && fix.branchName.isNotBlank()
             when {
                 candidatePrUrl != null && fix.status == FixStatus.PR_CREATED -> {
                     EngButton(
@@ -883,14 +886,18 @@ fun FixSuggestionCard(
 
                 else -> {
                     Text(
-                        if (canCreatePr) stringResource(R.string.pr_disclaimer) else "يلزم تسجيل الدخول بحساب صالح لإنشاء Pull Request.",
+                        when {
+                            !canCreatePr -> "يلزم تسجيل الدخول بحساب صالح لإنشاء Pull Request."
+                            !hasRepoContext -> "يتطلب إنشاء Pull Request ربط مستودع GitHub بهذا التطبيق أولاً."
+                            else -> stringResource(R.string.pr_disclaimer)
+                        },
                         color = VibeDesignTokens.Color.TextMuted,
                         style = MaterialTheme.typography.labelSmall
                     )
                     EngButton(
                         onClick = onCreatePr,
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isCreatingPr && canCreatePr
+                        enabled = !isCreatingPr && canCreatePr && hasRepoContext
                     ) {
                         if (isCreatingPr) {
                             CircularProgressIndicator(

@@ -2,405 +2,114 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.example.data.remote.supabase.SupabaseAuthApi
-import com.example.data.remote.supabase.SupabaseAuthResponse
-import com.example.data.remote.supabase.SupabaseAuthUser
-import com.example.data.remote.supabase.SupabasePasswordGrantRequest
-import com.example.data.remote.supabase.SupabaseIdTokenGrantRequest
-import com.example.data.remote.supabase.SupabaseRecoveryRequest
-import com.example.data.remote.supabase.SupabaseRefreshGrantRequest
-import com.example.data.remote.supabase.SupabaseSessionStore
-import com.example.data.remote.supabase.SupabaseStoredSession
-import com.example.data.remote.supabase.SupabaseSignUpRequest
-import com.example.data.remote.supabase.SupabaseUpdateUserRequest
-import com.example.data.remote.supabase.SupabaseVerifyOtpRequest
-import com.example.auth.SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI
-import com.example.data.repository.AuthRepositoryImpl
+import com.example.data.repository.FirebaseAuthRepository
+import com.example.domain.repository.FirebaseAuthNotConfiguredException
 import com.example.domain.repository.PasswordRecoveryCredentials
-import com.squareup.moshi.Moshi
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.currentCoroutineContext
+import com.example.presentation.auth.PasswordRecoveryLinkResult
+import com.example.presentation.auth.parsePasswordRecoveryLink
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import retrofit2.Response
-import java.io.IOException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class AuthRepositoryPasswordRecoveryTest {
 
     private lateinit var context: Context
-    private lateinit var sessionStore: SupabaseSessionStore
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        sessionStore = SupabaseSessionStore(
-            context = context,
-            encryptSecret = { "test-encrypted:$it" },
-            decryptSecret = { it.removePrefix("test-encrypted:") }
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+    }
+
+    @Test
+    fun firebaseOobCodeRecoveryLinkParsesIntoReadyCredentials() {
+        val parsed = parsePasswordRecoveryLink(
+            "com.aistudio.crashintelligence.vyfrip://auth/recovery?mode=resetPassword&oobCode=firebase-oob-code"
         )
-        sessionStore.clear()
-    }
 
-    @After
-    fun tearDown() {
-        sessionStore.clear()
-    }
-
-
-
-    @Test
-    fun googleIdTokenGrantUsesSupabaseWireFieldNames() {
-        val json = Moshi.Builder()
-            .build()
-            .adapter(SupabaseIdTokenGrantRequest::class.java)
-            .toJson(SupabaseIdTokenGrantRequest(provider = "google", idToken = "google-id-token"))
-
-        assertTrue(json.contains("\"provider\":\"google\""))
-        assertTrue(json.contains("\"id_token\":\"google-id-token\""))
-        assertFalse(json.contains("\"idToken\""))
+        assertTrue(parsed is PasswordRecoveryLinkResult.Ready)
+        assertEquals(
+            "firebase-oob-code",
+            (parsed as PasswordRecoveryLinkResult.Ready).credentials.oobCode
+        )
     }
 
     @Test
-    fun googleIdTokenExchangePersistsSupabaseSessionAndPublishesUser() = runTest {
-        var receivedPublishableKey: String? = null
-        var receivedGrantType: String? = null
-        var receivedRequest: SupabaseIdTokenGrantRequest? = null
-        val api = object : SupabaseAuthApi by unusedApi() {
-            override suspend fun signInWithIdToken(
-                publishableKey: String,
-                grantType: String,
-                request: SupabaseIdTokenGrantRequest
-            ): Response<SupabaseAuthResponse> {
-                receivedPublishableKey = publishableKey
-                receivedGrantType = grantType
-                receivedRequest = request
-                return Response.success(
-                    SupabaseAuthResponse(
-                        accessToken = "google-access",
-                        refreshToken = "google-refresh",
-                        expiresIn = 3_600L,
-                        user = SupabaseAuthUser(
-                            id = "google-user",
-                            email = "google@example.com"
-                        )
-                    )
-                )
-            }
-        }
-        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
-
-        val result = repository.signInWithGoogle("google-id-token")
-
-        assertTrue(result.isSuccess)
-        assertEquals("publishable-test-key", receivedPublishableKey)
-        assertEquals("id_token", receivedGrantType)
-        assertEquals("google", receivedRequest?.provider)
-        assertEquals("google-id-token", receivedRequest?.idToken)
-        assertEquals("google-user", repository.getCurrentUserSync()?.id)
-        assertEquals("google-access", sessionStore.read()?.accessToken)
-        assertEquals("google-refresh", sessionStore.read()?.refreshToken)
-    }
-
-    @Test
-    fun blankGoogleIdTokenIsRejectedBeforeCallingSupabase() = runTest {
-        var requestCalled = false
-        val api = object : SupabaseAuthApi by unusedApi() {
-            override suspend fun signInWithIdToken(
-                publishableKey: String,
-                grantType: String,
-                request: SupabaseIdTokenGrantRequest
-            ): Response<SupabaseAuthResponse> {
-                requestCalled = true
-                throw IOException("The API must not receive a blank Google token.")
-            }
-        }
-        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
+    fun blankGoogleIdTokenIsRejectedBeforeCallingFirebaseAuth() = runTest {
+        val repository = FirebaseAuthRepository(
+            context = context,
+            firestoreProvider = { null },
+            firebaseAuthProvider = { FirebaseAuth.getInstance() }
+        )
 
         val result = repository.signInWithGoogle("   ")
 
         assertTrue(result.isFailure)
-        assertFalse(requestCalled)
-        assertNull(sessionStore.read())
-        assertNull(repository.getCurrentUserSync())
-    }
-
-
-    @Test
-    fun googleIdTokenResponseWithoutCompleteSessionIsRejectedWithoutPersistence() = runTest {
-        val api = object : SupabaseAuthApi by unusedApi() {
-            override suspend fun signInWithIdToken(
-                publishableKey: String,
-                grantType: String,
-                request: SupabaseIdTokenGrantRequest
-            ): Response<SupabaseAuthResponse> = Response.success(
-                SupabaseAuthResponse(
-                    user = SupabaseAuthUser(
-                        id = "google-user",
-                        email = "google@example.com"
-                    )
-                )
-            )
-        }
-        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
-
-        val result = repository.signInWithGoogle("google-id-token")
-
-        assertTrue(result.isFailure)
-        assertNull(sessionStore.read())
-        assertNull(repository.getCurrentUserSync())
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
     }
 
     @Test
-    fun recoveryRequestUsesTheRegisteredAppRedirectAndDoesNotCreateASession() = runTest {
-        var requestedEmail: String? = null
-        var redirectUri: String? = null
-        val api = object : SupabaseAuthApi by unusedApi() {
-            override suspend fun requestPasswordRecovery(
-                publishableKey: String,
-                redirectTo: String?,
-                request: SupabaseRecoveryRequest
-            ): Response<Unit> {
-                requestedEmail = request.email
-                redirectUri = redirectTo
-                return Response.success(Unit)
-            }
-        }
-        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
+    fun unconfiguredFirebaseAuthReturnsExplicitConfigurationFailure() = runTest {
+        val repository = FirebaseAuthRepository(
+            context = context,
+            firestoreProvider = { null },
+            firebaseAuthProvider = { null }
+        )
 
-        val result = repository.requestPasswordRecovery(" owner@example.com ")
+        val signInResult = repository.signIn("owner@example.com", "password123")
+        val recoveryResult = repository.requestPasswordRecovery("owner@example.com")
+        val googleResult = repository.signInWithGoogle("valid-token")
 
-        assertTrue(result.isSuccess)
-        assertEquals("owner@example.com", requestedEmail)
-        assertEquals(SUPABASE_PASSWORD_RECOVERY_REDIRECT_URI, redirectUri)
-        assertNull(sessionStore.read())
-        assertNull(repository.getCurrentUserSync())
+        assertTrue(signInResult.exceptionOrNull() is FirebaseAuthNotConfiguredException)
+        assertTrue(recoveryResult.exceptionOrNull() is FirebaseAuthNotConfiguredException)
+        assertTrue(googleResult.exceptionOrNull() is FirebaseAuthNotConfiguredException)
     }
 
     @Test
-    fun verifiedRecoveryCredentialMustUpdatePasswordBeforePersistingTheSession() = runTest {
-        var verifiedType: String? = null
-        var verifiedTokenHash: String? = null
-        var updateBearer: String? = null
-        var updatedPassword: String? = null
-        val api = object : SupabaseAuthApi by unusedApi() {
-            override suspend fun verifyEmailOtp(
-                publishableKey: String,
-                request: SupabaseVerifyOtpRequest
-            ): Response<SupabaseAuthResponse> {
-                verifiedType = request.type
-                verifiedTokenHash = request.tokenHash
-                return Response.success(
-                    SupabaseAuthResponse(
-                        accessToken = "recovery-access",
-                        refreshToken = "recovery-refresh",
-                        expiresIn = 3_600L,
-                        user = SupabaseAuthUser(
-                            id = "recovery-user",
-                            email = "owner@example.com"
-                        )
-                    )
-                )
-            }
+    fun completePasswordRecoveryRejectsMissingOobCodeAndShortPassword() = runTest {
+        val repository = FirebaseAuthRepository(
+            context = context,
+            firestoreProvider = { null },
+            firebaseAuthProvider = { FirebaseAuth.getInstance() }
+        )
 
-            override suspend fun updatePassword(
-                publishableKey: String,
-                bearerToken: String,
-                request: SupabaseUpdateUserRequest
-            ): Response<SupabaseAuthUser> {
-                updateBearer = bearerToken
-                updatedPassword = request.password
-                return Response.success(
-                    SupabaseAuthUser(
-                        id = "recovery-user",
-                        email = "owner@example.com",
-                        userMetadata = mapOf<String, Any?>("display_name" to "Owner")
-                    )
-                )
-            }
-        }
-        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
-
-        val result = repository.completePasswordRecovery(
-            credentials = PasswordRecoveryCredentials(tokenHash = "one-time-token-hash"),
+        val missingOob = repository.completePasswordRecovery(
+            credentials = PasswordRecoveryCredentials(oobCode = " "),
             newPassword = "new-secure-password"
         )
+        assertTrue(missingOob.isFailure)
+        assertTrue(missingOob.exceptionOrNull() is IllegalArgumentException)
 
-        assertTrue(result.isSuccess)
-        assertEquals("recovery", verifiedType)
-        assertEquals("one-time-token-hash", verifiedTokenHash)
-        assertEquals("Bearer recovery-access", updateBearer)
-        assertEquals("new-secure-password", updatedPassword)
-        assertEquals("recovery-user", repository.getCurrentUserSync()?.id)
-        assertEquals("recovery-user", sessionStore.read()?.user?.id)
-        assertEquals("recovery-refresh", sessionStore.read()?.refreshToken)
+        val shortPassword = repository.completePasswordRecovery(
+            credentials = PasswordRecoveryCredentials(oobCode = "valid-oob"),
+            newPassword = "short"
+        )
+        assertTrue(shortPassword.isFailure)
+        assertTrue(shortPassword.exceptionOrNull() is IllegalArgumentException)
     }
 
     @Test
-    fun expiredDirectRecoverySessionIsRejectedBeforePasswordUpdate() = runTest {
-        var updateCalled = false
-        val api = object : SupabaseAuthApi by unusedApi() {
-            override suspend fun updatePassword(
-                publishableKey: String,
-                bearerToken: String,
-                request: SupabaseUpdateUserRequest
-            ): Response<SupabaseAuthUser> {
-                updateCalled = true
-                return Response.success(SupabaseAuthUser(id = "unexpected"))
-            }
-        }
-        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
-
-        val result = repository.completePasswordRecovery(
-            credentials = PasswordRecoveryCredentials(
-                accessToken = "expired-access",
-                refreshToken = "expired-refresh",
-                expiresAtEpochSeconds = 1L
-            ),
-            newPassword = "new-secure-password"
+    fun requestPasswordRecoveryRejectsBlankEmail() = runTest {
+        val repository = FirebaseAuthRepository(
+            context = context,
+            firestoreProvider = { null },
+            firebaseAuthProvider = { FirebaseAuth.getInstance() }
         )
+
+        val result = repository.requestPasswordRecovery("   ")
 
         assertTrue(result.isFailure)
-        assertTrue(!updateCalled)
-        assertNull(sessionStore.read())
-        assertNull(repository.getCurrentUserSync())
-    }
-
-    @Test
-    fun authenticatedPasswordChangeRequiresTheMatchingUnexpiredSession() = runTest {
-        sessionStore.write(
-            SupabaseStoredSession(
-                accessToken = "current-access",
-                refreshToken = "current-refresh",
-                expiresAtEpochSeconds = System.currentTimeMillis() / 1000L + 3_600L,
-                user = SupabaseAuthUser(id = "owner-user", email = "owner@example.com")
-            )
-        )
-        var updateCalls = 0
-        var bearerUsed: String? = null
-        val api = object : SupabaseAuthApi by unusedApi() {
-            override suspend fun updatePassword(
-                publishableKey: String,
-                bearerToken: String,
-                request: SupabaseUpdateUserRequest
-            ): Response<SupabaseAuthUser> {
-                updateCalls += 1
-                bearerUsed = bearerToken
-                return Response.success(
-                    SupabaseAuthUser(id = "owner-user", email = "owner@example.com")
-                )
-            }
-        }
-        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
-
-        val mismatchedEmail = repository.resetPassword("other@example.com", "new-secure-password")
-        assertTrue(mismatchedEmail.isFailure)
-        assertEquals(0, updateCalls)
-
-        val validChange = repository.resetPassword("owner@example.com", "new-secure-password")
-        assertTrue(validChange.isSuccess)
-        assertEquals(1, updateCalls)
-        assertEquals("Bearer current-access", bearerUsed)
-        assertEquals("owner-user", sessionStore.read()?.user?.id)
-    }
-
-    @Test
-    fun cancelledPasswordUpdateDoesNotPersistRecoverySession() = runTest {
-        var updateCalled = false
-        val api = object : SupabaseAuthApi by unusedApi() {
-            override suspend fun updatePassword(
-                publishableKey: String,
-                bearerToken: String,
-                request: SupabaseUpdateUserRequest
-            ): Response<SupabaseAuthUser> {
-                updateCalled = true
-                currentCoroutineContext().cancel(CancellationException("Recovery attempt superseded"))
-                return Response.success(
-                    SupabaseAuthUser(id = "recovery-user", email = "owner@example.com")
-                )
-            }
-        }
-        val repository = AuthRepositoryImpl(api, "publishable-test-key", sessionStore)
-        val attempt = async {
-            repository.completePasswordRecovery(
-                credentials = PasswordRecoveryCredentials(
-                    accessToken = "recovery-access",
-                    refreshToken = "recovery-refresh",
-                    expiresAtEpochSeconds = System.currentTimeMillis() / 1000L + 3_600L
-                ),
-                newPassword = "new-secure-password"
-            )
-        }
-
-        try {
-            attempt.await()
-            throw AssertionError("Expected cancellation to propagate")
-        } catch (_: CancellationException) {
-            // Cancellation is control flow and must not be converted to Result.failure.
-        }
-
-        assertTrue(updateCalled)
-        assertNull(sessionStore.read())
-        assertNull(repository.getCurrentUserSync())
-    }
-
-    private fun unusedApi(): SupabaseAuthApi = object : SupabaseAuthApi {
-        override suspend fun signUp(
-            publishableKey: String,
-            redirectTo: String?,
-            request: SupabaseSignUpRequest
-        ): Response<SupabaseAuthResponse> = throw IOException("Unexpected signup request")
-
-        override suspend fun signInWithPassword(
-            publishableKey: String,
-            grantType: String,
-            request: SupabasePasswordGrantRequest
-        ): Response<SupabaseAuthResponse> = throw IOException("Unexpected sign-in request")
-
-        override suspend fun signInWithIdToken(
-            publishableKey: String,
-            grantType: String,
-            request: SupabaseIdTokenGrantRequest
-        ): Response<SupabaseAuthResponse> = throw IOException("Unexpected Google sign-in request")
-
-        override suspend fun refreshSession(
-            publishableKey: String,
-            grantType: String,
-            request: SupabaseRefreshGrantRequest
-        ): Response<SupabaseAuthResponse> = throw IOException("Unexpected refresh request")
-
-        override suspend fun verifyEmailOtp(
-            publishableKey: String,
-            request: SupabaseVerifyOtpRequest
-        ): Response<SupabaseAuthResponse> = throw IOException("Unexpected OTP request")
-
-        override suspend fun requestPasswordRecovery(
-            publishableKey: String,
-            redirectTo: String?,
-            request: SupabaseRecoveryRequest
-        ): Response<Unit> = throw IOException("Unexpected recovery request")
-
-        override suspend fun updatePassword(
-            publishableKey: String,
-            bearerToken: String,
-            request: SupabaseUpdateUserRequest
-        ): Response<SupabaseAuthUser> = throw IOException("Unexpected password update request")
-
-        override suspend fun signOut(
-            publishableKey: String,
-            bearerToken: String
-        ): Response<Unit> = throw IOException("Unexpected logout request")
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
     }
 }

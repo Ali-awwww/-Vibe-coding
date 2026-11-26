@@ -2,7 +2,6 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.remote.supabase.SupabaseConfig
 import com.example.domain.model.CrashReport
 import com.example.domain.model.Project
 import com.example.domain.model.SystemNotification
@@ -34,7 +33,7 @@ data class DashboardUiState(
 class DashboardViewModel(
     private val repository: CrashRepository,
     private val authRepository: AuthRepository,
-    private val isCloudConfigured: Boolean = SupabaseConfig.isConfigured()
+    private val isCloudConfigured: Boolean = true
 ) : ViewModel() {
 
     private val _selectedProjectId = MutableStateFlow<String?>(null)

@@ -646,7 +646,7 @@ class ProductQualityGateEngine {
             isSatisfied = hasBackend,
             isApplicable = hasBackend || backendExemption == null,
             exemptionReason = if (!hasBackend) backendExemption else null,
-            evidence = if (hasBackend) "Crash/fix history is backed by Room source paths; Supabase cloud verification writes are not integrated." else (backendExemption ?: "Exempt")
+            evidence = if (hasBackend) "Crash/fix history is backed by Room source paths; Firestore cloud verification writes are not integrated." else (backendExemption ?: "Exempt")
         )
         evaluations[CompletionCriterion.HAS_CONNECTED_API_IF_NEEDED] = CriterionEvaluation(
             criterion = CompletionCriterion.HAS_CONNECTED_API_IF_NEEDED,

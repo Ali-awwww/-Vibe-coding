@@ -5,6 +5,7 @@ import com.example.domain.model.CrashReport
 import com.example.domain.model.CrashVerificationRecord
 import com.example.domain.model.FixSuggestion
 import com.example.domain.repository.CrashRepository
+import com.example.domain.repository.GeminiDailyQuotaExceededException
 import com.example.presentation.viewmodel.FixAssistantViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -134,11 +135,54 @@ class FixAssistantViewModelTest {
         assertNull(viewModel.uiState.value.error)
     }
 
+    @Test
+    fun `generateFix failure exposes single honest Arabic unavailable message`() = runTest(mainDispatcher) {
+        val viewModel = FixAssistantViewModel(
+            repositoryReturning(
+                crashFlow = flowOf(CrashReport(id = "crash-123")),
+                generateFixError = IOException("raw internal stack or HTTP 503")
+            )
+        )
+
+        viewModel.loadCrashAndDiagnosis("crash-123")
+        advanceUntilIdle()
+        viewModel.generateFix()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isGenerating)
+        assertFalse(viewModel.uiState.value.isDailyQuotaExhausted)
+        assertTrue(
+            viewModel.uiState.value.error == FixAssistantViewModel.FIX_ASSISTANT_UNAVAILABLE_ERROR
+        )
+    }
+
+    @Test
+    fun `generateFix daily quota exhaustion stops cleanly with honest error and quota flag`() = runTest(mainDispatcher) {
+        val viewModel = FixAssistantViewModel(
+            repositoryReturning(
+                crashFlow = flowOf(CrashReport(id = "crash-123")),
+                generateFixError = GeminiDailyQuotaExceededException()
+            )
+        )
+
+        viewModel.loadCrashAndDiagnosis("crash-123")
+        advanceUntilIdle()
+        viewModel.generateFix()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isGenerating)
+        assertTrue(viewModel.uiState.value.isDailyQuotaExhausted)
+        assertTrue(
+            viewModel.uiState.value.error == FixAssistantViewModel.FIX_ASSISTANT_UNAVAILABLE_ERROR
+        )
+    }
+
     private fun repositoryReturning(
         crashFlow: Flow<CrashReport?>,
         diagnosisError: Throwable? = null,
         suggestionsFlow: Flow<List<FixSuggestion>> = emptyFlow(),
-        verificationsFlow: Flow<List<CrashVerificationRecord>> = emptyFlow()
+        verificationsFlow: Flow<List<CrashVerificationRecord>> = emptyFlow(),
+        generateFixError: Throwable? = null
     ): CrashRepository =
         Proxy.newProxyInstance(
             CrashRepository::class.java.classLoader,
@@ -152,6 +196,10 @@ class FixAssistantViewModelTest {
                 }
                 "getFixSuggestions" -> suggestionsFlow
                 "getVerificationsByCrash" -> verificationsFlow
+                "generateFixSuggestion" -> {
+                    val error = generateFixError ?: IllegalStateException("unavailable")
+                    Result.failure<FixSuggestion>(error)
+                }
                 "toString" -> "FixAssistantCrashRepositoryTestDouble"
                 "hashCode" -> System.identityHashCode(proxy)
                 "equals" -> proxy === args?.firstOrNull()

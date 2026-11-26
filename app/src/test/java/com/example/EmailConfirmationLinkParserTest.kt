@@ -7,7 +7,12 @@ import org.junit.Test
 
 class EmailConfirmationLinkParserTest {
     @Test
-    fun acceptsSupabaseSignupConfirmationCallback() {
+    fun acceptsFirebaseAndDirectSignupConfirmationCallbacks() {
+        assertTrue(
+            isVerifiedEmailConfirmationLink(
+                "com.aistudio.crashintelligence.vyfrip://auth/email-confirmation?mode=verifyEmail&oobCode=one-time-oob-code"
+            )
+        )
         assertTrue(
             isVerifiedEmailConfirmationLink(
                 "com.aistudio.crashintelligence.vyfrip://auth/email-confirmation#access_token=opaque-token&type=signup"

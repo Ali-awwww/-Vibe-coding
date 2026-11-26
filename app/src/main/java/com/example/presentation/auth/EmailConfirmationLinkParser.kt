@@ -1,27 +1,31 @@
 package com.example.presentation.auth
 
-import com.example.auth.SUPABASE_AUTH_REDIRECT_HOST
-import com.example.auth.SUPABASE_AUTH_REDIRECT_SCHEME
+import com.example.auth.APP_AUTH_REDIRECT_HOST
+import com.example.auth.APP_AUTH_REDIRECT_SCHEME
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
 /**
- * Accepts only Supabase's post-verification callback for a confirmed signup.
- * The access token is checked for presence but never persisted or logged here;
- * the user signs in normally after returning to the app.
+ * Accepts only the app's post-verification callback for a confirmed signup.
+ * Supports Firebase Auth `verifyEmail` oobCode callbacks as well as direct signup confirmations.
  */
 internal fun isVerifiedEmailConfirmationLink(rawLink: String): Boolean {
     val uri = runCatching { URI(rawLink) }.getOrNull() ?: return false
-    if (!uri.scheme.equals(SUPABASE_AUTH_REDIRECT_SCHEME, ignoreCase = true) ||
-        !uri.host.equals(SUPABASE_AUTH_REDIRECT_HOST, ignoreCase = true) ||
+    if (!uri.scheme.equals(APP_AUTH_REDIRECT_SCHEME, ignoreCase = true) ||
+        !uri.host.equals(APP_AUTH_REDIRECT_HOST, ignoreCase = true) ||
         uri.path != EMAIL_CONFIRMATION_PATH
     ) return false
 
     val parameters = parseParameters(uri.rawQuery) + parseParameters(uri.rawFragment)
-    return parameters["error"].isNullOrBlank() &&
-        parameters["type"].equals("signup", ignoreCase = true) &&
+    if (!parameters["error"].isNullOrBlank()) return false
+
+    val isFirebaseVerifyEmail = parameters["mode"].equals("verifyEmail", ignoreCase = true) &&
+        !parameters["oobCode"].isNullOrBlank()
+    val isSignupConfirmation = parameters["type"].equals("signup", ignoreCase = true) &&
         !parameters["access_token"].isNullOrBlank()
+
+    return isFirebaseVerifyEmail || isSignupConfirmation
 }
 
 private fun parseParameters(encoded: String?): Map<String, String> {

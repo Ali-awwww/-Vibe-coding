@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.*
 import com.example.domain.repository.CrashRepository
+import com.example.domain.repository.GeminiDailyQuotaExceededException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -23,7 +24,8 @@ data class FixAssistantUiState(
     val suggestionsLoadError: String? = null,
     val verificationsLoadError: String? = null,
     val error: String? = null,
-    val prUrl: String? = null
+    val prUrl: String? = null,
+    val isDailyQuotaExhausted: Boolean = false
 )
 
 class FixAssistantViewModel(
@@ -58,7 +60,8 @@ class FixAssistantViewModel(
                     suggestionsLoadError = null,
                     verificationsLoadError = null,
                     error = null,
-                    prUrl = null
+                    prUrl = null,
+                    isDailyQuotaExhausted = false
                 )
             }
 
@@ -130,7 +133,8 @@ class FixAssistantViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        loadError = error.message ?: "تعذر تحميل بيانات الانهيار. أعد المحاولة."
+                        loadError = error.message ?: "تعذر تحميل بيانات الانهيار. أعد المحاولة.",
+                        isDailyQuotaExhausted = error is GeminiDailyQuotaExceededException
                     )
                 }
             }
@@ -153,18 +157,20 @@ class FixAssistantViewModel(
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isGenerating = true, error = null) }
+            _uiState.update { it.copy(isGenerating = true, error = null, isDailyQuotaExhausted = false) }
             val result = executeRepositoryResult {
                 repository.generateFixSuggestion(crash, diagnosis)
             }
             _uiState.update { current ->
                 val suggestion = result.getOrNull()
+                val failure = result.exceptionOrNull()
                 current.copy(
                     isGenerating = false,
                     suggestions = if (suggestion == null) current.suggestions
                         else (current.suggestions + suggestion).distinctBy { it.id },
                     suggestionsLoadError = if (suggestion != null) null else current.suggestionsLoadError,
-                    error = result.exceptionOrNull()?.message
+                    error = if (failure != null) FIX_ASSISTANT_UNAVAILABLE_ERROR else null,
+                    isDailyQuotaExhausted = failure is GeminiDailyQuotaExceededException
                 )
             }
         }
@@ -237,5 +243,9 @@ class FixAssistantViewModel(
         throw cancelled
     } catch (error: Exception) {
         Result.failure(error)
+    }
+
+    companion object {
+        const val FIX_ASSISTANT_UNAVAILABLE_ERROR = "تعذّر الوصول إلى المساعد الآن، حاول لاحقاً"
     }
 }

@@ -115,7 +115,7 @@ class AIModelTeamsEndToEndValidationTest {
         assertEquals(ValidationStatus.PASSED, result.status)
         assertNotNull(result.evidence)
         assertTrue(result.evidence!!.contains("local AIModelRepository"))
-        assertTrue(result.evidence!!.contains("does not verify Supabase RLS"))
+        assertTrue(result.evidence!!.contains("does not verify Firestore security rules"))
     }
 
     @Test

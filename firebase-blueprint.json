@@ -8,6 +8,7 @@
         "userId": { "type": "string", "description": "Unique user ID from Firebase Auth" },
         "email": { "type": "string", "description": "User email address" },
         "displayName": { "type": "string", "description": "User display name" },
+        "organization": { "type": "string", "description": "User organization name" },
         "photoUrl": { "type": "string", "description": "User profile photo URL" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Account creation server timestamp" },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Last profile update server timestamp" }
@@ -121,6 +122,26 @@
         "createdAt": { "type": "integer", "description": "Epoch milliseconds" }
       },
       "required": ["crashId", "summary", "rootCause", "certainty", "createdAt"]
+    },
+    "FixSuggestion": {
+      "title": "Fix Suggestion",
+      "description": "AI-generated code fix suggestion for a crash",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "crashId": { "type": "string" },
+        "originalCode": { "type": "string" },
+        "suggestedCode": { "type": "string" },
+        "explanation": { "type": "string" },
+        "potentialSideEffects": { "type": "string" },
+        "filePath": { "type": "string" },
+        "branchName": { "type": "string" },
+        "githubPrUrl": { "type": "string" },
+        "status": { "type": "string" },
+        "testResults": { "type": "string" },
+        "createdAt": { "type": "integer", "description": "Epoch milliseconds" }
+      },
+      "required": ["id", "crashId", "suggestedCode", "explanation", "status", "createdAt"]
     },
     "Integration": {
       "title": "Integration",
@@ -288,6 +309,10 @@
     "/users/{userId}/projects/{projectId}/diagnoses/{crashId}": {
       "schema": "AIDiagnosis",
       "description": "AI diagnoses for crashes"
+    },
+    "/users/{userId}/projects/{projectId}/fix_suggestions/{fixId}": {
+      "schema": "FixSuggestion",
+      "description": "AI fix suggestions for crashes"
     },
     "/users/{userId}/projects/{projectId}/integrations/{integrationId}": {
       "schema": "Integration",

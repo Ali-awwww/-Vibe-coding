@@ -4,6 +4,11 @@ import com.example.domain.model.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+class GeminiDailyQuotaExceededException(
+    message: String = "Gemini daily quota exhausted",
+    cause: Throwable? = null
+) : IllegalStateException(message, cause)
+
 interface AIModelRepository {
     fun getProviders(userId: String): Flow<List<AIProvider>>
     suspend fun getProviderById(userId: String, id: String): AIProvider?
@@ -46,4 +51,23 @@ interface AIModelRepository {
         taskId: String? = null,
         taskType: AITaskType = AITaskType.GENERAL_CHAT
     ): Result<String>
+
+    suspend fun generateWithFirebaseAiChain(
+        userId: String,
+        prompt: String,
+        systemInstruction: String? = null,
+        taskId: String? = null,
+        taskType: AITaskType = AITaskType.CODE_FIX_SUGGESTION
+    ): Result<Pair<String, String>> {
+        val defaultModel = getDefaultModel(userId)
+            ?: return Result.failure(IllegalStateException("No AI model available"))
+        return generateResponse(
+            userId = userId,
+            modelId = defaultModel.id,
+            prompt = prompt,
+            systemInstruction = systemInstruction,
+            taskId = taskId,
+            taskType = taskType
+        ).map { text -> defaultModel.apiId to text }
+    }
 }

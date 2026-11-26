@@ -5,25 +5,30 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppDatabase
 import com.example.data.remote.OpenRouterApi
-import com.example.data.remote.supabase.*
 import com.example.data.remote.OpenRouterChatRequest
 import com.example.data.remote.OpenRouterChatResponse
 import com.example.data.repository.AIModelRepositoryImpl
-import com.example.domain.model.*
+import com.example.data.repository.FirebaseAuthRepository
+import com.example.domain.model.AccessControl
+import com.example.domain.model.Role
+import com.example.domain.repository.FirebaseAuthNotConfiguredException
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.*
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.IOException
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -40,10 +45,9 @@ class ResilienceAndNegativePathTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext<Context>()
-        
-        // Initialize Firebase
-        if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) {
-            com.google.firebase.FirebaseApp.initializeApp(context)
+
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
         }
 
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
@@ -60,25 +64,33 @@ class ResilienceAndNegativePathTest {
     @Test
     fun `test AI Repository handles Rate Limit 429 gracefully`() = runTest(testDispatcher) {
         val fakeApi = object : OpenRouterApi {
-            override suspend fun getModels(token: String): com.example.data.remote.OpenRouterModelsResponse = throw Exception("HTTP 429: Too Many Requests")
-            override suspend fun generateCompletion(token: String, request: OpenRouterChatRequest): OpenRouterChatResponse {
+            override suspend fun getModels(token: String): com.example.data.remote.OpenRouterModelsResponse =
+                throw Exception("HTTP 429: Too Many Requests")
+
+            override suspend fun generateCompletion(
+                token: String,
+                request: OpenRouterChatRequest
+            ): OpenRouterChatResponse {
                 throw Exception("HTTP 429: Rate Limit Exceeded")
             }
         }
-        
+
         val repo = AIModelRepositoryImpl(
             database.aiProviderDao(),
             fakeApi,
             object : com.example.data.remote.HuggingFaceApi {
-                override suspend fun getModels(filter: String, sort: String, direction: Int, limit: Int) = emptyList<com.example.data.remote.HuggingFaceModelData>()
+                override suspend fun getModels(
+                    filter: String,
+                    sort: String,
+                    direction: Int,
+                    limit: Int
+                ) = emptyList<com.example.data.remote.HuggingFaceModelData>()
             }
         )
-        
-        // This validates that a sync attempt doesn't crash the app even if the provider is down
+
         try {
             repo.syncModels("usr_123", "p_1")
         } catch (e: Exception) {
-            // It's okay if it throws, as long as it's handled at the caller level in ViewModels
             assertTrue(e.message?.contains("429") == true)
         }
     }
@@ -86,372 +98,57 @@ class ResilienceAndNegativePathTest {
     @Test
     fun `test access control blocks unauthorized operations`() {
         val viewerRole = Role.VIEWER
-        
-        // Negative assertions
+
         assertFalse("Viewer should not be able to delete project", AccessControl.canDeleteProject(viewerRole))
         assertFalse("Viewer should not be able to manage members", AccessControl.canManageMembers(viewerRole))
         assertFalse("Viewer should not be able to purge data", AccessControl.canPurgeData(viewerRole))
     }
 
     @Test
-    fun `test invalid login credentials return failure result`() = runTest(testDispatcher) {
-        val unavailableAuthApi = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
-            override suspend fun signUp(
-                publishableKey: String,
-                redirectTo: String?,
-                request: SupabaseSignUpRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("network unavailable")
-
-            override suspend fun signInWithPassword(
-                publishableKey: String,
-                grantType: String,
-                request: SupabasePasswordGrantRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("network unavailable")
-
-            override suspend fun refreshSession(
-                publishableKey: String,
-                grantType: String,
-                request: SupabaseRefreshGrantRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("network unavailable")
-
-            override suspend fun verifyEmailOtp(
-                publishableKey: String,
-                request: SupabaseVerifyOtpRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("network unavailable")
-
-            override suspend fun requestPasswordRecovery(
-                publishableKey: String,
-                redirectTo: String?,
-                request: SupabaseRecoveryRequest
-            ): retrofit2.Response<Unit> = throw IOException("network unavailable")
-
-            override suspend fun updatePassword(
-                publishableKey: String,
-                bearerToken: String,
-                request: SupabaseUpdateUserRequest
-            ): retrofit2.Response<SupabaseAuthUser> = throw IOException("network unavailable")
-
-            override suspend fun signOut(
-                publishableKey: String,
-                bearerToken: String
-            ): retrofit2.Response<Unit> = throw IOException("network unavailable")
-        }
-        val authRepo = com.example.data.repository.AuthRepositoryImpl(
-            api = unavailableAuthApi,
-            publishableKey = "test-publishable-key",
-            sessionStore = createTestSessionStore()
+    fun `unconfigured FirebaseAuth returns failure result on sign in and sign up`() = runTest(testDispatcher) {
+        val authRepo = FirebaseAuthRepository(
+            context = context,
+            firestoreProvider = { null },
+            firebaseAuthProvider = { null }
         )
-        val result = authRepo.signIn("wrong@example.com", "bad_pass")
-        
-        assertTrue(result.isFailure)
-        assertNotNull(result.exceptionOrNull())
+
+        val signInResult = authRepo.signIn("wrong@example.com", "bad_pass")
+        val signUpResult = authRepo.signUp("wrong@example.com", "valid_pass_123", "Dev", "Org")
+
+        assertTrue(signInResult.isFailure)
+        assertTrue(signInResult.exceptionOrNull() is FirebaseAuthNotConfiguredException)
+        assertTrue(signUpResult.isFailure)
+        assertTrue(signUpResult.exceptionOrNull() is FirebaseAuthNotConfiguredException)
     }
 
     @Test
-    fun `successful sign in immediately publishes current user to active collectors`() = runTest(testDispatcher) {
-        val successfulAuthApi = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
-            override suspend fun signUp(
-                publishableKey: String,
-                redirectTo: String?,
-                request: SupabaseSignUpRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-            override suspend fun signInWithPassword(
-                publishableKey: String,
-                grantType: String,
-                request: SupabasePasswordGrantRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = retrofit2.Response.success(
-                SupabaseAuthResponse(
-                    accessToken = "access-token",
-                    refreshToken = "refresh-token",
-                    expiresIn = 3600L,
-                    user = SupabaseAuthUser(
-                        id = "user-1",
-                        email = "user@example.com",
-                        createdAt = "2024-01-01T00:00:00Z",
-                        userMetadata = mapOf<String, Any?>("display_name" to "Test User", "organization" to "Test Org")
-                    )
-                )
-            )
-
-            override suspend fun refreshSession(
-                publishableKey: String,
-                grantType: String,
-                request: SupabaseRefreshGrantRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-            override suspend fun verifyEmailOtp(
-                publishableKey: String,
-                request: SupabaseVerifyOtpRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-            override suspend fun requestPasswordRecovery(
-                publishableKey: String,
-                redirectTo: String?,
-                request: SupabaseRecoveryRequest
-            ): retrofit2.Response<Unit> = throw IOException("unused")
-
-            override suspend fun updatePassword(
-                publishableKey: String,
-                bearerToken: String,
-                request: SupabaseUpdateUserRequest
-            ): retrofit2.Response<SupabaseAuthUser> = throw IOException("unused")
-
-            override suspend fun signOut(
-                publishableKey: String,
-                bearerToken: String
-            ): retrofit2.Response<Unit> = throw IOException("unused")
-        }
-        val repository = com.example.data.repository.AuthRepositoryImpl(
-            api = successfulAuthApi,
-            publishableKey = "test-publishable-key",
-            sessionStore = createTestSessionStore()
+    fun `blank credentials and short passwords fail closed before Firebase call`() = runTest(testDispatcher) {
+        val authRepo = FirebaseAuthRepository(
+            context = context,
+            firestoreProvider = { null },
+            firebaseAuthProvider = { FirebaseAuth.getInstance() }
         )
-        val observedUsers = mutableListOf<com.example.domain.model.UserAccount?>()
-        val collector = backgroundScope.launch { repository.currentUser.collect { observedUsers += it } }
-        runCurrent()
-        assertNull(repository.getCurrentUserSync())
 
-        val result = repository.signIn("user@example.com", "correct-password")
-        assertTrue(result.isSuccess)
-        runCurrent()
+        val blankSignIn = authRepo.signIn("   ", "password")
+        val shortSignUp = authRepo.signUp("dev@example.com", "1234", "Dev", "")
 
-        assertEquals("user-1", repository.getCurrentUserSync()?.id)
-        assertTrue(observedUsers.any { it?.id == "user-1" })
-        collector.cancel()
+        assertTrue(blankSignIn.isFailure)
+        assertNotNull(blankSignIn.exceptionOrNull())
+        assertTrue(shortSignUp.isFailure)
+        assertNotNull(shortSignUp.exceptionOrNull())
     }
 
     @Test
-    fun `signup requiring email confirmation is not treated as an authenticated session`() = runTest(testDispatcher) {
-        val confirmationRequiredApi = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
-            override suspend fun signUp(
-                publishableKey: String,
-                redirectTo: String?,
-                request: SupabaseSignUpRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = retrofit2.Response.success(
-                SupabaseAuthResponse(
-                    user = SupabaseAuthUser(
-                        id = "pending-user",
-                        email = request.email,
-                        createdAt = "2026-11-06T00:00:00Z"
-                    )
-                )
-            )
-
-            override suspend fun signInWithPassword(
-                publishableKey: String,
-                grantType: String,
-                request: SupabasePasswordGrantRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-            override suspend fun refreshSession(
-                publishableKey: String,
-                grantType: String,
-                request: SupabaseRefreshGrantRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-            override suspend fun verifyEmailOtp(
-                publishableKey: String,
-                request: SupabaseVerifyOtpRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-            override suspend fun requestPasswordRecovery(
-                publishableKey: String,
-                redirectTo: String?,
-                request: SupabaseRecoveryRequest
-            ): retrofit2.Response<Unit> = throw IOException("unused")
-
-            override suspend fun updatePassword(
-                publishableKey: String,
-                bearerToken: String,
-                request: SupabaseUpdateUserRequest
-            ): retrofit2.Response<SupabaseAuthUser> = throw IOException("unused")
-
-            override suspend fun signOut(
-                publishableKey: String,
-                bearerToken: String
-            ): retrofit2.Response<Unit> = throw IOException("unused")
-        }
-        val sessionStore = createTestSessionStore()
-        val repository = com.example.data.repository.AuthRepositoryImpl(
-            api = confirmationRequiredApi,
-            publishableKey = "test-publishable-key",
-            sessionStore = sessionStore
+    fun `signOut emits null session cleanly`() = runTest(testDispatcher) {
+        val authRepo = FirebaseAuthRepository(
+            context = context,
+            firestoreProvider = { null },
+            firebaseAuthProvider = { FirebaseAuth.getInstance() }
         )
 
-        val result = repository.signUp(
-            email = "pending@example.com",
-            password = "valid-password",
-            displayName = "Pending User",
-            organization = ""
-        )
+        authRepo.signOut()
 
-        assertTrue(result.isFailure)
-        assertTrue(
-            result.exceptionOrNull() is com.example.domain.repository.EmailConfirmationRequiredException
-        )
-        assertNull(repository.getCurrentUserSync())
-        assertNull(sessionStore.read())
+        assertNull(authRepo.getCurrentUserSync())
+        assertNull(authRepo.currentUser.first())
     }
-    @Test
-    fun `sign in propagates coroutine cancellation instead of returning an auth failure`() = runTest(testDispatcher) {
-        val cancellation = CancellationException("request cancelled")
-        val api = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
-            override suspend fun signInWithPassword(
-                publishableKey: String,
-                grantType: String,
-                request: SupabasePasswordGrantRequest
-            ): retrofit2.Response<SupabaseAuthResponse> = throw cancellation
-        }
-        val repository = com.example.data.repository.AuthRepositoryImpl(
-            api = api,
-            publishableKey = "test-publishable-key",
-            sessionStore = createTestSessionStore()
-        )
-
-        try {
-            repository.signIn("user@example.com", "password")
-            fail("Expected coroutine cancellation to propagate")
-        } catch (actual: CancellationException) {
-            assertSame(cancellation, actual)
-        }
-    }
-
-    @Test
-    fun `sign out clears local identity before remote revocation and propagates cancellation`() = runTest(testDispatcher) {
-        val sessionStore = createTestSessionStore()
-        seedSession(sessionStore)
-        val cancellation = CancellationException("logout cancelled")
-        lateinit var repository: com.example.data.repository.AuthRepositoryImpl
-        var remoteSawClearedLocalState = false
-
-        val api = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
-            override suspend fun signOut(
-                publishableKey: String,
-                bearerToken: String
-            ): retrofit2.Response<Unit> {
-                remoteSawClearedLocalState =
-                    sessionStore.read() == null && repository.getCurrentUserSync() == null
-                throw cancellation
-            }
-        }
-        repository = com.example.data.repository.AuthRepositoryImpl(
-            api = api,
-            publishableKey = "test-publishable-key",
-            sessionStore = sessionStore
-        )
-        assertEquals("logout-user", repository.getCurrentUserSync()?.id)
-
-        try {
-            repository.signOut()
-            fail("Expected remote revocation cancellation to propagate")
-        } catch (actual: CancellationException) {
-            assertSame(cancellation, actual)
-        }
-
-        assertTrue("Local state must be cleared before the remote request", remoteSawClearedLocalState)
-        assertNull(sessionStore.read())
-        assertNull(repository.getCurrentUserSync())
-    }
-
-    @Test
-    fun `sign out keeps local logout complete when remote revocation fails`() = runTest(testDispatcher) {
-        val sessionStore = createTestSessionStore()
-        seedSession(sessionStore)
-        lateinit var repository: com.example.data.repository.AuthRepositoryImpl
-        var remoteSawClearedLocalState = false
-
-        val api = object : SupabaseAuthApi by unusedSupabaseAuthApi() {
-            override suspend fun signOut(
-                publishableKey: String,
-                bearerToken: String
-            ): retrofit2.Response<Unit> {
-                remoteSawClearedLocalState =
-                    sessionStore.read() == null && repository.getCurrentUserSync() == null
-                throw IOException("remote logout unavailable")
-            }
-        }
-        repository = com.example.data.repository.AuthRepositoryImpl(
-            api = api,
-            publishableKey = "test-publishable-key",
-            sessionStore = sessionStore
-        )
-
-        repository.signOut()
-
-        assertTrue("Local state must be cleared before the remote request", remoteSawClearedLocalState)
-        assertNull(sessionStore.read())
-        assertNull(repository.getCurrentUserSync())
-    }
-
-    private fun createTestSessionStore(): SupabaseSessionStore = SupabaseSessionStore(
-        context = context,
-        encryptSecret = { "test-encrypted:$it" },
-        decryptSecret = { it.removePrefix("test-encrypted:") }
-    )
-
-    private fun seedSession(sessionStore: SupabaseSessionStore) {
-        sessionStore.clear()
-        sessionStore.write(
-            SupabaseStoredSession(
-                accessToken = "access-token",
-                refreshToken = "refresh-token",
-                expiresAtEpochSeconds = System.currentTimeMillis() / 1000L + 3600L,
-                user = SupabaseAuthUser(
-                    id = "logout-user",
-                    email = "logout-user@example.com",
-                    createdAt = "2024-01-01T00:00:00Z"
-                )
-            )
-        )
-    }
-
-    private fun unusedSupabaseAuthApi(): SupabaseAuthApi = object : SupabaseAuthApi {
-        override suspend fun signUp(
-            publishableKey: String,
-            redirectTo: String?,
-            request: SupabaseSignUpRequest
-        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-        override suspend fun signInWithPassword(
-            publishableKey: String,
-            grantType: String,
-            request: SupabasePasswordGrantRequest
-        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-        override suspend fun signInWithIdToken(
-            publishableKey: String,
-            grantType: String,
-            request: SupabaseIdTokenGrantRequest
-        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("Unexpected Google sign-in request")
-
-        override suspend fun refreshSession(
-            publishableKey: String,
-            grantType: String,
-            request: SupabaseRefreshGrantRequest
-        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-        override suspend fun verifyEmailOtp(
-            publishableKey: String,
-            request: SupabaseVerifyOtpRequest
-        ): retrofit2.Response<SupabaseAuthResponse> = throw IOException("unused")
-
-        override suspend fun requestPasswordRecovery(
-            publishableKey: String,
-            redirectTo: String?,
-            request: SupabaseRecoveryRequest
-        ): retrofit2.Response<Unit> = throw IOException("unused")
-
-        override suspend fun updatePassword(
-            publishableKey: String,
-            bearerToken: String,
-            request: SupabaseUpdateUserRequest
-        ): retrofit2.Response<SupabaseAuthUser> = throw IOException("unused")
-
-        override suspend fun signOut(
-            publishableKey: String,
-            bearerToken: String
-        ): retrofit2.Response<Unit> = throw IOException("unused")
-    }
-
 }

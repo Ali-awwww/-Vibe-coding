@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Session ciphertext is device-bound to an Android Keystore key and must not be restored elsewhere. -->
-    <exclude domain="sharedpref" path="supabase_secure_session.xml" />
-    <exclude domain="sharedpref" path="supabase_identity_link.xml" />
+    <!-- Local encrypted API/token preferences bound to Android Keystore must not be restored elsewhere. -->
+    <exclude domain="sharedpref" path="github_secure_prefs.xml" />
 </full-backup-content>

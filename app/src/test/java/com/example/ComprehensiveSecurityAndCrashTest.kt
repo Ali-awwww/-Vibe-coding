@@ -165,7 +165,7 @@ class ComprehensiveSecurityAndCrashTest {
                 Result.failure(UnsupportedOperationException())
         }
 
-        // Use local Room storage with a mutable Supabase identity; do not bypass the project identity guard.
+        // Use local Room storage with a mutable Firebase identity; do not bypass the project identity guard.
         crashRepository = CrashRepositoryImpl(
             firestore = null,
             crashDao = database.crashDao(),

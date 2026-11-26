@@ -52,5 +52,6 @@ fun handleFirestoreError(
 
     val jsonString = errorInfoJson.toString()
     Log.e("FirestoreError", "Firestore Error: $jsonString")
+    recordCrashlyticsNonFatal(rootError, "Firestore ${operationType.value} failed at ${path ?: "unknown"}")
     return jsonString
 }
