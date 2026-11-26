@@ -780,4 +780,6 @@
     <string name="crash_watcher_service_starting_text">Verifying Shizuku access before monitoring begins</string>
     <string name="crash_watcher_process_start_failed">Shizuku could not start the privileged logcat process. Confirm that it is running and this app is authorized, then retry.</string>
     <string name="crash_watcher_stream_ended">The Shizuku logcat stream ended unexpectedly. Monitoring has stopped.</string>
+    <string name="crash_watcher_apps_load_failed">Installed applications could not be loaded. Check device access and try again.</string>
+    <string name="crash_watcher_retry">Try again</string>
 </resources>

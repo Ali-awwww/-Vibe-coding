@@ -10,6 +10,7 @@ import com.example.domain.model.CrashReport
 import com.example.service.CrashWatcherService
 import com.example.service.CrashWatcherState
 import com.example.util.shizuku.ShizukuManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -47,8 +48,12 @@ data class CrashWatcherUiState(
     val capturedCrashesCount: Int = 0,
     val lastCapturedCrash: CrashReport? = null,
     val isLoadingApps: Boolean = false,
+    val appsLoadError: Boolean = false,
     val userMessage: String? = null
 )
+
+internal fun CrashWatcherUiState.asAppsLoadFailure(): CrashWatcherUiState =
+    copy(isLoadingApps = false, appsLoadError = true)
 
 class CrashWatcherViewModel : ViewModel() {
 
@@ -142,55 +147,61 @@ class CrashWatcherViewModel : ViewModel() {
 
     fun loadInstalledApps(context: Context) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingApps = true) }
-            refreshShizukuStatus(context)
+            _uiState.update { it.copy(isLoadingApps = true, appsLoadError = false) }
+            try {
+                refreshShizukuStatus(context)
 
-            val apps = withContext(Dispatchers.IO) {
-                val pm = context.packageManager
-                val selfPackage = context.packageName
+                val apps = withContext(Dispatchers.IO) {
+                    val pm = context.packageManager
+                    val selfPackage = context.packageName
 
-                val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
-                    addCategory(Intent.CATEGORY_LAUNCHER)
+                    val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                    }
+                    val resolveInfos = pm.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
+                    val launcherPackages = resolveInfos.mapTo(HashSet()) { it.activityInfo.packageName }
+
+                    // Do not turn package-manager failures into a false "no apps found" state.
+                    val allPackages = pm.getInstalledPackages(0)
+
+                    allPackages.mapNotNull { packageInfo ->
+                        val pkgName = packageInfo.packageName
+                        if (pkgName == selfPackage) return@mapNotNull null
+
+                        val isLauncher = launcherPackages.contains(pkgName)
+                        val appInfo = packageInfo.applicationInfo
+                        val isSystem = (appInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM)) != 0
+
+                        if (!isLauncher && isSystem) return@mapNotNull null
+
+                        val appName = appInfo?.loadLabel(pm)?.toString() ?: pkgName
+                        val versionName = packageInfo.versionName ?: "1.0"
+
+                        MonitoredAppItem(
+                            packageName = pkgName,
+                            appName = appName,
+                            versionName = versionName,
+                            isSystemApp = isSystem,
+                            isSelected = _uiState.value.selectedPackages.contains(pkgName)
+                        )
+                    }.sortedBy { it.appName.lowercase(Locale.ROOT) }
                 }
-                val resolveInfos = pm.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
-                val launcherPackages = resolveInfos.mapTo(HashSet()) { it.activityInfo.packageName }
 
-                val allPackages = try {
-                    pm.getInstalledPackages(0)
-                } catch (_: Exception) {
-                    emptyList()
-                }
-
-                allPackages.mapNotNull { packageInfo ->
-                    val pkgName = packageInfo.packageName
-                    if (pkgName == selfPackage) return@mapNotNull null
-
-                    val isLauncher = launcherPackages.contains(pkgName)
-                    val appInfo = packageInfo.applicationInfo
-                    val isSystem = (appInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM)) != 0
-
-                    if (!isLauncher && isSystem) return@mapNotNull null
-
-                    val appName = appInfo?.loadLabel(pm)?.toString() ?: pkgName
-                    val versionName = packageInfo.versionName ?: "1.0"
-
-                    MonitoredAppItem(
-                        packageName = pkgName,
-                        appName = appName,
-                        versionName = versionName,
-                        isSystemApp = isSystem,
-                        isSelected = _uiState.value.selectedPackages.contains(pkgName)
+                _uiState.update { current ->
+                    val filtered = applyFilter(apps, current.searchQuery, current.activeFilter)
+                    current.copy(
+                        installedApps = apps,
+                        filteredApps = filtered,
+                        isLoadingApps = false,
+                        appsLoadError = false
                     )
-                }.sortedBy { it.appName.lowercase(Locale.ROOT) }
-            }
-
-            _uiState.update { current ->
-                val filtered = applyFilter(apps, current.searchQuery, current.activeFilter)
-                current.copy(
-                    installedApps = apps,
-                    filteredApps = filtered,
-                    isLoadingApps = false
-                )
+                }
+            } catch (error: CancellationException) {
+                _uiState.update { it.copy(isLoadingApps = false) }
+                throw error
+            } catch (error: Exception) {
+                android.util.Log.w("CrashWatcherViewModel", "Failed to load installed apps", error)
+                _uiState.update { it.asAppsLoadFailure() }
             }
         }
     }

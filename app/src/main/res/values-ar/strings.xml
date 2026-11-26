@@ -780,4 +780,6 @@
     <string name="crash_watcher_service_starting_text">جارٍ التحقق من صلاحية Shizuku قبل بدء المراقبة</string>
     <string name="crash_watcher_process_start_failed">تعذر تشغيل سجل الأعطال بصلاحيات Shizuku. تأكد من تشغيل Shizuku ومنح التطبيق الإذن ثم أعد المحاولة.</string>
     <string name="crash_watcher_stream_ended">انقطع تدفق سجلات Shizuku بشكل غير متوقع؛ أُوقفت المراقبة.</string>
+    <string name="crash_watcher_apps_load_failed">تعذر تحميل التطبيقات المثبتة. تحقق من صلاحيات الوصول إلى التطبيقات ثم أعد المحاولة.</string>
+    <string name="crash_watcher_retry">إعادة المحاولة</string>
 </resources>

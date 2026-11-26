@@ -195,6 +195,12 @@ fun CrashWatcherScreen(
                         CircularProgressIndicator(color = VibeDesignTokens.Color.Cyan)
                     }
                 }
+            } else if (uiState.appsLoadError) {
+                item {
+                    CrashWatcherAppsLoadErrorCard(
+                        onRetry = { viewModel.loadInstalledApps(context) }
+                    )
+                }
             } else if (uiState.filteredApps.isEmpty()) {
                 item {
                     Card(
@@ -224,6 +230,47 @@ fun CrashWatcherScreen(
                         onToggle = { viewModel.toggleAppSelection(appItem.packageName) }
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun CrashWatcherAppsLoadErrorCard(onRetry: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("crash_watcher_apps_error_card"),
+        colors = CardDefaults.cardColors(containerColor = VibeDesignTokens.Color.SpacePanel),
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
+        border = BorderStroke(1.dp, VibeDesignTokens.Color.Error.copy(alpha = 0.45f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ErrorOutline,
+                contentDescription = null,
+                tint = VibeDesignTokens.Color.Error,
+                modifier = Modifier.size(30.dp)
+            )
+            Text(
+                text = stringResource(R.string.crash_watcher_apps_load_failed),
+                style = MaterialTheme.typography.bodyMedium,
+                color = VibeDesignTokens.Color.TextPrimary,
+                textAlign = TextAlign.Center
+            )
+            Button(
+                onClick = onRetry,
+                modifier = Modifier.testTag("crash_watcher_apps_retry_button")
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.crash_watcher_retry))
             }
         }
     }
