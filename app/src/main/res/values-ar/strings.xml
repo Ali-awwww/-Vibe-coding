@@ -782,7 +782,6 @@
     <string name="crash_watcher_stream_ended">انقطع تدفق سجلات Shizuku بشكل غير متوقع؛ أُوقفت المراقبة.</string>
     <string name="crash_watcher_apps_load_failed">تعذر تحميل التطبيقات المثبتة. تحقق من صلاحيات الوصول إلى التطبيقات ثم أعد المحاولة.</string>
     <string name="crash_watcher_retry">إعادة المحاولة</string>
-    <string name="crash_watcher_subtitle">SHIZUKU / محرك مراقبة الأعطال على الجهاز</string>
     <string name="crash_watcher_back">العودة</string>
     <string name="crash_watcher_adb_command_copied">تم نسخ أمر ADB إلى الحافظة</string>
     <string name="crash_watcher_setup_guide">دليل الإعداد</string>
