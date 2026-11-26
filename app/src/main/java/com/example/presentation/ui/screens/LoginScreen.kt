@@ -53,9 +53,12 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import com.example.R
+import com.example.domain.model.UserAccount
+import com.example.presentation.viewmodel.AuthActionState
 import com.example.presentation.viewmodel.AuthDiagnosticInfo
 import com.example.presentation.viewmodel.AuthUiMessage
 import com.example.presentation.viewmodel.MainViewModel
+import com.example.presentation.viewmodel.PasswordRecoveryUiState
 import com.example.ui.theme.JetBrainsMono
 import com.example.ui.theme.VibeDesignTokens
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
@@ -83,6 +86,19 @@ internal data class AuthFormValidationError(
     val field: AuthFormField,
     val messageRes: Int
 )
+
+internal fun shouldNavigateToDashboardForRestoredSession(
+    currentUser: UserAccount?,
+    authMode: AuthMode,
+    actionState: AuthActionState,
+    passwordRecoveryState: PasswordRecoveryUiState
+): Boolean =
+    currentUser != null &&
+        authMode == AuthMode.SIGN_IN &&
+        !actionState.isLoading &&
+        actionState.errorMessage == null &&
+        actionState.successMessage == null &&
+        !passwordRecoveryState.isReadyForNewPassword
 
 internal fun resolvePasswordRecoveryMode(
     currentMode: AuthMode,
@@ -252,6 +268,29 @@ fun LoginScreen(
             password = ""
             confirmPassword = ""
             passwordVisible = false
+            onAuthSuccess()
+        }
+    }
+
+    LaunchedEffect(
+        currentUser,
+        authMode,
+        actionState.isLoading,
+        actionState.errorMessage,
+        actionState.successMessage,
+        passwordRecoveryState.linkGeneration,
+        passwordRecoveryState.isReadyForNewPassword
+    ) {
+        if (
+            shouldNavigateToDashboardForRestoredSession(
+                currentUser = currentUser,
+                authMode = authMode,
+                actionState = actionState,
+                passwordRecoveryState = passwordRecoveryState
+            )
+        ) {
+            silentSignInJob?.cancel()
+            silentSignInJob = null
             onAuthSuccess()
         }
     }

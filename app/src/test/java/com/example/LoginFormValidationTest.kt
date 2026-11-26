@@ -5,6 +5,11 @@ import com.example.presentation.ui.screens.AuthMode
 import com.example.presentation.ui.screens.resolvePasswordRecoveryMode
 import com.example.presentation.ui.screens.shouldSubmitOnEmailIme
 import com.example.presentation.ui.screens.validateAuthForm
+import com.example.presentation.ui.screens.shouldNavigateToDashboardForRestoredSession
+import com.example.domain.model.UserAccount
+import com.example.presentation.viewmodel.AuthActionState
+import com.example.presentation.viewmodel.AuthUiMessage
+import com.example.presentation.viewmodel.PasswordRecoveryUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -17,6 +22,60 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class LoginFormValidationTest {
+
+    @Test
+    fun restoredSessionNavigatesOnlyWhenLoginHasNoActiveAuthAction() {
+        val user = UserAccount(id = "restored-user")
+
+        assertTrue(
+            shouldNavigateToDashboardForRestoredSession(
+                currentUser = user,
+                authMode = AuthMode.SIGN_IN,
+                actionState = AuthActionState(),
+                passwordRecoveryState = PasswordRecoveryUiState()
+            )
+        )
+        assertFalse(
+            shouldNavigateToDashboardForRestoredSession(
+                currentUser = user,
+                authMode = AuthMode.RECOVER_PASSWORD,
+                actionState = AuthActionState(),
+                passwordRecoveryState = PasswordRecoveryUiState()
+            )
+        )
+        assertFalse(
+            shouldNavigateToDashboardForRestoredSession(
+                currentUser = user,
+                authMode = AuthMode.SIGN_IN,
+                actionState = AuthActionState(errorMessage = AuthUiMessage.SIGN_IN_FAILED),
+                passwordRecoveryState = PasswordRecoveryUiState()
+            )
+        )
+        assertFalse(
+            shouldNavigateToDashboardForRestoredSession(
+                currentUser = user,
+                authMode = AuthMode.SIGN_IN,
+                actionState = AuthActionState(successMessage = AuthUiMessage.PASSWORD_RECOVERY_REQUEST_ACCEPTED),
+                passwordRecoveryState = PasswordRecoveryUiState()
+            )
+        )
+        assertFalse(
+            shouldNavigateToDashboardForRestoredSession(
+                currentUser = user,
+                authMode = AuthMode.SIGN_IN,
+                actionState = AuthActionState(),
+                passwordRecoveryState = PasswordRecoveryUiState(isReadyForNewPassword = true)
+            )
+        )
+        assertFalse(
+            shouldNavigateToDashboardForRestoredSession(
+                currentUser = null,
+                authMode = AuthMode.SIGN_IN,
+                actionState = AuthActionState(),
+                passwordRecoveryState = PasswordRecoveryUiState()
+            )
+        )
+    }
 
     @Test
     fun recoveryEmailImeSubmitsTheRecoveryRequest() {

@@ -3879,3 +3879,23 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The Login acceptance requires the authenticated provider identity to restore the initial session and to disappear after sign-out. AppNavigation selects Dashboard only when `MainViewModel.currentUser` contains the provider identity; otherwise it starts at Login and redirects protected routes back to Login.
 - Added a ViewModel regression using a stateful AuthRepository test double: the repository's synchronous persisted identity seeds `currentUser`, the observed provider flow remains authoritative, and sign-out clears the identity without a hard-coded user ID.
 - The test is added but not yet executed. It does not substitute for a Firebase/Supabase-backed Android session test or visual route verification.
+
+
+### 2026-11-27 — Restore asynchronous auth sessions and avoid optimistic sign-out navigation
+
+**Confirmed navigation defect**
+- `AppNavigation` selected `Login` when the synchronous auth snapshot was initially null, but its route guard only handled the later `currentUser == null` case. If the provider's auth-state listener restored a valid session after the first composition, no branch navigated the already-visible Login route to Dashboard.
+- Both Dashboard and Settings sign-out callbacks navigated to Login immediately after starting asynchronous sign-out, before the provider had emitted a cleared session. A slow or failed sign-out could therefore display Login while the old identity remained active.
+
+**Implementation**
+- `LoginScreen.kt`: added a guarded restored-session transition. It navigates only when a provider identity is present, the screen is idle in sign-in mode, no auth error/success message is being shown, and no verified password-recovery link is active. Any pending silent credential request is cancelled before navigation.
+- `AppNavigation.kt`: removed both optimistic Login navigations from sign-out callbacks. The existing auth-state guard now redirects only after the repository clears the provider identity; a failed sign-out leaves the authenticated route visible.
+- `LoginFormValidationTest.kt`: added regression coverage for a restored session and guards for recovery mode, active auth feedback, a pending new-password flow and a missing identity.
+- The prior `MainViewModelAuthMessageTest` session test also verifies that the provider's synchronous identity seeds the state and that sign-out clears the observed identity.
+
+**Verification boundary**
+- These navigation changes and tests are committed to `main`; their new CI runs must reach terminal status. No emulator route-transition test or live provider session test is claimed.
+- Supabase Auth remains BLOCKED by read-only project-access permission. No production Auth settings, schema, RLS or data were changed.
+
+**Next exact step**
+- Inspect the current main-head Unit Tests, Lint and Debug/Release APK runs. Fix any failure from actual logs, then test cold-start restoration and sign-out transitions on Android before closing Login.

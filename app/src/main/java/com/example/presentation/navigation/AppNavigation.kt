@@ -84,10 +84,8 @@ fun AppNavigation(
             DashboardScreen(
                 navController = navController,
                 onSignOut = {
+                    // Let the auth-state observer navigate only after the provider session is cleared.
                     mainViewModel.signOut()
-                    navController.navigate(Screen.Login) {
-                        popUpTo(0) { inclusive = true }
-                    }
                 },
                 viewModel = dashboardViewModel
             )
@@ -197,10 +195,8 @@ fun AppNavigation(
             SettingsScreen(
                 viewModel = mainViewModel,
                 onSignOut = {
+                    // Let the auth-state observer navigate only after the provider session is cleared.
                     mainViewModel.signOut()
-                    navController.navigate(Screen.Login) {
-                        popUpTo(0) { inclusive = true }
-                    }
                 },
                 navController = navController
             )
