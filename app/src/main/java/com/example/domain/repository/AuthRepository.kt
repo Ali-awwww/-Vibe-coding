@@ -36,7 +36,7 @@ interface AuthRepository {
     suspend fun completePasswordRecovery(
         credentials: PasswordRecoveryCredentials,
         newPassword: String
-    ): Result<UserAccount> =
+    ): Result<Unit> =
         Result.failure(UnsupportedOperationException("Verified password recovery is not implemented by this repository."))
 
     suspend fun resetPassword(email: String, newPassword: String): Result<Unit>
