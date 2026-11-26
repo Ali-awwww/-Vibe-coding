@@ -14,7 +14,8 @@ import com.google.firebase.auth.FirebaseAuthException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -38,6 +39,32 @@ import javax.net.ssl.SSLHandshakeException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class MainViewModelAuthMessageTest {
+
+    @Test
+    fun restoredProviderSessionIsPublishedAndSignOutClearsTheIdentity() = runMainViewModelTest {
+        val restoredUser = UserAccount(
+            id = "restored-user",
+            email = "developer@example.com"
+        )
+        val repository = RecordingAuthRepository().apply {
+            currentUserSnapshot = restoredUser
+            currentUserState.value = restoredUser
+        }
+        val viewModel = MainViewModel(repository)
+
+        assertEquals(restoredUser, viewModel.currentUser.value)
+
+        backgroundScope.launch {
+            viewModel.currentUser.collect {}
+        }
+        advanceUntilIdle()
+
+        viewModel.signOut()
+        advanceUntilIdle()
+
+        assertNull(viewModel.currentUser.value)
+        assertNull(repository.currentUserSnapshot)
+    }
 
     @Test
     fun signInFailureUsesLocalizedKeyInsteadOfProviderMessage() = runMainViewModelTest {
@@ -313,7 +340,9 @@ private fun runMainViewModelTest(block: suspend TestScope.() -> Unit) = runTest 
 }
 
 private class RecordingAuthRepository : AuthRepository {
-    override val currentUser: Flow<UserAccount?> = flowOf(null)
+    val currentUserState = MutableStateFlow<UserAccount?>(null)
+    override val currentUser: Flow<UserAccount?> = currentUserState
+    var currentUserSnapshot: UserAccount? = null
 
     var signInResult: Result<UserAccount> = Result.failure(IllegalStateException("sign-in failed"))
     var signUpResult: Result<UserAccount> = Result.failure(IllegalStateException("sign-up failed"))
@@ -323,7 +352,7 @@ private class RecordingAuthRepository : AuthRepository {
     var resetPasswordResult: Result<Unit> = Result.failure(IllegalStateException("password update failed"))
     var requestedRecoveryEmail: String? = null
 
-    override fun getCurrentUserSync(): UserAccount? = null
+    override fun getCurrentUserSync(): UserAccount? = currentUserSnapshot ?: currentUserState.value
 
     override suspend fun signUp(
         email: String,
@@ -334,7 +363,10 @@ private class RecordingAuthRepository : AuthRepository {
 
     override suspend fun signIn(email: String, password: String): Result<UserAccount> = signInResult
 
-    override suspend fun signOut() = Unit
+    override suspend fun signOut() {
+        currentUserSnapshot = null
+        currentUserState.value = null
+    }
 
     override suspend fun requestPasswordRecovery(email: String): Result<Unit> {
         requestedRecoveryEmail = email

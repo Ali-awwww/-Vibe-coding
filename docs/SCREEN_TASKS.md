@@ -403,7 +403,10 @@ Append newest entries first. Each entry must state what changed, files/routes af
 | Date | Commit / PR | Work completed | Verification | Remaining work |
 |---|---|---|---|---|
 | 2026-11-27 | 9ac32aa74e600d2ebc9a404eab91e8b574feb5d4 | Refined Login field tokens and compact layout; made diagnostic details opt-in; cleared non-persisted credentials on auth-mode/success transitions; added four Compose regressions. | Android Lint succeeded; Debug and Release APKs built and uploaded; unit suite ran 453 tests with 4 failures and 4 skipped. Failure reports were inspected; no Login test result is inferred from this parent run. | Fix the confirmed test-isolation/proxy failures in the next row, then inspect the new run and complete device RTL/LTR/IME/accessibility review. Live Supabase Auth remains blocked by project read permission. |
-| 2026-11-27 | same main commit | Fixed three verified unit-test failure causes: Kotlin Result-mangled proxy dispatch, FirebaseAuthException's Android TextUtils dependency, and accidental implicit Firestore discovery in a no-backend test. | Source and regression-test changes committed; CI for this commit pending. | Inspect all test/lint/APK runs to terminal status; keep Login and the Identity prerequisite open until device and Supabase verification pass. |
+| 2026-11-27 | f7ac8e3b57a90d2c5553d7ec2313b761d4e14fb4 | Fixed three verified unit-test failure causes: Kotlin Result-mangled proxy dispatch, FirebaseAuthException's Android TextUtils dependency, and accidental implicit Firestore discovery in a no-backend test. | Follow-up unit compile still failed only on three explicit Compose test imports; no unit tests executed on this head. | Correct Compose test imports, rerun the full suite, and verify the four prior failures are resolved. |
+| 2026-11-27 | 0798a0b63454b92c7c8f4561ae952c69d896d850 | Corrected Login Compose test imports to match the existing screen-test API surface. | Import correction committed; CI queued/in progress and not yet verified. | Run the full unit suite and verify the new Login UI and session-restoration tests; continue to keep Login open pending device/Supabase checks. |
+| 2026-11-27 | same main commit | Added a MainViewModel regression proving a provider-restored identity is the initial session and sign-out clears the observed identity. | Test added; not yet executed. | Inspect terminal unit/lint/APK results, then validate real auth restoration and sign-out on Android. |
+
 | 2026-11-05 | — | Approved cybernetic space / cyberpunk / engineering direction with strong effects. Added global design-system and 28-route visual backlog to this task register. | Documentation update only; no screen implementation, Gradle build, UI test or device verification performed in this entry. | Implement shared Compose design tokens/components, then migrate screens incrementally without changing their real behavior. |
 
 ### Mandatory update protocol
@@ -3869,3 +3872,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - The Login UI test compile failed with three exact unresolved references: `assertDoesNotExist`, `assertExists` and `fetchSemanticsNode`. The existing Compose screen tests import `androidx.compose.ui.test.*`, which is the supported API surface for these extensions in this repository's Compose version.
 - Replaced the individual explicit imports with the same wildcard import used by the already-compiling screen tests. No production source or test assertion was changed.
 - This correction is committed to `main`; the new unit-test run is required to verify compilation and execution. The prior compile failure is not treated as a test result.
+
+
+### 2026-11-27 — Cover Login session restoration and sign-out state
+
+- The Login acceptance requires the authenticated provider identity to restore the initial session and to disappear after sign-out. AppNavigation selects Dashboard only when `MainViewModel.currentUser` contains the provider identity; otherwise it starts at Login and redirects protected routes back to Login.
+- Added a ViewModel regression using a stateful AuthRepository test double: the repository's synchronous persisted identity seeds `currentUser`, the observed provider flow remains authoritative, and sign-out clears the identity without a hard-coded user ID.
+- The test is added but not yet executed. It does not substitute for a Firebase/Supabase-backed Android session test or visual route verification.
