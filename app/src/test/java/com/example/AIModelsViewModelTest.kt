@@ -347,7 +347,7 @@ class AIModelsViewModelTest {
         override suspend fun requestPasswordRecovery(email: String) =
             Result.failure<Unit>(UnsupportedOperationException())
         override suspend fun completePasswordRecovery(credentials: PasswordRecoveryCredentials, newPassword: String) =
-            Result.failure<UserAccount>(UnsupportedOperationException())
+            Result.failure<Unit>(UnsupportedOperationException())
         override suspend fun resetPassword(email: String, newPassword: String) =
             Result.failure<Unit>(UnsupportedOperationException())
         override suspend fun signInWithGoogle(idToken: String) =
