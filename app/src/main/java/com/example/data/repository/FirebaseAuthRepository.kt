@@ -40,7 +40,11 @@ class FirebaseAuthRepository(
         CredentialManager.create(context.applicationContext)
             .clearCredentialState(ClearCredentialStateRequest())
     },
-    private val firebaseSignOutAction: (FirebaseAuth?) -> Unit = { it?.signOut() }
+    private val firebaseSignOutAction: (FirebaseAuth?) -> Unit = { it?.signOut() },
+    private val passwordResetConfirmer: suspend (String, String) -> Unit = { oobCode, newPassword ->
+        val firebaseAuth = firebaseAuthProvider() ?: throw FirebaseAuthNotConfiguredException()
+        firebaseAuth.confirmPasswordReset(oobCode, newPassword).await()
+    }
 ) : AuthRepository {
 
     private val auth: FirebaseAuth?
@@ -190,22 +194,15 @@ class FirebaseAuthRepository(
     override suspend fun completePasswordRecovery(
         credentials: PasswordRecoveryCredentials,
         newPassword: String
-    ): Result<UserAccount> =
+    ): Result<Unit> =
         try {
-            val firebaseAuth = auth ?: throw FirebaseAuthNotConfiguredException()
             val oobCode = credentials.oobCode?.takeIf(String::isNotBlank)
                 ?: throw IllegalArgumentException("Password recovery verification code is missing.")
             require(newPassword.length >= 8) { "Password must be at least 8 characters." }
 
-            firebaseAuth.confirmPasswordReset(oobCode, newPassword).await()
-            val current = firebaseAuth.currentUser?.takeIf { it.isSessionAuthorized() }?.toUserAccount()
-            if (current != null) {
-                Result.success(current)
-            } else {
-                Result.failure(
-                    IllegalStateException("Password updated. Sign in with your new password.")
-                )
-            }
+            // Firebase consumes the one-time code but does not sign the user in.
+            passwordResetConfirmer(oobCode, newPassword)
+            Result.success(Unit)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
