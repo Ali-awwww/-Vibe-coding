@@ -46,10 +46,29 @@ object CrashWatcherState {
     private val _lastCapturedCrash = MutableStateFlow<CrashReport?>(null)
     val lastCapturedCrash = _lastCapturedCrash.asStateFlow()
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage = _errorMessage.asStateFlow()
+
     internal fun setMonitoring(active: Boolean, packages: Set<String> = emptySet(), time: Long? = null) {
         _isMonitoring.value = active
         _monitoredPackages.value = packages
         _startTime.value = time
+    }
+
+    internal fun onProcessStartResult(
+        processStarted: Boolean,
+        packages: Set<String> = emptySet(),
+        startedAt: Long? = null
+    ) {
+        if (processStarted && packages.isNotEmpty()) {
+            setMonitoring(true, packages, startedAt ?: System.currentTimeMillis())
+        } else {
+            setMonitoring(false)
+        }
+    }
+
+    internal fun setError(message: String?) {
+        _errorMessage.value = message
     }
 
     internal fun incrementCaptured(crash: CrashReport) {
@@ -62,6 +81,7 @@ class CrashWatcherService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var streamJob: Job? = null
+    @Volatile
     private var activeProcess: Process? = null
 
     private lateinit var notificationManager: NotificationManager
@@ -78,6 +98,7 @@ class CrashWatcherService : Service() {
         val action = intent?.action ?: ACTION_START
         when (action) {
             ACTION_STOP -> {
+                CrashWatcherState.setError(null)
                 stopMonitoring()
             }
             ACTION_START -> {
@@ -85,6 +106,7 @@ class CrashWatcherService : Service() {
                 if (packages.isNotEmpty()) {
                     startMonitoring(packages)
                 } else {
+                    CrashWatcherState.onProcessStartResult(processStarted = false)
                     stopSelf()
                 }
             }
@@ -119,23 +141,63 @@ class CrashWatcherService : Service() {
     }
 
     private fun startMonitoring(packages: Set<String>) {
-        val now = System.currentTimeMillis()
-        CrashWatcherState.setMonitoring(true, packages, now)
-
-        val notification = buildOngoingNotification(packages)
-        startForeground(ONGOING_NOTIFICATION_ID, notification)
-
         streamJob?.cancel()
-        streamJob = serviceScope.launch {
-            // 1. Inspect recent logcat buffer for any recent crash before starting continuous stream
-            inspectRecentLogcatBuffer(packages)
+        runCatching { activeProcess?.destroy() }
+        activeProcess = null
+        CrashWatcherState.onProcessStartResult(processStarted = false)
+        CrashWatcherState.setError(null)
 
-            // 2. Start continuous logcat streaming via Shizuku
-            streamLogcatContinuously(packages)
+        // A foreground notification is required immediately, but it must not claim that
+        // monitoring is active until the privileged logcat process has actually started.
+        startForeground(
+            ONGOING_NOTIFICATION_ID,
+            buildServiceNotification(packages, isStarting = true)
+        )
+
+        streamJob = serviceScope.launch {
+            if (!inspectRecentLogcatBuffer(packages)) {
+                failMonitoring(getString(R.string.crash_watcher_process_start_failed))
+                return@launch
+            }
+
+            val process = ShizukuManager.executeProcess(
+                arrayOf("logcat", "-v", "threadtime", "-b", "crash", "-b", "main")
+            )
+            if (process == null) {
+                failMonitoring(getString(R.string.crash_watcher_process_start_failed))
+                return@launch
+            }
+
+            activeProcess = process
+            CrashWatcherState.onProcessStartResult(
+                processStarted = true,
+                packages = packages,
+                startedAt = System.currentTimeMillis()
+            )
+            withContext(Dispatchers.Main) {
+                notificationManager.notify(
+                    ONGOING_NOTIFICATION_ID,
+                    buildServiceNotification(packages, isStarting = false)
+                )
+            }
+
+            streamLogcatContinuously(packages, process)
         }
     }
 
-    private fun buildOngoingNotification(packages: Set<String>): android.app.Notification {
+    private suspend fun failMonitoring(message: String) {
+        CrashWatcherState.onProcessStartResult(processStarted = false)
+        CrashWatcherState.setError(message)
+        withContext(Dispatchers.Main) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
+    private fun buildServiceNotification(
+        packages: Set<String>,
+        isStarting: Boolean
+    ): android.app.Notification {
         val stopIntent = Intent(this, CrashWatcherService::class.java).apply {
             action = ACTION_STOP
         }
@@ -158,8 +220,16 @@ class CrashWatcherService : Service() {
 
         val appCount = packages.size
         return NotificationCompat.Builder(this, CHANNEL_ONGOING_ID)
-            .setContentTitle(getString(R.string.crash_watcher_service_notification_title))
-            .setContentText(getString(R.string.crash_watcher_service_notification_text, appCount))
+            .setContentTitle(
+                getString(
+                    if (isStarting) R.string.crash_watcher_service_starting_title
+                    else R.string.crash_watcher_service_notification_title
+                )
+            )
+            .setContentText(
+                if (isStarting) getString(R.string.crash_watcher_service_starting_text)
+                else getString(R.string.crash_watcher_service_notification_text, appCount)
+            )
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
@@ -171,34 +241,35 @@ class CrashWatcherService : Service() {
             .build()
     }
 
-    private suspend fun inspectRecentLogcatBuffer(packages: Set<String>) = withContext(Dispatchers.IO) {
+    private suspend fun inspectRecentLogcatBuffer(packages: Set<String>): Boolean = withContext(Dispatchers.IO) {
+        val cmd = arrayOf("logcat", "-d", "-v", "threadtime", "-b", "crash", "-b", "main")
+        val process = ShizukuManager.executeProcess(cmd) ?: return@withContext false
         try {
-            val cmd = arrayOf("logcat", "-d", "-v", "threadtime", "-b", "crash", "-b", "main")
-            val process = ShizukuManager.executeProcess(cmd) ?: return@withContext
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            val lines = mutableListOf<String>()
-            var line = reader.readLine()
-            while (line != null) {
-                lines.add(line)
-                line = reader.readLine()
+            val lines = process.inputStream.bufferedReader().use { it.readLines() }
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                Log.w(TAG, "Recent logcat inspection failed with exit code $exitCode")
+                return@withContext false
             }
-            process.waitFor()
 
-            val detected = LogcatCrashParser.parseLines(lines, packages)
-            for (crash in detected) {
+            LogcatCrashParser.parseLines(lines, packages).forEach { crash ->
                 recordAndNotifyCrash(crash)
             }
-        } catch (e: Throwable) {
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             Log.w(TAG, "Error checking recent logcat buffer: ${e.message}")
+            false
+        } finally {
+            runCatching { process.destroy() }
         }
     }
 
-    private suspend fun streamLogcatContinuously(packages: Set<String>) = withContext(Dispatchers.IO) {
-        val cmd = arrayOf("logcat", "-v", "threadtime", "-b", "crash", "-b", "main")
-        val process = ShizukuManager.executeProcess(cmd) ?: run {
-            Log.e(TAG, "Shizuku process execution failed")
-            return@withContext
-        }
+    private suspend fun streamLogcatContinuously(
+        packages: Set<String>,
+        process: Process
+    ) = withContext(Dispatchers.IO) {
         activeProcess = process
 
         val reader = BufferedReader(InputStreamReader(process.inputStream))
@@ -230,12 +301,21 @@ class CrashWatcherService : Service() {
                     }
                 }
             }
-        } catch (e: Throwable) {
-            if (e !is CancellationException) {
-                Log.w(TAG, "Logcat streaming ended: ${e.message}")
-            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Logcat streaming ended: ${e.message}")
         } finally {
             runCatching { process.destroy() }
+            if (activeProcess === process) activeProcess = null
+            if (isActive) {
+                CrashWatcherState.onProcessStartResult(processStarted = false)
+                CrashWatcherState.setError(getString(R.string.crash_watcher_stream_ended))
+                withContext(Dispatchers.Main) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+            }
         }
     }
 
@@ -243,7 +323,11 @@ class CrashWatcherService : Service() {
         try {
             val crashRepo = DependencyProvider.provideCrashRepository(applicationContext)
             val authRepo = DependencyProvider.provideAuthRepository(applicationContext)
-            val currentUserId = authRepo.getCurrentUserSync()?.id ?: "local_user"
+            val currentUserId = authRepo.getCurrentUserSync()?.id?.takeIf { it.isNotBlank() }
+                ?: run {
+                    Log.w(TAG, "Skipping captured crash because no authenticated user is available")
+                    return@withContext
+                }
 
             // 1. Resolve or establish active project and registered application
             val projects = crashRepo.getProjects().firstOrNull().orEmpty()
@@ -345,8 +429,9 @@ class CrashWatcherService : Service() {
     }
 
     private fun stopMonitoring() {
-        CrashWatcherState.setMonitoring(false)
+        CrashWatcherState.onProcessStartResult(processStarted = false)
         streamJob?.cancel()
+        streamJob = null
         runCatching { activeProcess?.destroy() }
         activeProcess = null
         stopForeground(STOP_FOREGROUND_REMOVE)

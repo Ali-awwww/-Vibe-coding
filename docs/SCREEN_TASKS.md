@@ -131,6 +131,18 @@ Complete each slice end-to-end before marking it complete. Visual redesign and f
 - Verification: source files were written through GitHub and will be re-fetched for content verification. No Gradle build, unit test execution, screenshot, emulator or device visual review is claimed. Login remains unchecked in the screen inventory and must not be considered complete.
 - Remaining design-system work: unify the existing `Eng*` theme palette with the new tokens, define reusable component/state patterns and document spacing/type/motion/accessibility rules. Correct the semantic mismatch where `EngCyan` is currently assigned a green hex value only after auditing its usages.
 
+
+## 2026-11-27 — CrashWatcher process integrity and CI timeout correction
+
+- Confirmed the new CrashWatcher route is registered in Screen.kt and AppNavigation.kt but absent from the prior 27-route register; reconciled the inventory to 28 routes and kept the new route unchecked.
+- ShizukuManager.executeProcess previously fell back to Runtime.exec after privileged process creation failed. Removed that fallback so the feature cannot silently run under the app UID without Shizuku privileges.
+- Added the Shizuku package to Android package-visibility queries. The service now starts with a truthful preparation notification, validates the recent-logcat process exit status, and only marks monitoring active after the privileged streaming process exists. Unexpected stream termination clears the active state and surfaces a localized error.
+- Removed the local_user persistence fallback from crash capture. Captured crashes are not written unless a non-blank authenticated user is available.
+- Added regression coverage for the CrashWatcher process-start state transition and increased the Gradle unit-test task timeout from 5 to 15 minutes. The latest CI failure on bb612a1 was a task timeout, not an assertion failure: :app:testDebugUnitTest exceeded its explicit five-minute timeout before the suite completed.
+- Verification: source and test changes are committed together; local Gradle execution is unavailable because the runner cannot resolve github.com to clone the repository, and no Android emulator/ADB binary is available. GitHub Actions is the available build/test verification path; record its terminal result before claiming success. CrashWatcher remains open pending CI, RTL/LTR, visual and device verification.
+- Supabase blocker: read-only calls to get_project, list_tables, list_migrations, list_edge_functions and security advisors for hgfgbjomwhogpswpqusk returned permission denied. No live database or project mutation was attempted. Current main includes commit e919e16, which removed Supabase Android code and made Firebase the only backend; this does not meet the approved dedicated-Supabase migration requirement. Schema/runtime reconciliation remains BLOCKED until read-only project access is available.
+
+
 ## Navigation screen inventory
 
 | # | Route / destination | UI implementation | Parameters | Audit status |
@@ -162,8 +174,9 @@ Complete each slice end-to-end before marking it complete. Visual redesign and f
 | 25 | `TeamChat` | `presentation/ui/screens/TeamChatScreen.kt` | Optional `teamId`, `projectId` | [ ] |
 | 26 | `TeamValidation` | `presentation/ui/screens/TeamValidationCenterScreen.kt` | — | [ ] |
 | 27 | `ProductQualityCenter` | `presentation/ui/screens/quality/ProductQualityCenterScreen.kt` | — | [ ] |
+| 28 | `CrashWatcher` | `presentation/ui/screens/CrashWatcherScreen.kt` | — | [ ] Shizuku process lifecycle and authenticated crash persistence require verification |
 
-**Count:** 27 navigation route declarations. Some routes intentionally reuse the same Composable implementation; route count is not the count of unique screen files.
+**Count:** 28 navigation route declarations. Some routes intentionally reuse the same Composable implementation; route count is not the count of unique screen files.
 
 ## Reusable UI components (not independent navigation destinations)
 
@@ -262,7 +275,7 @@ The product target is a dependable Android development and diagnostics workspace
 3. Stabilize provider configuration and real-request validation; handle provider errors without crashing or masking failure.
 4. Keep Live Testing unavailable until an authenticated, functioning Android Agent transport and event protocol exist.
 5. Implement Vibe Studio workspace boundaries, file operations, diff/approval flow, checkpoints and controlled command execution.
-6. Audit all 27 routes against the inventory and shared checklist; fix navigation, persistence, authorization, localization and accessibility defects.
+6. Audit all 28 routes against the inventory and shared checklist; fix navigation, persistence, authorization, localization and accessibility defects.
 7. Verify critical flows with automated tests and emulator/device runs; record evidence and exact commands.
 
 ## Current implementation notes
@@ -376,6 +389,7 @@ Status is intentionally **[ ] Not started** until the actual Compose screen and 
 | TeamChat | Operational communications console; message and task states must be persisted. | [ ] |
 | TeamValidation | Validation control room with real job lifecycle and evidence-backed reports. | [ ] |
 | ProductQualityCenter | Quality observatory showing actionable, traceable findings. | [ ] |
+| CrashWatcher | On-device crash monitoring with truthful Shizuku process and authorization state. | [ ] |
 
 ### Continuous execution log
 
@@ -383,7 +397,7 @@ Append newest entries first. Each entry must state what changed, files/routes af
 
 | Date | Commit / PR | Work completed | Verification | Remaining work |
 |---|---|---|---|---|
-| 2026-11-05 | — | Approved cybernetic space / cyberpunk / engineering direction with strong effects. Added global design-system and 27-route visual backlog to this task register. | Documentation update only; no screen implementation, Gradle build, UI test or device verification performed in this entry. | Implement shared Compose design tokens/components, then migrate screens incrementally without changing their real behavior. |
+| 2026-11-05 | — | Approved cybernetic space / cyberpunk / engineering direction with strong effects. Added global design-system and 28-route visual backlog to this task register. | Documentation update only; no screen implementation, Gradle build, UI test or device verification performed in this entry. | Implement shared Compose design tokens/components, then migrate screens incrementally without changing their real behavior. |
 
 ### Mandatory update protocol
 
@@ -3788,3 +3802,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Static review of the new resolver found that Kotlin raw-string regexes had been double-escaped by the code-generation step (`\\.` and `\\d` inside triple quotes). That would reject valid `File.kt:line` evidence even though the safety rules were correct.
 - Corrected the raw regex literals to use a single regex escape for the extension dot and line-number boundary. The regression suite covers raw stack traces, symbolicated frames, unknown/mismatched locations and ambiguous repository paths.
 - This correction is included in the next CI run; the previous commit's test result is not accepted as verification.
+
+
+### 28. CrashWatcher — authenticated on-device crash capture
+- Purpose / outcome: capture crash evidence from explicitly selected installed applications through an authorized Shizuku process, without presenting an inactive or failed process as live monitoring.
+- Required behavior: discover Shizuku under Android package-visibility rules; distinguish installed/running/authorized states; select monitored applications; confirm the privileged logcat process before showing active monitoring; stop cleanly when the process ends; persist captured reports only under the current authenticated account.
+- Acceptance: no app-UID fallback for privileged logcat commands; monitoring is active only while a Shizuku process is running; process-start/stream failures are visible and actionable; unauthenticated capture is not persisted; stop/restart does not leave stale active state.
+- Visual target: on-device diagnostic console with an explicit preparation state, permission state and process-backed monitoring indicator. Visual and device verification remain required before closure.

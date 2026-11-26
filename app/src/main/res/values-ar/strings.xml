@@ -776,4 +776,8 @@
     <string name="crashes_source_on_device_watcher">مراقب الجهاز (Shizuku)</string>
     <string name="crash_watcher_recent_buffer_checked">تم فحص السجل الأخير والتقاط الأعطال السابقة.</string>
     <string name="crash_watcher_no_selection_warning">يرجى اختيار تطبيق واحد على الأقل للمراقبة.</string>
+    <string name="crash_watcher_service_starting_title">جارٍ تهيئة مراقبة الأعطال على الجهاز</string>
+    <string name="crash_watcher_service_starting_text">جارٍ التحقق من صلاحية Shizuku قبل بدء المراقبة</string>
+    <string name="crash_watcher_process_start_failed">تعذر تشغيل سجل الأعطال بصلاحيات Shizuku. تأكد من تشغيل Shizuku ومنح التطبيق الإذن ثم أعد المحاولة.</string>
+    <string name="crash_watcher_stream_ended">انقطع تدفق سجلات Shizuku بشكل غير متوقع؛ أُوقفت المراقبة.</string>
 </resources>

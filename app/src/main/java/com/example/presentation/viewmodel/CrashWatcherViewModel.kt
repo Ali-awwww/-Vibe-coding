@@ -99,6 +99,13 @@ class CrashWatcherViewModel : ViewModel() {
                 _uiState.update { it.copy(lastCapturedCrash = crash) }
             }
         }
+        viewModelScope.launch {
+            CrashWatcherState.errorMessage.collect { message ->
+                if (!message.isNullOrBlank()) {
+                    _uiState.update { it.copy(userMessage = message) }
+                }
+            }
+        }
     }
 
     private fun startTimer() {
@@ -259,6 +266,7 @@ class CrashWatcherViewModel : ViewModel() {
     }
 
     fun dismissUserMessage() {
+        CrashWatcherState.setError(null)
         _uiState.update { it.copy(userMessage = null) }
     }
 

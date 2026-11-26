@@ -89,13 +89,10 @@ object ShizukuManager {
             method.isAccessible = true
             method.invoke(null, cmd, null, null) as? Process
         } catch (e: Throwable) {
+            // Never fall back to the app UID: it does not have Shizuku's privileges and
+            // would make a failed privileged operation look like a successful launch.
             Log.e(TAG, "Error starting Shizuku remote process: ${e.message}", e)
-            try {
-                Runtime.getRuntime().exec(cmd)
-            } catch (e2: Throwable) {
-                Log.e(TAG, "Fallback process execution failed: ${e2.message}")
-                null
-            }
+            null
         }
     }
 

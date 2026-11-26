@@ -173,7 +173,8 @@ dependencies {
 }
 
 tasks.withType<Test> {
-    timeout.set(Duration.ofMinutes(5))
+    // The full Robolectric suite routinely exceeds five minutes on cold CI runners.
+    timeout.set(Duration.ofMinutes(15))
     // Robolectric fetches android-all directly (outside Gradle's dependency resolver).
     // Use the canonical Maven Central host to avoid repo1's intermittent 429 responses.
     systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
