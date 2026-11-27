@@ -150,9 +150,11 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs "$APK"
           AAPT2=$(find "$BUILD_TOOLS_DIR" -name aapt2 2>/dev/null | sort -V | tail -n 1)
           test -n "$AAPT2"
-          RESOURCES=$("$AAPT2" dump resources "$APK")
-          echo "$RESOURCES" | grep -q "google_app_id"
-          echo "$RESOURCES" | grep -q "gen-lang-client-0258473942"
+          RESOURCES_FILE="${RUNNER_TEMP:-/tmp}/apk-resources.txt"
+          "$AAPT2" dump resources "$APK" > "$RESOURCES_FILE"
+          grep -q "google_app_id" "$RESOURCES_FILE"
+          grep -q "gen-lang-client-0258473942" "$RESOURCES_FILE"
+          rm -f "$RESOURCES_FILE"
           echo "Verified Firebase configuration resources inside release APK."
           sha256sum "$APK"
 
