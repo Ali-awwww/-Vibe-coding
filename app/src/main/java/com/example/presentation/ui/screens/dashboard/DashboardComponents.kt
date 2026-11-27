@@ -545,6 +545,71 @@ internal fun DashboardCompactToolCard(
 }
 
 @Composable
+internal fun DashboardIssueRow(issue: Issue, onClick: () -> Unit) {
+    val severityColor = when (issue.severity) {
+        Severity.LOW -> VibeDesignTokens.Color.Cyan
+        Severity.MEDIUM -> VibeDesignTokens.Color.Warning
+        Severity.HIGH, Severity.CRITICAL -> VibeDesignTokens.Color.Error
+    }
+    val statusLabel = when (issue.status) {
+        IssueStatus.NEW -> stringResource(R.string.dashboard_issue_status_new)
+        IssueStatus.INVESTIGATING -> stringResource(R.string.dashboard_issue_status_investigating)
+        IssueStatus.RESOLVED -> stringResource(R.string.dashboard_issue_status_resolved)
+        IssueStatus.REOPENED -> stringResource(R.string.dashboard_issue_status_reopened)
+    }
+    val severityLabel = when (issue.severity) {
+        Severity.LOW -> stringResource(R.string.crashes_severity_low)
+        Severity.MEDIUM -> stringResource(R.string.crashes_severity_medium)
+        Severity.HIGH -> stringResource(R.string.crashes_severity_high)
+        Severity.CRITICAL -> stringResource(R.string.crashes_severity_critical)
+    }
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("dashboard_issue_${issue.id}"),
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
+        colors = CardDefaults.cardColors(containerColor = VibeDesignTokens.Color.SpacePanel),
+        border = BorderStroke(1.dp, severityColor.copy(alpha = 0.35f))
+    ) {
+        Column(Modifier.padding(VibeDesignTokens.Spacing.Medium), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = issue.title.ifBlank { stringResource(R.string.dashboard_untitled_issue) },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = VibeDesignTokens.Color.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (issue.subtitle.isNotBlank()) {
+                Text(
+                    text = issue.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = VibeDesignTokens.Color.TextMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(color = VibeDesignTokens.Color.Cyan.copy(alpha = 0.12f), shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact)) {
+                    Text(statusLabel, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = VibeDesignTokens.Color.Cyan)
+                }
+                Surface(color = severityColor.copy(alpha = 0.12f), shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact)) {
+                    Text(severityLabel, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = severityColor)
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.dashboard_issue_occurrences, issue.occurrenceCount),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeDesignTokens.Color.TextMuted
+                )
+            }
+        }
+    }
+}
+
 internal fun DashboardCrashRow(
     crash: CrashReport,
     onClick: () -> Unit

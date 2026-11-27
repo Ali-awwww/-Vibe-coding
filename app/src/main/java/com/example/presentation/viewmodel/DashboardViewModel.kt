@@ -3,6 +3,8 @@ package com.example.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.CrashReport
+import com.example.domain.model.IntegrationType
+import com.example.domain.model.Issue
 import com.example.domain.model.Project
 import com.example.domain.model.SystemNotification
 import com.example.domain.model.UserAccount
@@ -20,6 +22,7 @@ data class DashboardUiState(
     val projects: List<Project> = emptyList(),
     val selectedProjectId: String? = null,
     val recentCrashes: List<CrashReport> = emptyList(),
+    val recentIssues: List<Issue> = emptyList(),
     val crashCount: Int = 0,
     val notifications: List<SystemNotification> = emptyList(),
     val unreadNotificationCount: Int = 0,
@@ -95,7 +98,9 @@ class DashboardViewModel(
 
                         val userApps = allApps.filter { it.projectId in scopedProjectIds }
                         val userCrashes = allCrashes.filter { it.projectId in scopedProjectIds && !it.isSimulatedQa() }
-                        val userIssues = allIssues.filter { it.projectId in scopedProjectIds }
+                        val userIssues = allIssues.filter {
+                            it.projectId in scopedProjectIds && it.source != IntegrationType.INTERNAL_QA
+                        }
 
                         DashboardUiState(
                             isAuthenticated = true,
@@ -106,6 +111,9 @@ class DashboardViewModel(
                                 .sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
                                 .take(10),
                             crashCount = userCrashes.size,
+                            recentIssues = userIssues
+                                .sortedWith(compareByDescending<Issue> { it.lastOccurrence }.thenByDescending { it.id })
+                                .take(5),
                             notifications = notifData.first,
                             unreadNotificationCount = notifData.second,
                             projectCount = userProjects.size,

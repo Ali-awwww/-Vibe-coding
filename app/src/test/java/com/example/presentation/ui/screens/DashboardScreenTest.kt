@@ -69,6 +69,39 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun unscopedApplicationsKpiPromptsForProjectInsteadOfOpeningTheFirstProject() {
+        val navigatedRoutes = mutableListOf<Screen>()
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                DashboardScreenContent(
+                    uiState = DashboardUiState(
+                        isAuthenticated = true,
+                        currentUser = UserAccount(id = "u1", email = "dev@vibe.io"),
+                        projects = listOf(
+                            Project(id = "p1", name = "Alpha", ownerId = "u1"),
+                            Project(id = "p2", name = "Beta", ownerId = "u1")
+                        ),
+                        applicationCount = 4,
+                        isLoading = false
+                    ),
+                    onNavigate = { navigatedRoutes.add(it) },
+                    onSelectProject = {},
+                    onRefresh = {},
+                    onMarkNotificationRead = {},
+                    onMarkAllNotificationsRead = {},
+                    onClearNotifications = {},
+                    onSignOut = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("dashboard_lazy_column")
+            .performScrollToNode(hasTestTag("dashboard_kpi_applications"))
+        composeRule.onNodeWithTag("dashboard_kpi_applications").performClick()
+        assertEquals(Screen.Projects, navigatedRoutes.last())
+    }
+
+    @Test
     fun authenticatedStateDisplaysCloudStatusProjectFiltersAndKpiNavigation() {
         val navigatedRoutes = mutableListOf<Screen>()
         var selectedProjectArg: String? = "unset"
@@ -93,6 +126,7 @@ class DashboardScreenTest {
                         projects = listOf(project1, project2),
                         selectedProjectId = "p1",
                         recentCrashes = listOf(crash),
+                        recentIssues = listOf(Issue(id = "i1", projectId = "p1", title = "Null pointer", occurrenceCount = 7)),
                         crashCount = 42,
                         projectCount = 2,
                         applicationCount = 4,
@@ -117,6 +151,8 @@ class DashboardScreenTest {
             .assertTextContains("LOCAL CACHE • CLOUD UNCONFIGURED")
 
         composeRule.onNodeWithTag("dashboard_kpi_crashes").assertTextContains("42")
+        composeRule.onNodeWithTag("dashboard_kpi_issues").performClick()
+        assertEquals(Screen.Issues(projectId = "p1"), navigatedRoutes.last())
         composeRule.onNodeWithTag("dashboard_error_card").assertIsDisplayed()
         composeRule.onNodeWithTag("dashboard_retry_button").performClick()
         assertTrue(retryClicked)
@@ -139,6 +175,11 @@ class DashboardScreenTest {
             .performScrollToNode(hasTestTag("dashboard_kpi_crashes"))
         composeRule.onNodeWithTag("dashboard_kpi_crashes").performClick()
         assertEquals(Screen.Crashes(projectId = "p1"), navigatedRoutes.last())
+
+        composeRule.onNodeWithTag("dashboard_lazy_column")
+            .performScrollToNode(hasTestTag("dashboard_issue_i1"))
+        composeRule.onNodeWithTag("dashboard_issue_i1").performClick()
+        assertEquals(Screen.Issues(projectId = "p1"), navigatedRoutes.last())
 
         composeRule.onNodeWithTag("dashboard_lazy_column")
             .performScrollToNode(hasTestTag("dashboard_crash_c1"))

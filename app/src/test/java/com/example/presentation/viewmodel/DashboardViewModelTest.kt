@@ -118,6 +118,27 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `dashboard counts and orders real issues while excluding internal QA`() = runTest {
+        authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
+        crashRepo.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "user-1"))
+        val realIssues = (0L..6L).map { timestamp ->
+            Issue(id = "issue-$timestamp", projectId = "p1", title = "Issue $timestamp", lastOccurrence = timestamp)
+        }
+        crashRepo.issues.value = realIssues.reversed() + Issue(
+            id = "qa-issue", projectId = "p1", title = "QA issue",
+            lastOccurrence = 99L, source = IntegrationType.INTERNAL_QA
+        )
+        val viewModel = DashboardViewModel(crashRepo, authRepo, isCloudConfigured = true)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+
+        val state = viewModel.uiState.value
+        assertEquals(7, state.issueCount)
+        assertEquals(5, state.recentIssues.size)
+        assertEquals((6L downTo 2L).map { "issue-$it" }, state.recentIssues.map { it.id })
+        assertFalse(state.recentIssues.any { it.id == "qa-issue" })
+    }
+
+    @Test
     fun `stream failure emits user safe error and refresh recovers`() = runTest {
         authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
         crashRepo.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "user-1"))

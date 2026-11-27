@@ -256,8 +256,6 @@ internal fun DashboardScreenContent(
                                 badge = "${uiState.projectCount} PRJ"
                             )
                             Spacer(Modifier.height(10.dp))
-                            val targetAppsProjectId = uiState.selectedProjectId
-                                ?: uiState.projects.firstOrNull()?.id
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -280,11 +278,9 @@ internal fun DashboardScreenContent(
                                         tag = "dashboard_kpi_applications",
                                         modifier = Modifier.weight(1f),
                                         onClick = {
-                                            if (targetAppsProjectId != null) {
-                                                onNavigate(Screen.Applications(targetAppsProjectId))
-                                            } else {
-                                                onNavigate(Screen.Projects)
-                                            }
+                                            uiState.selectedProjectId?.let { projectId ->
+                                                onNavigate(Screen.Applications(projectId))
+                                            } ?: onNavigate(Screen.Projects)
                                         }
                                     )
                                 }
@@ -388,6 +384,36 @@ internal fun DashboardScreenContent(
                                     accent = VibeDesignTokens.Color.Violet,
                                     tag = "dashboard_tool_team_validation",
                                     onClick = { onNavigate(Screen.TeamValidation) }
+                                )
+                            }
+                        }
+
+                        item {
+                            DashboardSectionHeader(
+                                title = stringResource(R.string.dashboard_recent_issues),
+                                badge = "${uiState.recentIssues.size}"
+                            )
+                        }
+
+                        if (uiState.recentIssues.isEmpty()) {
+                            item {
+                                DashboardPanel(
+                                    modifier = Modifier.fillMaxWidth().testTag("dashboard_empty_issues_card")
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.dashboard_empty_issues),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = VibeDesignTokens.Color.TextMuted,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        } else {
+                            items(uiState.recentIssues, key = { "issue-${it.id}" }) { issue ->
+                                DashboardIssueRow(
+                                    issue = issue,
+                                    onClick = { onNavigate(Screen.Issues(issue.projectId)) }
                                 )
                             }
                         }
