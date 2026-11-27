@@ -1,11 +1,7 @@
 package com.example.presentation.ui.screens
 
 import android.content.Context
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertTextEquals
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.*
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
 import com.example.R

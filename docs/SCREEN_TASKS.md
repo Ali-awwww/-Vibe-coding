@@ -4003,3 +4003,21 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Run the new main-head Unit Tests, Lint and Debug/Release APK workflows to terminal status and inspect their logs/artifacts. Then return to Login's remaining provider/device gates; keep Login open until those acceptance checks are actually verified.
+
+
+## 2026-11-28 — Fix Settings test compilation and Gradle wrapper permissions
+
+**CI evidence for `f1a99b04aee8ad4e7ba877eeedee03326f21df44`**
+- Android Unit Tests stopped during `compileDebugUnitTestKotlin`: the new test imported `androidx.compose.ui.test.assertDoesNotExist` as a top-level function, which this Compose test API does not expose. No tests ran on that commit.
+- Android Lint: **PASS** (`lintDebug`).
+- Build Android APK: **PASS**; Debug and signed Release APK build and artifact uploads completed.
+
+**Correction**
+- The Settings test now uses the same Compose test package wildcard import pattern as the existing Login Compose tests, which already compile and use `assertDoesNotExist`.
+- CI reported that `gradlew` was not executable and had to repair its mode during setup. The repository entry is now set to executable mode (`100755`) so local wrapper invocation works without that workaround.
+
+**Verification boundary**
+- The import and file-mode corrections are committed but not yet executed. Lint/APK results above apply only to `f1a99b04aee8ad4e7ba877eeedee03326f21df44`; they do not verify the corrected test import. No Android device/emulator verification is claimed.
+
+**Next exact step**
+- Inspect Unit Tests, Lint and Debug/Release APK runs for the corrected main head through terminal status. Resolve any further compiler or assertion failure from the actual logs before returning to Login's open provider/device gates.
