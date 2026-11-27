@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.domain.model.*
 import com.example.presentation.navigation.Screen
 import com.example.presentation.viewmodel.DashboardUiState
+import com.example.presentation.ui.screens.dashboard.DeveloperSessionHeader
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

@@ -4116,3 +4116,12 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect Unit Tests, Lint and Debug/Release APK workflows for the new main head to terminal status. Fix only failures evidenced by their reports, then continue the Dashboard metric provenance/refresh and accessibility audit without repeating Login's unchanged external blockers.
+
+
+## 2026-11-28 — Correct Dashboard Compose regression import after CI
+
+- CI for Dashboard data-integrity commit `37e8b11217dbd88ad48a727e1da7e34d5dc7eb7c`: Android Lint **PASS** and Debug/Release APK workflow **PASS**; Android Unit Tests **FAIL** during `compileDebugUnitTestKotlin` before tests ran.
+- The compiler identified one test-only issue: `DashboardScreenTest` referenced `DeveloperSessionHeader`, which is declared in the `presentation.ui.screens.dashboard` package, without importing it.
+- Added the explicit import. This does not change production code. The failure is not treated as a test assertion or a production regression.
+- The follow-up CI for the recent-issues/navigation commits is still pending; those runs contain the same test import until this correction reaches their descendants.
+- Next: verify the corrected main-head Unit Tests, Lint and APK workflow to terminal status; inspect any additional compiler/test output before marking either Dashboard slice PASS.
