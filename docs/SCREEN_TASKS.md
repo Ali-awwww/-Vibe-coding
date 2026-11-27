@@ -4245,3 +4245,33 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Post-change CI for 43257e94210236dee578550253fac7838daf1375 failed both Android Code Quality & Security Audit and Debug APK compilation at IssuesScreen.kt:93: the contentDescription semantics property was not imported. The lint and APK failures share this single Kotlin compile error; they are not independent defects.
 - Added the explicit androidx.compose.ui.semantics.contentDescription import. The Unit Tests run was still executing when this failure was identified; its terminal result must also be checked.
 - The failed run did not produce Debug/Release APK artifacts. Re-run all main-head workflows after this fix and inspect each to terminal status.
+
+## 2026-11-28 — Dashboard project-scope revocation and refresh integrity
+
+**Confirmed defect**
+- DashboardViewModel converted a requested project ID that disappeared from the authenticated project stream into null. The next combine emission silently expanded the dashboard from one project to every remaining project, while the project filter visually switched to ALL. This was a scope-integrity defect, not an authorization bypass in the repository query.
+
+**Implementation**
+- Preserve the requested project ID through loading and refresh. If it is no longer in the authenticated project stream, emit PROJECT_UNAVAILABLE with all project-derived metrics and recent records empty; do not aggregate other projects.
+- Keep the project filter visible and give the error banner an explicit Show all projects action. Only that user action clears the selected scope; overview KPIs and recent issue/crash lists are hidden until the scope is valid again.
+- Make the shared test repository's project stream reactive so revocation is exercised as a live lifecycle event. Added ViewModel regressions for revocation and refresh re-subscription, plus a Compose test for the fail-closed UI and explicit reset.
+
+**Files changed**
+- app/src/main/java/com/example/presentation/viewmodel/DashboardViewModel.kt
+- app/src/main/java/com/example/presentation/ui/screens/DashboardScreen.kt
+- app/src/main/java/com/example/presentation/ui/screens/dashboard/DashboardComponents.kt
+- app/src/test/java/com/example/presentation/viewmodel/FakeRepositories.kt
+- app/src/test/java/com/example/presentation/viewmodel/DashboardViewModelTest.kt
+- app/src/test/java/com/example/presentation/ui/screens/DashboardScreenTest.kt
+- app/src/main/res/values/strings.xml
+- app/src/main/res/values-ar/strings.xml
+
+**Verification boundary**
+- The Issues CI fix adding the missing Compose semantics property import is on main at 2fb8d02bd15db816addfb060173430167468d0d7. Its Unit Tests, Lint and Debug/Release APK workflows were still in progress when this Dashboard change was prepared; inspect their terminal results and then inspect the Dashboard commit's own CI. No emulator/device is attached, so visual/RTL/LTR and TalkBack review remain BLOCKED. No Supabase production data/schema changes were made.
+
+**Criterion state**
+- Dashboard selected-project revocation, refresh scope preservation, error recovery and stale-data suppression: IN_PROGRESS pending CI and rendered device verification.
+- Dashboard remaining visual, navigation, offline and lifecycle acceptance criteria remain open.
+
+**Next exact step**
+- Inspect the 2fb8d02 main-head workflows to terminal status. Then inspect the Dashboard change's Unit Tests, Lint and Debug/Release APK runs; fix only evidence-backed failures and continue the next independent Dashboard criterion without marking the screen complete.

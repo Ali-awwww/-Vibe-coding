@@ -51,6 +51,8 @@
     <string name="dashboard_error_session_expired">انتهت صلاحية الجلسة السحابية. سجّل الدخول مجددًا لتحديث بيانات المشاريع.</string>
     <string name="dashboard_error_connection">تعذر الاتصال بالخدمة السحابية. تحقق من الشبكة ثم أعد المحاولة.</string>
     <string name="dashboard_error_load">تعذر تحميل بيانات لوحة التحكم. تحقق من الاتصال ثم أعد المحاولة.</string>
+    <string name="dashboard_error_project_unavailable">لم يعد المشروع المحدد متاحاً. اختر مشروعاً آخر أو اعرض جميع المشاريع.</string>
+    <string name="dashboard_show_all_projects">عرض جميع المشاريع</string>
     <string name="dashboard_firebase_configured_sync_unverified">FIREBASE مُهيّأ • المزامنة غير متحققة</string>
     <string name="dashboard_local_cache_cloud_unconfigured">ذاكرة محلية • السحابة غير مهيأة</string>
     <string name="dashboard_greeting">مرحبًا، %1$s</string>

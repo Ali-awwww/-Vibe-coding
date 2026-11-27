@@ -74,7 +74,13 @@ class FakeCrashRepository : CrashRepository {
             failNextProjectsLoad = null
             return flow { throw error }
         }
-        return flowOf(projects.value.filter { it.ownerId == userId || members.value.any { m -> m.projectId == it.id && m.userId == userId } })
+        return projects.map { projectRecords ->
+            projectRecords.filter { project ->
+                project.ownerId == userId || members.value.any { member ->
+                    member.projectId == project.id && member.userId == userId
+                }
+            }
+        }
     }
 
     override suspend fun getProjectById(projectId: String): Project? =

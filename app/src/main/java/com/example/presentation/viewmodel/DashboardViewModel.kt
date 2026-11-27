@@ -90,45 +90,58 @@ class DashboardViewModel(
                         val activeProjectId = requestedProjectId?.takeIf { id ->
                             userProjects.any { it.id == id }
                         }
-                        val scopedProjectIds = if (activeProjectId != null) {
-                            setOf(activeProjectId)
+                        if (requestedProjectId != null && activeProjectId == null) {
+                            DashboardUiState(
+                                isAuthenticated = true,
+                                currentUser = user,
+                                projects = userProjects,
+                                selectedProjectId = requestedProjectId,
+                                isCloudConfigured = isCloudConfigured,
+                                isLoading = false,
+                                error = ERROR_PROJECT_UNAVAILABLE
+                            )
                         } else {
-                            userProjects.map { it.id }.toSet()
+                            val scopedProjectIds = if (activeProjectId != null) {
+                                setOf(activeProjectId)
+                            } else {
+                                userProjects.map { it.id }.toSet()
+                            }
+    
+                            val userApps = allApps.filter { it.projectId in scopedProjectIds }
+                            val userCrashes = allCrashes.filter { it.projectId in scopedProjectIds && !it.isSimulatedQa() }
+                            val userIssues = allIssues.filter {
+                                it.projectId in scopedProjectIds && it.source != IntegrationType.INTERNAL_QA
+                            }
+    
+                            DashboardUiState(
+                                isAuthenticated = true,
+                                currentUser = user,
+                                projects = userProjects,
+                                selectedProjectId = activeProjectId,
+                                recentCrashes = userCrashes
+                                    .sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
+                                    .take(10),
+                                crashCount = userCrashes.size,
+                                recentIssues = userIssues
+                                    .sortedWith(compareByDescending<Issue> { it.lastOccurrence }.thenByDescending { it.id })
+                                    .take(5),
+                                notifications = notifData.first,
+                                unreadNotificationCount = notifData.second,
+                                projectCount = userProjects.size,
+                                applicationCount = userApps.size,
+                                issueCount = userIssues.size,
+                                isCloudConfigured = isCloudConfigured,
+                                isLoading = false,
+                                error = null
+                            )
                         }
-
-                        val userApps = allApps.filter { it.projectId in scopedProjectIds }
-                        val userCrashes = allCrashes.filter { it.projectId in scopedProjectIds && !it.isSimulatedQa() }
-                        val userIssues = allIssues.filter {
-                            it.projectId in scopedProjectIds && it.source != IntegrationType.INTERNAL_QA
-                        }
-
-                        DashboardUiState(
-                            isAuthenticated = true,
-                            currentUser = user,
-                            projects = userProjects,
-                            selectedProjectId = activeProjectId,
-                            recentCrashes = userCrashes
-                                .sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
-                                .take(10),
-                            crashCount = userCrashes.size,
-                            recentIssues = userIssues
-                                .sortedWith(compareByDescending<Issue> { it.lastOccurrence }.thenByDescending { it.id })
-                                .take(5),
-                            notifications = notifData.first,
-                            unreadNotificationCount = notifData.second,
-                            projectCount = userProjects.size,
-                            applicationCount = userApps.size,
-                            issueCount = userIssues.size,
-                            isCloudConfigured = isCloudConfigured,
-                            isLoading = false,
-                            error = null
-                        )
                     }
                         .onStart {
                             emit(
                                 DashboardUiState(
                                     isAuthenticated = true,
                                     currentUser = user,
+                                    selectedProjectId = _selectedProjectId.value,
                                     isCloudConfigured = isCloudConfigured,
                                     isLoading = true
                                 )
@@ -194,5 +207,6 @@ class DashboardViewModel(
         const val ERROR_SESSION_EXPIRED = "SESSION_EXPIRED"
         const val ERROR_CONNECTION = "CONNECTION_FAILED"
         const val ERROR_LOAD = "LOAD_FAILED"
+        const val ERROR_PROJECT_UNAVAILABLE = "PROJECT_UNAVAILABLE"
     }
 }

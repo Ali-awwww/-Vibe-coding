@@ -202,7 +202,8 @@ internal fun DashboardAuthRequiredCard(
 @Composable
 internal fun DashboardErrorBanner(
     errorMessage: String,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    actionLabel: String? = null
 ) {
     DashboardPanel(
         modifier = Modifier
@@ -234,7 +235,7 @@ internal fun DashboardErrorBanner(
                 border = BorderStroke(1.dp, VibeDesignTokens.Color.Error.copy(alpha = 0.7f)),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = VibeDesignTokens.Color.Error)
             ) {
-                Text(stringResource(R.string.dashboard_retry))
+                Text(actionLabel ?: stringResource(R.string.dashboard_retry))
             }
         }
     }

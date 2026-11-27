@@ -62,9 +62,11 @@ internal fun DashboardScreenContent(
     onSignIn: () -> Unit = {}
 ) {
     var showNotificationsSheet by remember { mutableStateOf(false) }
+    val isProjectScopeUnavailable = uiState.error == DashboardViewModel.ERROR_PROJECT_UNAVAILABLE
     val dashboardErrorMessage = when (uiState.error) {
         DashboardViewModel.ERROR_SESSION_EXPIRED -> stringResource(R.string.dashboard_error_session_expired)
         DashboardViewModel.ERROR_CONNECTION -> stringResource(R.string.dashboard_error_connection)
+        DashboardViewModel.ERROR_PROJECT_UNAVAILABLE -> stringResource(R.string.dashboard_error_project_unavailable)
         else -> stringResource(R.string.dashboard_error_load)
     }
 
@@ -228,7 +230,15 @@ internal fun DashboardScreenContent(
                             item {
                                 DashboardErrorBanner(
                                     errorMessage = dashboardErrorMessage,
-                                    onRetry = onRefresh
+                                    onRetry = if (isProjectScopeUnavailable) {
+                                        { onSelectProject(null) }
+                                    } else {
+                                        onRefresh
+                                    },
+                                    actionLabel = stringResource(
+                                        if (isProjectScopeUnavailable) R.string.dashboard_show_all_projects
+                                        else R.string.dashboard_retry
+                                    )
                                 )
                             }
                         }
@@ -255,6 +265,7 @@ internal fun DashboardScreenContent(
                             }
                         }
 
+                        if (!isProjectScopeUnavailable) {
                         item {
                             DashboardSectionHeader(
                                 title = stringResource(R.string.overview),
@@ -318,6 +329,8 @@ internal fun DashboardScreenContent(
                                     )
                                 }
                             }
+                        }
+
                         }
 
                         item {
@@ -398,6 +411,7 @@ internal fun DashboardScreenContent(
                             }
                         }
 
+                        if (!isProjectScopeUnavailable) {
                         item {
                             DashboardSectionHeader(
                                 title = stringResource(R.string.dashboard_recent_issues),
@@ -471,6 +485,7 @@ internal fun DashboardScreenContent(
                                     onClick = { onNavigate(Screen.CrashDetail(crash.id)) }
                                 )
                             }
+                        }
                         }
                     }
                 }

@@ -133,6 +133,44 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun revokedProjectScopeHidesAggregateDataAndOffersAnExplicitReset() {
+        var selectedProject: String? = "p1"
+        val remainingProject = Project(id = "p2", name = "Beta", ownerId = "u1")
+
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                DashboardScreenContent(
+                    uiState = DashboardUiState(
+                        isAuthenticated = true,
+                        currentUser = UserAccount(id = "u1", email = "dev@vibe.io"),
+                        projects = listOf(remainingProject),
+                        selectedProjectId = "p1",
+                        isLoading = false,
+                        error = DashboardViewModel.ERROR_PROJECT_UNAVAILABLE
+                    ),
+                    onNavigate = {},
+                    onSelectProject = { selectedProject = it },
+                    onRefresh = {},
+                    onMarkNotificationRead = {},
+                    onMarkAllNotificationsRead = {},
+                    onClearNotifications = {},
+                    onSignOut = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(
+            "The selected project is no longer available. Choose another project or show all projects."
+        ).assertExists()
+        composeRule.onNodeWithTag("dashboard_kpi_projects").assertDoesNotExist()
+        composeRule.onNodeWithTag("dashboard_empty_issues_card").assertDoesNotExist()
+        composeRule.onNodeWithText("Show all projects").performClick()
+
+        assertEquals(null, selectedProject)
+    }
+
+    @Test
     fun authenticatedStateDisplaysCloudStatusProjectFiltersAndKpiNavigation() {
         val navigatedRoutes = mutableListOf<Screen>()
         var selectedProjectArg: String? = "unset"

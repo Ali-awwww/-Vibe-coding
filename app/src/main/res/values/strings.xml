@@ -51,6 +51,8 @@
     <string name="dashboard_error_session_expired">Your cloud session expired. Sign in again to refresh project data.</string>
     <string name="dashboard_error_connection">Could not connect to the cloud service. Check your network and retry.</string>
     <string name="dashboard_error_load">Could not load dashboard data. Check the connection and retry.</string>
+    <string name="dashboard_error_project_unavailable">The selected project is no longer available. Choose another project or show all projects.</string>
+    <string name="dashboard_show_all_projects">Show all projects</string>
     <string name="dashboard_firebase_configured_sync_unverified">FIREBASE CONFIGURED • SYNC UNVERIFIED</string>
     <string name="dashboard_local_cache_cloud_unconfigured">LOCAL CACHE • CLOUD UNCONFIGURED</string>
     <string name="dashboard_greeting">Welcome, %1$s</string>

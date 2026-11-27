@@ -139,6 +139,63 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun selectedProjectRevocationFailsClosedInsteadOfExpandingToAllProjects() = runTest {
+        authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
+        val project1 = Project(id = "p1", name = "Alpha", ownerId = "user-1")
+        val project2 = Project(id = "p2", name = "Beta", ownerId = "user-1")
+        crashRepo.projects.value = listOf(project1, project2)
+        crashRepo.applications.value = listOf(
+            Application(id = "a1", projectId = "p1", name = "App 1", packageName = "com.a1"),
+            Application(id = "a2", projectId = "p2", name = "App 2", packageName = "com.a2")
+        )
+        crashRepo.issues.value = listOf(
+            Issue(id = "i1", projectId = "p1"),
+            Issue(id = "i2", projectId = "p2")
+        )
+        crashRepo.crashes.value = listOf(
+            CrashReport(id = "c1", projectId = "p1"),
+            CrashReport(id = "c2", projectId = "p2")
+        )
+
+        val viewModel = DashboardViewModel(crashRepo, authRepo)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        viewModel.selectProject("p1")
+        assertEquals(1, viewModel.uiState.value.applicationCount)
+        assertEquals(1, viewModel.uiState.value.issueCount)
+        assertEquals(1, viewModel.uiState.value.crashCount)
+
+        crashRepo.projects.value = listOf(project2)
+
+        val revokedState = viewModel.uiState.value
+        assertEquals(DashboardViewModel.ERROR_PROJECT_UNAVAILABLE, revokedState.error)
+        assertEquals("p1", revokedState.selectedProjectId)
+        assertEquals(0, revokedState.applicationCount)
+        assertEquals(0, revokedState.issueCount)
+        assertEquals(0, revokedState.crashCount)
+        assertTrue(revokedState.recentIssues.isEmpty())
+        assertTrue(revokedState.recentCrashes.isEmpty())
+    }
+
+    @Test
+    fun refreshReopensStreamsWithoutDroppingTheSelectedProjectScope() = runTest {
+        authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
+        crashRepo.projects.value = listOf(
+            Project(id = "p1", name = "Alpha", ownerId = "user-1"),
+            Project(id = "p2", name = "Beta", ownerId = "user-1")
+        )
+
+        val viewModel = DashboardViewModel(crashRepo, authRepo)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        viewModel.selectProject("p2")
+        val issueReadsBeforeRefresh = crashRepo.getAllIssuesCalls
+
+        viewModel.refresh()
+
+        assertEquals("p2", viewModel.uiState.value.selectedProjectId)
+        assertEquals(issueReadsBeforeRefresh + 1, crashRepo.getAllIssuesCalls)
+    }
+
+    @Test
     fun `stream failure emits user safe error and refresh recovers`() = runTest {
         authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
         crashRepo.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "user-1"))
