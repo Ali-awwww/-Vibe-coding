@@ -4125,3 +4125,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added the explicit import. This does not change production code. The failure is not treated as a test assertion or a production regression.
 - The follow-up CI for the recent-issues/navigation commits is still pending; those runs contain the same test import until this correction reaches their descendants.
 - Next: verify the corrected main-head Unit Tests, Lint and APK workflow to terminal status; inspect any additional compiler/test output before marking either Dashboard slice PASS.
+
+
+## 2026-11-28 — Fix Dashboard recent-issue composable declaration
+
+- CI for commit `9eda4e235e86f7b8d4983c8a78e6771250f14903` exposed a production Kotlin compile error: `DashboardIssueRow` called `stringResource` without being annotated `@Composable`. The same intermediate commit also preceded the resource-string commit, so its unresolved resource IDs are superseded by the subsequent strings update.
+- Added the missing `@Composable` annotation. No acceptance assertion was weakened.
+- The separate test-only missing import from `37e8b112` was corrected in `b0b26503`.
+- Next: inspect CI for the current main head, where both corrections and the full issue resources are present; fix any remaining errors from actual job logs.
