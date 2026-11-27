@@ -4140,3 +4140,30 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - CI for `6a77b4e6690a8e72cfe6e306ca8d96534b9bedab` found the prior annotation fix had been inserted between the existing `@Composable` marker and `DashboardCrashRow`, resulting in a duplicate annotation on `DashboardIssueRow` and no annotation on `DashboardCrashRow`.
 - Corrected the declarations so each row has exactly one `@Composable` annotation.
 - The Unit Tests and Debug APK builds for that commit stopped at main-source compilation; no tests ran and no APK was produced. The current main commit must be rechecked from a fresh CI run.
+
+
+## 2026-11-28 — Dashboard localization, metric definitions and error/empty separation
+
+**Confirmed gaps**
+- Several Dashboard labels, section headings, notification actions and accessibility descriptions were Arabic literals in the default English resource configuration.
+- KPI cards did not explain that their counts cover all persisted records in the selected project scope and have no date window.
+- A failed dashboard stream could render the same “no recent crashes/issues” empty-state panels as a successful empty result.
+- DashboardViewModel exposed Arabic error prose directly instead of a stable error category that the UI could localize.
+
+**Implementation**
+- Moved Dashboard session actions, project scope, tool-card copy, sign-in gate, notification sheet, retry labels and accessibility descriptions into default-English and Arabic resources.
+- Added an explicit metric-scope explanation: authorized project total; all persisted applications/issues/crashes within the selected scope; internal QA excluded; no date filter.
+- Error states now use stable session-expired/connection/load codes and localized UI copy. Empty success panels are suppressed while the data source is in an error state.
+- Added a Compose regression proving that a load failure does not masquerade as healthy empty data and a ViewModel assertion for the safe error code.
+
+**Verification boundary**
+- Source-level resource consistency check found no missing or duplicate resource IDs in DashboardScreen, DashboardComponents and IssuesScreen for either English or Arabic.
+- CI for the preceding corrected row-annotation commit is still in progress; this localization/error-state batch is committed after it and requires its own terminal CI result.
+- Device-level RTL/LTR rendering and accessibility review remain BLOCKED because no Android device/emulator is attached. The live Supabase project remains read-only and inaccessible under the existing permission block; no production changes were made.
+
+**Criterion state**
+- Dashboard metric definitions, localization/accessibility labels and error-versus-empty behavior: **IN_PROGRESS** — implementation and regression tests committed; CI pending.
+- Dashboard data integrity, recent issue/crash ordering and Issues route scope remain **IN_PROGRESS** pending terminal CI and device review.
+
+**Next exact step**
+- Verify the latest main-head Unit Tests, Lint and Debug/Release APK workflows to terminal status. Correct only failures demonstrated by logs; then complete Dashboard project-context/refresh/accessibility checks before closing the screen.
