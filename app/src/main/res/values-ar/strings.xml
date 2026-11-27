@@ -800,4 +800,12 @@
     <string name="crashes_simulated_qa_empty_title">لا توجد تقارير اختبار محاكاة</string>
     <string name="crashes_simulated_qa_empty_desc">تظهر هنا تقارير الأعطال المُختلقة الناتجة عن فحوصات الجودة أو المحاكاة دون تلويث قائمة الأعطال الحقيقية.</string>
     <string name="simulated_qa_badge">اختبار محاكاة</string>
+    <string name="settings_profile_section_title">ملف الحساب</string>
+    <string name="settings_profile_not_signed_in">غير مسجل الدخول</string>
+    <string name="settings_profile_name_unavailable">الاسم غير متاح</string>
+    <string name="settings_profile_email_unavailable">البريد الإلكتروني غير متاح</string>
+    <string name="settings_last_login">آخر تسجيل دخول: %1$s</string>
+    <string name="settings_last_login_unavailable">غير متاح</string>
+    <string name="settings_authenticated_session">جلسة مصادق عليها</string>
+    <string name="settings_no_active_session">لا توجد جلسة نشطة</string>
 </resources>

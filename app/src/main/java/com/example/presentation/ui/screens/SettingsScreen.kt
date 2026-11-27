@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.R
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
 import com.example.presentation.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -37,6 +39,24 @@ fun SettingsScreen(
     var showSignOutDialog by remember { mutableStateOf(false) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+    val profileName = currentUser?.displayName?.takeIf(String::isNotBlank)
+        ?: currentUser?.email?.substringBefore('@')?.takeIf(String::isNotBlank)
+        ?: stringResource(
+            if (currentUser == null) R.string.settings_profile_not_signed_in
+            else R.string.settings_profile_name_unavailable
+        )
+    val profileEmail = currentUser?.email?.takeIf(String::isNotBlank)
+        ?: stringResource(R.string.settings_profile_email_unavailable)
+    val profileInitial = currentUser?.displayName?.takeIf(String::isNotBlank)?.firstOrNull()?.uppercaseChar()?.toString()
+        ?: currentUser?.email?.takeIf(String::isNotBlank)?.firstOrNull()?.uppercaseChar()?.toString()
+        ?: "—"
+    val lastLoginValue = currentUser?.lastLoginAt?.takeIf { it > 0L }
+        ?.let { dateFormat.format(Date(it)) }
+        ?: stringResource(R.string.settings_last_login_unavailable)
+    val sessionStatus = stringResource(
+        if (currentUser != null) R.string.settings_authenticated_session
+        else R.string.settings_no_active_session
+    )
 
     Scaffold(
         topBar = {
@@ -59,7 +79,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Profile Card
-            Text("حساب المطور النشط", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.settings_profile_section_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
@@ -77,7 +97,7 @@ fun SettingsScreen(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
-                                    (currentUser?.displayName?.take(1) ?: "D").uppercase(),
+                                    profileInitial,
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
@@ -87,12 +107,14 @@ fun SettingsScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                currentUser?.displayName ?: "Developer",
+                                profileName,
+                                modifier = Modifier.testTag("settings_profile_name"),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                currentUser?.email ?: "dev@crashintelligence.local",
+                                profileEmail,
+                                modifier = Modifier.testTag("settings_profile_email"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -114,13 +136,14 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "آخر تسجيل دخول: ${if (currentUser?.lastLoginAt != null) dateFormat.format(Date(currentUser!!.lastLoginAt)) else "الآن"}",
+                            text = stringResource(R.string.settings_last_login, lastLoginValue),
                             style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.testTag("settings_last_login"),
                             color = MaterialTheme.colorScheme.outline
                         )
 
                         Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            color = if (currentUser != null) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Row(
@@ -128,9 +151,10 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(Icons.Default.VerifiedUser, null, modifier = Modifier.size(14.dp))
+                                Icon(if (currentUser != null) Icons.Default.VerifiedUser else Icons.Default.Info, null, modifier = Modifier.size(14.dp))
                                 Text(
-                                    "Google / Firebase",
+                                    sessionStatus,
+                                    modifier = Modifier.testTag("settings_session_status"),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Medium
                                 )

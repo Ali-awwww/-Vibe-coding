@@ -3984,3 +3984,22 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the new main-head Unit Tests, Lint and Debug/Release APK runs to terminal status. If the corrected test passes, return to the open Login gate: verify its provider-backed recovery/session behavior and complete rendered RTL/LTR, IME and accessibility review when the required project access and Android device/emulator are available.
+
+
+## 2026-11-28 — CI green; remove synthetic identity from Settings
+
+**CI verification for `0df722e5fef7626c85111cd9fe6b605ef8283d03`**
+- Android Unit Tests: **PASS**, 465 tests, 0 failures, 0 skipped (Firebase Auth/Firestore emulators); the corrected Firestore notification test passed.
+- Android Code Quality & Security Audit: **PASS** (`lintDebug`).
+- Build Android APK: **PASS**; Debug and signed Release APK build/upload steps both completed. Artifacts: `CrashIntelligence-Debug-APK` and `CrashIntelligence-Release-APK-signed`.
+
+**Confirmed Settings defect and correction**
+- When `currentUser == null`, Settings displayed a fabricated `Developer` name, `dev@crashintelligence.local` email, a false “now” login time and a “Google / Firebase” provider badge. The badge was also inaccurate for valid email/password sessions.
+- Settings now derives the profile from the authenticated account, displays localized unavailable/signed-out values when data is absent, and labels only the generic authenticated-session state. The false provider claim and fabricated account fields are removed.
+- Added Compose/Robolectric regression coverage for signed-out and authenticated profile states, including the absence of the old fake email/provider label.
+
+**Verification boundary**
+- The new Settings regression tests are committed but not yet executed. The prior 465-test/Lint/APK results apply only to commit `0df722e5fef7626c85111cd9fe6b605ef8283d03`; they do not verify this new change. No emulator screenshot or live Supabase operation is claimed.
+
+**Next exact step**
+- Run the new main-head Unit Tests, Lint and Debug/Release APK workflows to terminal status and inspect their logs/artifacts. Then return to Login's remaining provider/device gates; keep Login open until those acceptance checks are actually verified.
