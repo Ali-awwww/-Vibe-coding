@@ -183,10 +183,17 @@ class FirestoreRepositoryRuleTest : FirestoreEmulatorTestBase() {
         }
         assertTrue(issues.any { it.projectId == projectId })
 
-        val unreadCount = withTimeout(FLOW_TIMEOUT_MS) {
-            crashRepo.getUnreadNotificationCount().first()
+        // Adding a HIGH-severity crash also creates its own unread CRASH_ALERT.
+        // Marking the separate notification above must leave that crash alert unread.
+        val notificationsAfterRead = withTimeout(FLOW_TIMEOUT_MS) {
+            crashRepo.getNotifications().first { notifications ->
+                notifications.any { it.id == notifId && it.isRead }
+            }
         }
-        assertEquals(0, unreadCount)
+        assertTrue(notificationsAfterRead.single { it.id == notifId }.isRead)
+        val remainingUnread = notificationsAfterRead.filterNot { it.isRead }
+        assertEquals(1, remainingUnread.size)
+        assertEquals(crashId, remainingUnread.single().targetCrashId)
     }
 
     @Test

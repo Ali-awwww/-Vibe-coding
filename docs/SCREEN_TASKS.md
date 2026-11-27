@@ -3968,3 +3968,19 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - At the next meaningful verification point, inspect the Unit Tests, Lint and Debug/Release APK runs for `9298d9acf4adf3e28d5b975e716f92cc5e95d234` using a run-list-capable GitHub Actions endpoint; do not repeat the current PR-only lookup unless its capabilities change. Fix only failures evidenced by those logs. Then exercise recovery with a signed-out account and complete rendered Login RTL/LTR, IME and accessibility review on an Android device. Keep Login open until its design and functional gates are verified; do not mark it complete or advance to Dashboard while those gates remain open.
+
+
+## 2026-11-28 — Correct Firestore notification unread-count test expectation
+
+**CI evidence**
+- Main commit `201628fa366f261b63d39784a91a99093ee611b4`: Android Unit Tests completed with 465 tests, 1 failure; Android Lint, Debug APK build and the configured release-artifact workflow completed successfully.
+- The sole failure was `FirestoreRepositoryRuleTest.crashRepository_ownerCrudAndCollectionGroupQueries_succeedUnderRules` at line 189: expected unread count 0, actual 1. The test creates a HIGH-severity crash; `CrashRepositoryImpl.addCrash` intentionally creates a separate `CRASH_ALERT` notification for that crash. The test then marked only its separately-created notification as read, so one unread crash alert is correct. This is a test expectation defect, not evidence of a production notification write failure.
+
+**Correction**
+- The rule test now waits until the explicitly addressed notification is observed as read, verifies it is read, and asserts that exactly one unread notification remains and is linked to the generated crash. Production repository and Firestore rules are unchanged.
+
+**Verification boundary**
+- This is a test correction based on the downloaded CI test report and the actual `addCrash` notification path. It has not yet been executed; the next main push must complete Unit Tests, Lint and APK workflows before any new pass is recorded. No Supabase production operation was attempted.
+
+**Next exact step**
+- Inspect the new main-head Unit Tests, Lint and Debug/Release APK runs to terminal status. If the corrected test passes, return to the open Login gate: verify its provider-backed recovery/session behavior and complete rendered RTL/LTR, IME and accessibility review when the required project access and Android device/emulator are available.
