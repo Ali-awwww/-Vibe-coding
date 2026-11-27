@@ -74,6 +74,9 @@
     <string name="issues_load_error">تعذر تحميل المشكلات. تحقق من الاتصال ثم أعد المحاولة.</string>
     <string name="issues_sync_error">تعذرت مزامنة مشروع واحد أو أكثر.</string>
     <string name="issues_retry">إعادة المحاولة</string>
+    <string name="issues_last_successful_sync">آخر مزامنة ناجحة: %1$s</string>
+    <string name="issues_no_successful_sync">لم تُسجّل مزامنة ناجحة بعد</string>
+    <string name="issues_source_unknown">غير معروف</string>
     <string name="no_recent_crashes">لم يتم العثور على انهيارات حديثة. عمل رائع!</string>
 
     <!-- Analytics Section -->

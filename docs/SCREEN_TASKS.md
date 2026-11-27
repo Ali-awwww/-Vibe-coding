@@ -4175,3 +4175,26 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Failure 1: the existing project-scope ViewModel test expected repository order `[c2, c3]`; the implemented timestamp-descending contract correctly returned `[c3, c2]`. Updated the stale expectation to the deterministic recent-first order.
 - Failure 2: the Dashboard Compose test queried the crash KPI before the LazyColumn had composed the off-screen KPI row. Updated the test to scroll to the error and KPI items before asserting/clicking them; the retry action is exercised while its banner is visible.
 - The 30c unit-test run failed only on these two assertions; the current follow-up must rerun the suite. Lint/APK workflows for that commit were still being monitored when the report was read.
+
+
+## 2026-11-28 — Issues source and successful-sync provenance
+
+**Confirmed gap**
+- Issues rows displayed the source and last occurrence, but the screen had no authoritative last-successful-sync timestamp. A local wall-clock timestamp or the last issue occurrence would not be a valid substitute.
+
+**Implementation**
+- IssuesViewModel now observes each authorized project's persisted `Integration.lastSyncedAt` via `CrashRepository.getIntegrations`. Project-scoped mode reports only that project's latest successful sync; all-project mode reports the latest successful sync across the visible project set.
+- Internal QA integrations are excluded from the displayed timestamp. A missing timestamp is rendered as “No successful sync recorded”; no connected/success state is fabricated.
+- Switching scope cancels the prior integration observer; removing the selected project clears the timestamp and fails closed. The screen displays the localized timestamp under the current project scope and localizes issue status/source fallback.
+- Extended the fake repository with a real StateFlow-backed integration fixture and sync timestamp update; added tests for all-project max timestamp, project isolation, QA exclusion and successful sync refresh.
+
+**Verification boundary**
+- Dashboard/Issues unit tests for main commit `3440c587`: **477/477 PASS**, including 5 Dashboard Compose tests, 5 Dashboard ViewModel tests and 4 IssuesViewModel tests. Debug/Release APK and Lint for that commit are still being monitored.
+- The new last-sync implementation is committed after that passing test run; its own CI is pending. Device RTL/LTR and TalkBack review remain BLOCKED because no emulator/device is attached. Supabase live project access remains BLOCKED by the previously recorded read-only permission denial; no production data/schema was changed.
+
+**Criterion state**
+- Issues source and authoritative last-successful-sync visibility: **IN_PROGRESS** — implementation and three sync-provenance regressions committed; CI pending.
+- Dashboard data integrity, recent issue/crash rendering, project routing, metric scope copy and error/empty separation: implementation and regression tests are committed; main-head CI/device verification still pending.
+
+**Next exact step**
+- Inspect the `bcf5739` main-head Unit Tests, Lint and Debug/Release APK workflows to terminal status. Fix only evidence-backed failures, then continue the Issues screen lifecycle/error/accessibility audit and Dashboard device-independent criteria.

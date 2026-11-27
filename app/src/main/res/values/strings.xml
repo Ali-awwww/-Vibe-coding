@@ -74,6 +74,9 @@
     <string name="issues_load_error">Could not load issues. Check the connection and retry.</string>
     <string name="issues_sync_error">One or more projects could not be synchronized.</string>
     <string name="issues_retry">Retry</string>
+    <string name="issues_last_successful_sync">Last successful sync: %1$s</string>
+    <string name="issues_no_successful_sync">No successful sync recorded</string>
+    <string name="issues_source_unknown">Unknown</string>
     <string name="no_recent_crashes">No recent crashes found. Great job!</string>
 
     <!-- Analytics Section -->
