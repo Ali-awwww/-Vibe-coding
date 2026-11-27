@@ -794,4 +794,10 @@
     <string name="crash_watcher_deselect_all">إلغاء التحديد</string>
     <string name="crash_watcher_select_app_first">يرجى اختيار تطبيق واحد على الأقل للمراقبة.</string>
     <string name="crash_watcher_shizuku_permission_required">يلزم منح إذن Shizuku أولاً لبدء المراقبة.</string>
+    <string name="crashes_real_tab">الأعطال الحقيقية</string>
+    <string name="crashes_simulated_qa_tab">تقارير اختبار محاكاة</string>
+    <string name="crashes_simulated_qa_banner">تُحفظ تقارير الاختبار والمحاكاة الصادرة عن بيئة التطوير هنا بمعزلٍ تام عن الأعطال الحقيقية الواردة من Sentry أو Bugsnag أو Crashlytics أو مراقب الجهاز.</string>
+    <string name="crashes_simulated_qa_empty_title">لا توجد تقارير اختبار محاكاة</string>
+    <string name="crashes_simulated_qa_empty_desc">تظهر هنا تقارير الأعطال المُختلقة الناتجة عن فحوصات الجودة أو المحاكاة دون تلويث قائمة الأعطال الحقيقية.</string>
+    <string name="simulated_qa_badge">اختبار محاكاة</string>
 </resources>

@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.MemoryCacheSettings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -22,6 +23,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import java.io.IOException
+import java.net.InetSocketAddress
+import java.net.Socket
 
 @RunWith(RobolectricTestRunner::class)
 @Config
@@ -34,6 +38,8 @@ abstract class FirestoreEmulatorTestBase {
 
     @Before
     open fun setUpFirebase() {
+        assumeEmulatorsAvailable()
+
         val context = ApplicationProvider.getApplicationContext<Context>()
         val resId = context.resources.getIdentifier("firestore_database_id", "string", context.packageName)
         databaseId = if (resId != 0) context.getString(resId) else "demo-database"
@@ -68,26 +74,59 @@ abstract class FirestoreEmulatorTestBase {
 
     @After
     open fun tearDownFirebase() {
-        auth.signOut()
+        if (::auth.isInitialized) {
+            auth.signOut()
+        }
     }
+
+    protected fun assumeEmulatorsAvailable() {
+        val firestoreUp = isPortReachable(EMULATOR_HOST, FIRESTORE_PORT)
+        val authUp = isPortReachable(EMULATOR_HOST, AUTH_PORT)
+        if (!firestoreUp || !authUp) {
+            val reason = "Skipping emulator-backed test: Firebase emulators not reachable " +
+                "(firestore=$EMULATOR_HOST:$FIRESTORE_PORT up=$firestoreUp, " +
+                "auth=$EMULATOR_HOST:$AUTH_PORT up=$authUp)"
+            System.err.println("[SKIP] $reason")
+            assumeTrue(reason, false)
+        }
+    }
+
+    private fun isPortReachable(host: String, port: Int): Boolean =
+        try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, port), PORT_CHECK_TIMEOUT_MS)
+                true
+            }
+        } catch (_: IOException) {
+            false
+        }
 
     // Local emulator test helper ONLY (under app/src/test/).
     protected suspend fun signInTestUser(email: String): String = withContext(Dispatchers.IO) {
-        withTimeout(AUTH_TIMEOUT_MS) {
-            val result = try {
-                try {
+        try {
+            withTimeout(AUTH_TIMEOUT_MS) {
+                val result = try {
                     auth.signInWithEmailAndPassword(email, DEFAULT_PASSWORD).await()
                 } catch (_: FirebaseAuthInvalidUserException) {
                     auth.createUserWithEmailAndPassword(email, DEFAULT_PASSWORD).await()
                 }
-            } catch (error: FirebaseException) {
-                assumeTrue(
-                    "Firebase Auth emulator is unavailable; skipping emulator-backed test",
-                    false
-                )
-                throw error
+                checkNotNull(result.user?.uid) { "User auth failed" }
             }
-            checkNotNull(result.user?.uid) { "User auth failed" }
+        } catch (error: TimeoutCancellationException) {
+            val reason = "Firebase Auth emulator timed out; skipping emulator-backed test"
+            System.err.println("[SKIP] $reason")
+            assumeTrue(reason, false)
+            throw error
+        } catch (error: FirebaseException) {
+            val reason = "Firebase Auth emulator is unavailable (${error.message}); skipping emulator-backed test"
+            System.err.println("[SKIP] $reason")
+            assumeTrue(reason, false)
+            throw error
+        } catch (error: IOException) {
+            val reason = "Firebase Auth emulator connection failed (${error.message}); skipping emulator-backed test"
+            System.err.println("[SKIP] $reason")
+            assumeTrue(reason, false)
+            throw error
         }
     }
 
@@ -105,6 +144,7 @@ abstract class FirestoreEmulatorTestBase {
         const val EMULATOR_HOST = "127.0.0.1"
         const val FIRESTORE_PORT = 8085
         const val AUTH_PORT = 9099
+        const val PORT_CHECK_TIMEOUT_MS = 400
         const val PROJECT_ID = "demo-no-project"
         const val DEFAULT_PASSWORD = "password123"
         const val AUTH_TIMEOUT_MS = 5000L

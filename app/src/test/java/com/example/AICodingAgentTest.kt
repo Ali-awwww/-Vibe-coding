@@ -11,6 +11,7 @@ import com.example.domain.repository.AIModelRepository
 import com.example.util.DiffUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
@@ -135,8 +136,12 @@ class AICodingAgentTest {
             override fun getAllApplications() = crashDao.getAllApplications()
             override suspend fun addApplication(application: Application) = crashDao.insertApplication(application)
             override suspend fun deleteApplication(applicationId: String) = crashDao.deleteApplication(applicationId)
-            override fun getLatestCrashes(projectId: String?, applicationId: String?) = crashDao.getAllCrashes()
-            override fun getAllCrashes() = crashDao.getAllCrashes()
+            override fun getLatestCrashes(projectId: String?, applicationId: String?) =
+                crashDao.getAllCrashes().map { list -> list.filterNot { it.isSimulatedQa() } }
+            override fun getAllCrashes() =
+                crashDao.getAllCrashes().map { list -> list.filterNot { it.isSimulatedQa() } }
+            override fun getSimulatedQaReports(projectId: String?, applicationId: String?) =
+                crashDao.getSimulatedQaReports()
             override fun getCrashDetails(crashId: String) = crashDao.getCrashDetails(crashId)
             override suspend fun addCrash(crash: CrashReport) = crashDao.insertCrash(crash)
             override suspend fun updateCrashStatus(crashId: String, isResolved: Boolean) = crashDao.updateCrashStatus(crashId, isResolved)
@@ -813,12 +818,15 @@ class AICodingAgentTest {
         val crashReport = crashResult.getOrThrow()
         assertEquals(workspaceId, crashReport.applicationId)
         assertEquals(workspaceId, crashReport.projectId)
-        assertEquals(Severity.CRITICAL, crashReport.severity)
+        assertEquals(Severity.LOW, crashReport.severity)
+        assertTrue(crashReport.isSimulatedQaReport)
         assertTrue(crashReport.message.contains("NullPointerException"))
 
-        // Verify stored in crash repository
-        val crashes = crashRepository.getAllCrashes().first()
-        assertTrue("Crash must be saved in database", crashes.any { it.id == crashReport.id })
+        // Verify separated from real crashes and present in simulated QA reports
+        val realCrashes = crashRepository.getAllCrashes().first()
+        assertTrue("Simulated QA report must not pollute real crashes", realCrashes.none { it.id == crashReport.id })
+        val simulatedQa = crashRepository.getSimulatedQaReports().first()
+        assertTrue("Simulated QA report must be stored in simulated QA list", simulatedQa.any { it.id == crashReport.id })
     }
 }
 

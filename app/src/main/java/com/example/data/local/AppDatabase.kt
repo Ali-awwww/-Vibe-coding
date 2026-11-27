@@ -56,7 +56,16 @@ interface CrashDao {
 
     @Query("""
         SELECT * FROM crashes
+        WHERE isSimulatedQaReport = 1 OR source = 'INTERNAL_QA'
+        ORDER BY timestamp DESC
+    """)
+    fun getSimulatedQaReports(): Flow<List<CrashReport>>
+
+    @Query("""
+        SELECT * FROM crashes
         WHERE projectId = :projectId
+          AND isSimulatedQaReport = 0
+          AND (source IS NULL OR source != 'INTERNAL_QA')
           AND (:applicationId IS NULL OR applicationId = :applicationId)
           AND (:cursorTimestamp IS NULL OR timestamp < :cursorTimestamp OR (timestamp = :cursorTimestamp AND id < :cursorId))
         ORDER BY timestamp DESC, id DESC
@@ -67,6 +76,8 @@ interface CrashDao {
     @Query("""
         SELECT * FROM crashes
         WHERE projectId IN (:projectIds)
+          AND isSimulatedQaReport = 0
+          AND (source IS NULL OR source != 'INTERNAL_QA')
           AND (:applicationId IS NULL OR applicationId = :applicationId)
           AND (:cursorTimestamp IS NULL OR timestamp < :cursorTimestamp OR (timestamp = :cursorTimestamp AND id < :cursorId))
         ORDER BY timestamp DESC, id DESC
@@ -480,7 +491,7 @@ interface AIProviderDao {
         PendingApproval::class,
         TeamUsageRecord::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

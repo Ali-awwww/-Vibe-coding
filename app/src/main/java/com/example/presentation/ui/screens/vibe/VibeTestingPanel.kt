@@ -18,12 +18,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.R
 import com.example.domain.model.*
 import com.example.presentation.viewmodel.VibeStudioViewModel
 
@@ -750,10 +752,10 @@ private fun CrashIntelligenceTabContent(
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFC62828)
                             )
-                            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFFEBEE)) {
+                            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFFF3E0)) {
                                 Text(
-                                    text = "CRITICAL",
-                                    color = Color(0xFFC62828),
+                                    text = stringResource(R.string.simulated_qa_badge),
+                                    color = Color(0xFFE65100),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

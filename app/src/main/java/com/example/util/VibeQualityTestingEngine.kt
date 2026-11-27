@@ -961,7 +961,7 @@ object VibeQualityTestingEngine {
     }
 
     /**
-     * Generates a real CrashReport connected to Crash Intelligence from test failures.
+     * Generates a simulated QA CrashReport from test failures so it stays isolated from real crashes.
      */
     fun generateCrashReportFromFailure(
         workspace: Workspace,
@@ -988,9 +988,10 @@ object VibeQualityTestingEngine {
             appVersion = buildId ?: "1.0.0-dev",
             timestamp = System.currentTimeMillis(),
             isResolved = false,
-            severity = Severity.CRITICAL,
+            severity = Severity.LOW,
             userId = workspace.ownerId,
-            source = IntegrationType.INTERNAL_QA
+            source = IntegrationType.INTERNAL_QA,
+            isSimulatedQaReport = true
         )
     }
 

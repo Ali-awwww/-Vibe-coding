@@ -46,8 +46,13 @@ data class CrashReport(
     val isResolved: Boolean = false,
     val severity: Severity = Severity.MEDIUM,
     val userId: String = "",
-    val source: IntegrationType? = null
+    val source: IntegrationType? = null,
+    @get:PropertyName("isSimulatedQaReport") @field:PropertyName("isSimulatedQaReport")
+    val isSimulatedQaReport: Boolean = false
 )
+
+fun CrashReport.isSimulatedQa(): Boolean =
+    isSimulatedQaReport || source == IntegrationType.INTERNAL_QA
 
 enum class Severity {
     LOW, MEDIUM, HIGH, CRITICAL

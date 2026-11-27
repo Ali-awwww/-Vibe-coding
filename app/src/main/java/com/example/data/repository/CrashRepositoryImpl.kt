@@ -16,6 +16,7 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import java.security.MessageDigest
 import java.util.UUID
@@ -348,7 +349,9 @@ class CrashRepositoryImpl(
                 val filteredQuery = if (applicationId != null) query.whereEqualTo("applicationId", applicationId) else query
                 emitAll(
                     filteredQuery.snapshots()
-                        .map { it.toObjects(CrashReport::class.java) }
+                        .map { snapshot ->
+                            snapshot.toObjects(CrashReport::class.java).filterNot { it.isSimulatedQa() }
+                        }
                         .catch { e ->
                             handleFirestoreError(e, OperationType.LIST, collectionPath)
                             throw e
@@ -361,7 +364,10 @@ class CrashRepositoryImpl(
                         .orderBy("timestamp", Query.Direction.DESCENDING)
                         .limit(100)
                         .snapshots()
-                        .map { snapshot -> snapshot.toObjects(CrashReport::class.java).filter { it.projectId in projectIds } }
+                        .map { snapshot ->
+                            snapshot.toObjects(CrashReport::class.java)
+                                .filter { it.projectId in projectIds && !it.isSimulatedQa() }
+                        }
                         .catch { e ->
                             handleFirestoreError(e, OperationType.LIST, "collectionGroup/crashes")
                             throw e
@@ -369,17 +375,19 @@ class CrashRepositoryImpl(
                 )
             }
         } else {
-            val projectIds = currentUserProjectIds()
-            if (projectId != null && projectId !in projectIds) {
+            val localProjectIds = currentUserProjectIds()
+            if (projectId != null && projectId !in localProjectIds) {
                 emit(emptyList())
-            } else if (projectIds.isEmpty()) {
+            } else if (localProjectIds.isEmpty()) {
                 emit(emptyList())
             } else {
                 val source = if (projectId != null) crashDao.getCrashesByProject(projectId) else crashDao.getAllCrashes()
                 emitAll(
                     source.map { crashes ->
                         crashes.filter {
-                            it.projectId in projectIds && (applicationId == null || it.applicationId == applicationId)
+                            it.projectId in localProjectIds &&
+                                (applicationId == null || it.applicationId == applicationId) &&
+                                !it.isSimulatedQa()
                         }.sortedByDescending { it.timestamp }.take(100)
                     }
                 )
@@ -418,7 +426,11 @@ class CrashRepositoryImpl(
                 val fetchedDocuments = snapshot.documents
                 val pageDocuments = fetchedDocuments.take(pageSize)
                 val crashes = pageDocuments.mapNotNull { it.toObject(CrashReport::class.java) }
-                    .filter { it.projectId in projectIds && (projectId == null || it.projectId == projectId) }
+                    .filter {
+                        it.projectId in projectIds &&
+                            (projectId == null || it.projectId == projectId) &&
+                            !it.isSimulatedQa()
+                    }
                 val nextCursor = if (fetchedDocuments.size > pageSize) {
                     pageDocuments.lastOrNull()?.let { document ->
                         val timestamp = document.getLong("timestamp") ?: document.toObject(CrashReport::class.java)?.timestamp ?: 0L
@@ -436,9 +448,10 @@ class CrashRepositoryImpl(
 
         val fetchedCrashes = if (projectId != null) {
             crashDao.getCrashPage(projectId, applicationId, cursor?.timestamp, cursor?.id, pageSize + 1)
-                .filter { it.projectId in projectIds }
+                .filter { it.projectId in projectIds && !it.isSimulatedQa() }
         } else {
             crashDao.getCrashPageForProjects(projectIds.toList(), applicationId, cursor?.timestamp, cursor?.id, pageSize + 1)
+                .filterNot { it.isSimulatedQa() }
         }
         val page = fetchedCrashes.take(pageSize)
         val nextCursor = if (fetchedCrashes.size > pageSize) {
@@ -458,17 +471,75 @@ class CrashRepositoryImpl(
                 fs.collectionGroup("crashes")
                     .whereEqualTo("userId", uid)
                     .snapshots()
-                    .map { snapshot -> snapshot.toObjects(CrashReport::class.java).filter { it.projectId in projectIds } }
+                    .map { snapshot ->
+                        snapshot.toObjects(CrashReport::class.java)
+                            .filter { it.projectId in projectIds && !it.isSimulatedQa() }
+                    }
                     .catch { e ->
                         handleFirestoreError(e, OperationType.LIST, "collectionGroup/crashes")
                         throw e
                     }
             )
         } else {
-            val projectIds = currentUserProjectIds()
-            if (projectIds.isEmpty()) emit(emptyList())
-            else emitAll(crashDao.getAllCrashes().map { crashes -> crashes.filter { it.projectId in projectIds } })
+            val localProjectIds = currentUserProjectIds()
+            if (localProjectIds.isEmpty()) emit(emptyList())
+            else emitAll(
+                crashDao.getAllCrashes().map { crashes ->
+                    crashes.filter { it.projectId in localProjectIds && !it.isSimulatedQa() }
+                }
+            )
         }
+    }
+
+    override fun getSimulatedQaReports(projectId: String?, applicationId: String?): Flow<List<CrashReport>> = flow {
+        val uid = runCatching { requireUserId() }.getOrNull()
+        val localFlow = crashDao.getSimulatedQaReports().map { reports ->
+            reports.filter { report ->
+                (uid == null || report.userId.isBlank() || report.userId == uid) &&
+                    (projectId == null || report.projectId == projectId) &&
+                    (applicationId == null || report.applicationId == applicationId) &&
+                    report.isSimulatedQa()
+            }.sortedByDescending { it.timestamp }
+        }
+        val fs = firestore
+        if (fs == null || uid == null) {
+            emitAll(localFlow)
+            return@flow
+        }
+        val remoteFlow = if (projectId != null) {
+            fs.collection("users").document(uid).collection("projects").document(projectId)
+                .collection("crashes")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(100)
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(CrashReport::class.java)
+                        .filter {
+                            (applicationId == null || it.applicationId == applicationId) &&
+                                it.isSimulatedQa()
+                        }
+                }
+        } else {
+            fs.collectionGroup("crashes")
+                .whereEqualTo("userId", uid)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(100)
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(CrashReport::class.java)
+                        .filter {
+                            (applicationId == null || it.applicationId == applicationId) &&
+                                it.isSimulatedQa()
+                        }
+                }
+        }
+        emitAll(
+            combine(localFlow, remoteFlow.catch { emit(emptyList()) }) { local, remote ->
+                (local + remote)
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.timestamp }
+            }
+        )
     }
     override fun getCrashDetails(crashId: String): Flow<CrashReport?> = flow {
         val projectIds = currentUserProjectIds()
@@ -501,8 +572,12 @@ class CrashRepositoryImpl(
         if (crash.applicationId.isNotBlank() &&
             getApplications(crash.projectId).first().none { it.id == crash.applicationId }
         ) throw SecurityException("The selected application is not available in this project.")
-        // Deduplicate only against records visible to the active account.
-        val recentCrashes = getLatestCrashes(crash.projectId, crash.applicationId.ifBlank { null }).first()
+        // Deduplicate only against records visible to the active account within the same lane.
+        val recentCrashes = if (crash.isSimulatedQa()) {
+            getSimulatedQaReports(crash.projectId, crash.applicationId.ifBlank { null }).first()
+        } else {
+            getLatestCrashes(crash.projectId, crash.applicationId.ifBlank { null }).first()
+        }
         val isDuplicate = recentCrashes.any { existing ->
             existing.projectId == crash.projectId &&
             existing.exceptionType == crash.exceptionType &&
@@ -539,7 +614,11 @@ class CrashRepositoryImpl(
         
         crashDao.insertCrash(crashWithAuth)
 
-        // 3. Issue Aggregation: Group crash reports by unique fingerprint
+        if (newCrash.isSimulatedQa()) {
+            return
+        }
+
+        // 3. Issue Aggregation: Group real crash reports by unique fingerprint
         val fingerprint = generateFingerprint("${newCrash.exceptionType}:${newCrash.stackTrace.lines().firstOrNull() ?: newCrash.message}")
         val projectIssues = crashDao.getIssues(newCrash.projectId).first()
         val existingIssue = projectIssues.find { it.fingerprint == fingerprint }

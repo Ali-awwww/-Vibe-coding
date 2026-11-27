@@ -37,6 +37,8 @@ interface CrashRepository {
         return CrashPage(page, next)
     }
     fun getAllCrashes(): Flow<List<CrashReport>>
+    fun getSimulatedQaReports(projectId: String? = null, applicationId: String? = null): Flow<List<CrashReport>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
     fun getCrashDetails(crashId: String): Flow<CrashReport?>
     suspend fun addCrash(crash: CrashReport)
     suspend fun updateCrashStatus(crashId: String, isResolved: Boolean)

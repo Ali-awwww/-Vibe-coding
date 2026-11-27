@@ -70,6 +70,7 @@ fun CrashesScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var searchVisible by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -231,6 +232,43 @@ fun CrashesScreen(
                 }
             }
 
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    modifier = Modifier.testTag("crashes_real_tab"),
+                    text = {
+                        Text(
+                            text = "${stringResource(R.string.crashes_real_tab)} (${uiState.filteredCrashes.size})",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    modifier = Modifier.testTag("crashes_simulated_qa_tab"),
+                    text = {
+                        Text(
+                            text = "${stringResource(R.string.crashes_simulated_qa_tab)} (${uiState.simulatedQaReports.size})",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                )
+            }
+
+            if (selectedTab == 1) {
+                SimulatedQaReportsSection(
+                    reports = uiState.simulatedQaReports,
+                    navController = navController
+                )
+            } else {
             // Results count
             Surface(
                 color = MaterialTheme.colorScheme.surface,
@@ -427,6 +465,7 @@ fun CrashesScreen(
                     }
                 }
             }
+            }
         }
     }
 
@@ -522,6 +561,101 @@ fun CrashesScreen(
                     ) {
                         Text(stringResource(R.string.crashes_filter_apply))
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SimulatedQaReportsSection(
+    reports: List<CrashReport>,
+    navController: NavController
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+            shape = RoundedCornerShape(VibeDesignTokens.Shape.Control),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    Icons.Default.Science,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = stringResource(R.string.crashes_simulated_qa_tab),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.testTag("crashes_simulated_qa_section_title")
+                    )
+                    Text(
+                        text = stringResource(R.string.crashes_simulated_qa_banner),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        }
+
+        if (reports.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Science,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.crashes_simulated_qa_empty_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = stringResource(R.string.crashes_simulated_qa_empty_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("crashes_simulated_qa_list"),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(reports, key = { it.id }) { report ->
+                    DetailedCrashCard(
+                        crash = report,
+                        onClick = { navController.navigate(Screen.CrashDetail(report.id)) },
+                        onAnalyzeClick = { navController.navigate(Screen.FixAssistant(report.id)) }
+                    )
                 }
             }
         }

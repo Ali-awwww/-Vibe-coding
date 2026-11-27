@@ -105,7 +105,9 @@ class FirestoreRepositoryRuleTest : FirestoreEmulatorTestBase() {
 
     @After
     fun closeDatabase() {
-        database.close()
+        if (::database.isInitialized) {
+            database.close()
+        }
     }
 
     @Test

@@ -579,4 +579,59 @@ class ComprehensiveSecurityAndCrashTest {
         val decrypted = com.example.util.SecurityUtils.decryptSecret(encrypted)
         assertEquals(rawConfig, decrypted)
     }
+
+    @Test
+    fun `legacy ENC secrets are dropped instead of decrypted with embedded key`() {
+        val legacyPayload = "ENC:c29tZS1sZWdhY3ktY2lwaGVydGV4dA=="
+        assertEquals("", com.example.util.SecurityUtils.decryptSecret(legacyPayload))
+        assertEquals("", com.example.util.SecurityUtils.maskSecret(legacyPayload))
+    }
+
+    @Test
+    fun `simulated QA reports are excluded from real crash feeds and issues`() = runTest(testDispatcher) {
+        val userId = "dev_qa_isolation"
+        val projectId = "proj_qa_isolation"
+        activeUserId = userId
+        crashRepository.addProject(Project(id = projectId, name = "Isolation Proj", ownerId = userId))
+
+        crashRepository.addCrash(
+            CrashReport(
+                id = "real_prod_crash",
+                projectId = projectId,
+                userId = userId,
+                exceptionType = "IllegalStateException",
+                message = "Real device crash",
+                stackTrace = "at com.example.App.run(App.kt:10)",
+                severity = Severity.HIGH,
+                source = IntegrationType.SENTRY,
+                isSimulatedQaReport = false
+            )
+        )
+        crashRepository.addCrash(
+            CrashReport(
+                id = "simulated_qa_crash",
+                projectId = projectId,
+                userId = userId,
+                exceptionType = "AssertionError",
+                message = "Simulated failure",
+                stackTrace = "at Sandbox.kt:1",
+                severity = Severity.LOW,
+                source = IntegrationType.INTERNAL_QA,
+                isSimulatedQaReport = true
+            )
+        )
+
+        val latestReal = crashRepository.getLatestCrashes(projectId).first()
+        val allReal = crashRepository.getAllCrashes().first()
+        val pagedReal = crashRepository.getCrashPage(projectId, null, null, 20).crashes
+        val simulatedOnly = crashRepository.getSimulatedQaReports(projectId).first()
+        val issues = crashRepository.getIssues(projectId).first()
+
+        assertEquals(listOf("real_prod_crash"), latestReal.map { it.id })
+        assertEquals(listOf("real_prod_crash"), allReal.map { it.id })
+        assertEquals(listOf("real_prod_crash"), pagedReal.map { it.id })
+        assertEquals(listOf("simulated_qa_crash"), simulatedOnly.map { it.id })
+        assertEquals(1, issues.size)
+        assertEquals("IllegalStateException", issues.first().title)
+    }
 }

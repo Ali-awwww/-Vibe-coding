@@ -37,7 +37,7 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config
 class MainViewModelAuthMessageTest {
 
     @Test

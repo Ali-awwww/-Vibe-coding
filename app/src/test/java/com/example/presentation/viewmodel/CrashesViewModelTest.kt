@@ -298,4 +298,33 @@ class CrashesViewModelTest {
         assertTrue(viewModel.uiState.value.crashes.isEmpty())
         assertFalse(viewModel.uiState.value.hasConnectedCrashSource)
     }
+
+    @Test
+    fun simulatedQaReportsAreExcludedFromRealCrashesAndExposedSeparately() = runTest {
+        repository.crashes.value = listOf(
+            CrashReport(
+                id = "real-sentry",
+                projectId = "p1",
+                applicationId = "a1",
+                exceptionType = "NullPointerException",
+                source = com.example.domain.model.IntegrationType.SENTRY,
+                isSimulatedQaReport = false
+            ),
+            CrashReport(
+                id = "sim-qa",
+                projectId = "p1",
+                applicationId = "a1",
+                exceptionType = "AssertionError",
+                severity = Severity.LOW,
+                source = com.example.domain.model.IntegrationType.INTERNAL_QA,
+                isSimulatedQaReport = true
+            )
+        )
+        val viewModel = CrashesViewModel(repository = repository, initialProjectId = "p1", initialAppId = "a1")
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(listOf("real-sentry"), viewModel.uiState.value.visibleCrashes.map { it.id })
+        assertEquals(listOf("sim-qa"), viewModel.uiState.value.simulatedQaReports.map { it.id })
+    }
 }

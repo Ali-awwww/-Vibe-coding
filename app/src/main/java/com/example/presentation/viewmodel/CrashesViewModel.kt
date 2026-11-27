@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.domain.model.CrashReport
 import com.example.domain.model.IntegrationStatus
+import com.example.domain.model.isSimulatedQa
 import com.example.domain.repository.CrashPageCursor
 import com.example.domain.repository.CrashRepository
 import kotlinx.coroutines.CancellationException
@@ -26,6 +27,7 @@ data class CrashesUiState(
     val crashes: List<CrashReport> = emptyList(),
     val filteredCrashes: List<CrashReport> = emptyList(),
     val visibleCrashes: List<CrashReport> = emptyList(),
+    val simulatedQaReports: List<CrashReport> = emptyList(),
     val filter: CrashesFilterState = CrashesFilterState(),
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -86,11 +88,23 @@ class CrashesViewModel(
         CrashPagingState(isLoading, error, isLoadingMore, loadMoreError, nextCursor)
     }
 
-    val uiState: StateFlow<CrashesUiState> = combine(_crashes, _filter, pagingState, _hasConnectedCrashSource) { crashes, filter, paging, hasConnectedSource ->
-        val filtered = if (paging.error != null && crashes.isEmpty()) {
+    private val _simulatedQaReports: Flow<List<CrashReport>> = repository
+        .getSimulatedQaReports(initialProjectId, initialAppId)
+        .map { reports -> reports.filter { it.isSimulatedQa() } }
+        .catch { emit(emptyList()) }
+
+    val uiState: StateFlow<CrashesUiState> = combine(
+        _crashes,
+        _simulatedQaReports,
+        _filter,
+        pagingState,
+        _hasConnectedCrashSource
+    ) { crashes, simulatedQa, filter, paging, hasConnectedSource ->
+        val realCrashes = crashes.filterNot { it.isSimulatedQa() }
+        val filtered = if (paging.error != null && realCrashes.isEmpty()) {
             emptyList()
         } else {
-            crashes.filter { crash ->
+            realCrashes.filter { crash ->
                 val matchProject = filter.projectId == null || crash.projectId == filter.projectId
                 val matchApp = filter.applicationId == null || crash.applicationId == filter.applicationId
                 val matchException = filter.exceptionType == null ||
@@ -112,10 +126,19 @@ class CrashesViewModel(
             }.sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
         }
 
+        val filteredSimulatedQa = simulatedQa.filter { report ->
+            val matchQuery = filter.searchQuery.isBlank() ||
+                report.exceptionType.contains(filter.searchQuery, ignoreCase = true) ||
+                report.message.contains(filter.searchQuery, ignoreCase = true) ||
+                report.stackTrace.contains(filter.searchQuery, ignoreCase = true)
+            matchQuery
+        }.sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
+
         CrashesUiState(
-            crashes = crashes,
+            crashes = realCrashes,
             filteredCrashes = filtered,
             visibleCrashes = filtered,
+            simulatedQaReports = filteredSimulatedQa,
             filter = filter,
             isLoading = paging.isLoading,
             error = paging.error,
@@ -190,8 +213,9 @@ class CrashesViewModel(
                 )
                 if (generation != loadGeneration) return@launch
 
+                val realPageCrashes = page.crashes.filterNot { it.isSimulatedQa() }
                 if (replace) {
-                    _crashes.value = page.crashes
+                    _crashes.value = realPageCrashes
                     val integrations = runCatching {
                         if (initialProjectId != null) {
                             repository.getIntegrations(initialProjectId).firstOrNull().orEmpty()
@@ -202,10 +226,10 @@ class CrashesViewModel(
                         }
                     }.getOrElse { emptyList() }
                     _hasConnectedCrashSource.value =
-                        page.crashes.isNotEmpty() || integrations.any { it.status == IntegrationStatus.CONNECTED }
+                        realPageCrashes.isNotEmpty() || integrations.any { it.status == IntegrationStatus.CONNECTED }
                 } else {
                     _crashes.update { existing ->
-                        (existing + page.crashes)
+                        (existing + realPageCrashes)
                             .distinctBy { it.id }
                             .sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
                     }

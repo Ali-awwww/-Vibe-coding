@@ -20,8 +20,7 @@ object SecurityUtils {
     private val secureRandom = SecureRandom()
     private const val SECRET_KEY_ALIAS = "vibe_coding_api_keys_v1"
     private val robolectricFallbackKey by lazy {
-        val seed = "CrashIntelligence_Robolectric_Test_Key_2026".toByteArray(StandardCharsets.UTF_8)
-        SecretKeySpec(MessageDigest.getInstance("SHA-256").digest(seed), "AES")
+        KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
     }
 
     private fun getOrCreateSecretKey(): java.security.Key {
@@ -47,22 +46,6 @@ object SecurityUtils {
                 throw error
             }
         }
-    }
-
-    private fun decryptLegacySecret(cipherText: String): String {
-        val raw = cipherText.removePrefix("ENC:")
-        val combined = Base64.decode(raw, Base64.NO_WRAP)
-        if (combined.size < 28) {
-            // Older builds could fall back to Base64-only obfuscation.
-            return String(combined, StandardCharsets.UTF_8)
-        }
-        val iv = combined.copyOfRange(0, 12)
-        val encrypted = combined.copyOfRange(12, combined.size)
-        val legacySeed = "CrashIntelligence_SecureMasterKey_2026_Applet_Salt".toByteArray(StandardCharsets.UTF_8)
-        val legacyKey = SecretKeySpec(MessageDigest.getInstance("SHA-256").digest(legacySeed), "AES")
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, legacyKey, GCMParameterSpec(128, iv))
-        return String(cipher.doFinal(encrypted), StandardCharsets.UTF_8)
     }
 
     // Rate Limiting tracker: projectId -> list of request timestamps
@@ -102,8 +85,7 @@ object SecurityUtils {
     }
 
     fun decryptSecret(cipherText: String): String {
-        if (cipherText.isBlank()) return ""
-        if (cipherText.startsWith("ENC:")) return decryptLegacySecret(cipherText)
+        if (cipherText.isBlank() || cipherText.startsWith("ENC:")) return ""
         if (!cipherText.startsWith("ENC2:")) return cipherText
         val combined = Base64.decode(cipherText.removePrefix("ENC2:"), Base64.NO_WRAP)
         require(combined.size >= 28) { "Encrypted API key is malformed" }
@@ -117,6 +99,7 @@ object SecurityUtils {
     fun maskSecret(secret: String): String {
         if (secret.isBlank()) return ""
         val decrypted = decryptSecret(secret)
+        if (decrypted.isBlank()) return ""
         if (decrypted.length <= 6) return "••••••••"
         val prefix = decrypted.take(3)
         val suffix = decrypted.takeLast(3)

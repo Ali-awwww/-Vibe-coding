@@ -1,9 +1,12 @@
 package com.example.util
 
 import com.example.domain.model.IntegrationType
+import com.example.domain.model.Severity
 import com.example.domain.model.TestCaseResult
 import com.example.domain.model.Workspace
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VibeQualityTestingEngineTest {
@@ -25,5 +28,8 @@ class VibeQualityTestingEngineTest {
         )
 
         assertEquals(IntegrationType.INTERNAL_QA, report.source)
+        assertTrue(report.isSimulatedQaReport)
+        assertEquals(Severity.LOW, report.severity)
+        assertNotEquals(Severity.CRITICAL, report.severity)
     }
 }

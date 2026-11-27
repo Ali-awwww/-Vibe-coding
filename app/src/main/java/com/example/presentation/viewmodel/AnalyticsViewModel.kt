@@ -51,8 +51,9 @@ class AnalyticsViewModel(
         combine(_selectedTab, _isFilterSheetOpen, _isExportDialogOpen, _version1, _version2) { tab, sheet, export, v1, v2 ->
             Tuple5(tab, sheet, export, v1, v2)
         }
-    ) { projects, applications, allCrashes, filter, extra ->
+    ) { projects, applications, rawCrashes, filter, extra ->
         val (tab, isSheetOpen, isExportOpen, v1, v2) = extra
+        val allCrashes = rawCrashes.filterNot { it.isSimulatedQa() }
 
         // Compute available versions from real crashes
         val allVersions = allCrashes.map { it.appVersion }.filter { it.isNotBlank() }.distinct().sortedDescending()

@@ -21,6 +21,37 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Verify Firebase Configuration
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+
+          config_path = pathlib.Path("app/google-services.json")
+          if not config_path.is_file() or config_path.stat().st_size == 0:
+              raise SystemExit("::error::Missing or empty app/google-services.json; release build aborted.")
+
+          data = json.loads(config_path.read_text(encoding="utf-8"))
+          project_id = data.get("project_info", {}).get("project_id")
+          expected_project = "gen-lang-client-0258473942"
+          if project_id != expected_project:
+              raise SystemExit(
+                  f"::error::app/google-services.json project_id mismatch: expected {expected_project}, found {project_id!r}."
+              )
+
+          packages = [
+              client.get("client_info", {}).get("android_client_info", {}).get("package_name")
+              for client in data.get("client", [])
+          ]
+          expected_package = "com.aistudio.crashintelligence.vyfrip"
+          if expected_package not in packages:
+              raise SystemExit(
+                  f"::error::app/google-services.json does not contain package {expected_package}; found {packages!r}."
+              )
+
+          print(f"Verified app/google-services.json for Firebase project {project_id} and package {expected_package}.")
+          PY
+
       - name: Setup Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -113,9 +144,16 @@ jobs:
           set -euo pipefail
           APK=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
           test -s "$APK"
-          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name apksigner 2>/dev/null | sort -V | tail -n 1)
+          BUILD_TOOLS_DIR="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools"
+          APKSIGNER=$(find "$BUILD_TOOLS_DIR" -name apksigner 2>/dev/null | sort -V | tail -n 1)
           test -n "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs "$APK"
+          AAPT2=$(find "$BUILD_TOOLS_DIR" -name aapt2 2>/dev/null | sort -V | tail -n 1)
+          test -n "$AAPT2"
+          RESOURCES=$("$AAPT2" dump resources "$APK")
+          echo "$RESOURCES" | grep -q "google_app_id"
+          echo "$RESOURCES" | grep -q "gen-lang-client-0258473942"
+          echo "Verified Firebase configuration resources inside release APK."
           sha256sum "$APK"
 
       - name: Create GitHub Release

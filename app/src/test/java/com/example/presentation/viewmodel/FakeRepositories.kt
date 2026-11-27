@@ -119,7 +119,8 @@ class FakeCrashRepository : CrashRepository {
         }
         return crashes.map { records ->
             records.filter { crash ->
-                (projectId == null || crash.projectId == projectId) &&
+                !crash.isSimulatedQa() &&
+                    (projectId == null || crash.projectId == projectId) &&
                     (applicationId == null || crash.applicationId == applicationId)
             }.sortedByDescending { it.timestamp }.take(100)
         }
@@ -141,7 +142,8 @@ class FakeCrashRepository : CrashRepository {
             throw error
         }
         val matching = crashes.value.filter { crash ->
-            (projectId == null || crash.projectId == projectId) &&
+            !crash.isSimulatedQa() &&
+                (projectId == null || crash.projectId == projectId) &&
                 (applicationId == null || crash.applicationId == applicationId)
         }.sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
         val startIndex = if (cursor == null) {
@@ -168,7 +170,17 @@ class FakeCrashRepository : CrashRepository {
             failNextCrashesLoad = null
             return flow { throw error }
         }
-        return crashes
+        return crashes.map { records -> records.filterNot { it.isSimulatedQa() } }
+    }
+
+    override fun getSimulatedQaReports(projectId: String?, applicationId: String?): Flow<List<CrashReport>> {
+        return crashes.map { records ->
+            records.filter { crash ->
+                crash.isSimulatedQa() &&
+                    (projectId == null || crash.projectId == projectId) &&
+                    (applicationId == null || crash.applicationId == applicationId)
+            }.sortedByDescending { it.timestamp }
+        }
     }
 
     override fun getCrashDetails(crashId: String): Flow<CrashReport?> = flowOf(null)

@@ -2007,9 +2007,10 @@ class VibeStudioRepositoryImpl(
             appVersion = simulatedBuildId,
             osVersion = workspace.techStack,
             deviceModel = "Vibe Studio Simulated Sandbox",
-            severity = Severity.CRITICAL,
+            severity = Severity.LOW,
             isResolved = false,
-            source = IntegrationType.INTERNAL_QA
+            source = IntegrationType.INTERNAL_QA,
+            isSimulatedQaReport = true
         )
 
         crashDao?.insertCrash(crashReport)
