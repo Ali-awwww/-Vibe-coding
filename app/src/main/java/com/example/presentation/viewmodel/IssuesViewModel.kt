@@ -34,6 +34,7 @@ class IssuesViewModel(
     private var projectsJob: Job? = null
     private var issuesJob: Job? = null
     private var syncTimeJob: Job? = null
+    private var observedAllProjectIds: Set<String>? = null
     private var initialSelectionResolved = false
 
     init {
@@ -69,6 +70,7 @@ class IssuesViewModel(
                         if (selectedId != null && projects.none { it.id == selectedId }) {
                             issuesJob?.cancel()
                             syncTimeJob?.cancel()
+                            observedAllProjectIds = null
                             _uiState.update {
                                 it.copy(
                                     selectedProject = null,
@@ -81,7 +83,12 @@ class IssuesViewModel(
                             }
                         } else if (state.isAllProjectsScope) {
                             observeSyncTime(projects, selectedProjectId = null)
+                            observeAllProjectsIssues(projects)
                         } else if (selectedId != null) {
+                            val currentProject = projects.firstOrNull { it.id == selectedId }
+                            if (currentProject != null && currentProject != state.selectedProject) {
+                                _uiState.update { it.copy(selectedProject = currentProject) }
+                            }
                             observeSyncTime(projects, selectedProjectId = selectedId)
                         }
                     }
@@ -91,6 +98,7 @@ class IssuesViewModel(
 
     fun selectAllProjects() {
         initialSelectionResolved = true
+        observedAllProjectIds = null
         issuesJob?.cancel()
         val projects = _uiState.value.projects
         _uiState.update {
@@ -103,25 +111,34 @@ class IssuesViewModel(
             )
         }
         observeSyncTime(projects, selectedProjectId = null)
-        issuesJob = viewModelScope.launch {
-            repository.getAllIssues()
-                .catch { failure ->
-                    if (failure is CancellationException) throw failure
-                    _uiState.update { it.copy(isLoading = false, error = ERROR_LOAD) }
-                }
-                .collect { issues ->
-                    _uiState.update { it.copy(issues = issues, isLoading = false, error = null) }
-                }
-        }
+        observeAllProjectsIssues(projects)
     }
 
     fun selectProject(project: Project) {
         initialSelectionResolved = true
+        val authorizedProject = _uiState.value.projects.firstOrNull { it.id == project.id }
+        if (authorizedProject == null) {
+            issuesJob?.cancel()
+            syncTimeJob?.cancel()
+            observedAllProjectIds = null
+            _uiState.update {
+                it.copy(
+                    selectedProject = null,
+                    isAllProjectsScope = false,
+                    issues = emptyList(),
+                    lastSyncAt = null,
+                    isLoading = false,
+                    error = ERROR_PROJECT_UNAVAILABLE
+                )
+            }
+            return
+        }
+        observedAllProjectIds = null
         issuesJob?.cancel()
         val projects = _uiState.value.projects
         _uiState.update {
             it.copy(
-                selectedProject = project,
+                selectedProject = authorizedProject,
                 isAllProjectsScope = false,
                 lastSyncAt = null,
                 isLoading = true,
@@ -142,6 +159,10 @@ class IssuesViewModel(
     }
 
     fun retry() {
+        if (_uiState.value.error == ERROR_SYNC) {
+            syncIssues()
+            return
+        }
         val selected = _uiState.value.selectedProject
         if (selected == null) {
             if (initialProjectId != null && !_uiState.value.isAllProjectsScope) loadProjects()
@@ -151,6 +172,37 @@ class IssuesViewModel(
         }
     }
 
+
+    private fun observeAllProjectsIssues(projects: List<Project>) {
+        val projectIds = projects.map { it.id }.filter { it.isNotBlank() }.toSet()
+        if (observedAllProjectIds == projectIds) return
+
+        observedAllProjectIds = projectIds
+        issuesJob?.cancel()
+        _uiState.update {
+            it.copy(
+                issues = emptyList(),
+                isLoading = projectIds.isNotEmpty(),
+                error = null
+            )
+        }
+        if (projectIds.isEmpty()) {
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+
+        issuesJob = viewModelScope.launch {
+            repository.getAllIssues()
+                .map { issues -> issues.filter { it.projectId in projectIds } }
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    _uiState.update { it.copy(isLoading = false, error = ERROR_LOAD) }
+                }
+                .collect { issues ->
+                    _uiState.update { it.copy(issues = issues, isLoading = false, error = null) }
+                }
+        }
+    }
 
     private fun observeSyncTime(projects: List<Project>, selectedProjectId: String?) {
         syncTimeJob?.cancel()
@@ -182,6 +234,7 @@ class IssuesViewModel(
 
     fun syncIssues() {
         val state = _uiState.value
+        if (state.isSyncing) return
         val projectsToSync = state.selectedProject?.let(::listOf) ?: state.projects
         if (projectsToSync.isEmpty()) return
         viewModelScope.launch {

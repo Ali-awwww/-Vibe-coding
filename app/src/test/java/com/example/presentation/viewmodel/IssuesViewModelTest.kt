@@ -4,6 +4,7 @@ import com.example.domain.model.Integration
 import com.example.domain.model.IntegrationType
 import com.example.domain.model.Issue
 import com.example.domain.model.Project
+import com.example.domain.repository.CrashRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -126,6 +127,84 @@ class IssuesViewModelTest {
 
         assertNotNull(viewModel.uiState.value.lastSyncAt)
         assertTrue(viewModel.uiState.value.lastSyncAt!! > 100L)
+    }
+
+    @Test
+    fun allProjectsIssueStreamFollowsTheCurrentAuthorizedProjectSet() = runTest {
+        val project1 = Project(id = "p1", name = "Alpha", ownerId = "u1")
+        val project2 = Project(id = "p2", name = "Beta", ownerId = "u1")
+        val project3 = Project(id = "p3", name = "Gamma", ownerId = "u1")
+        repository.projects.value = listOf(project1, project2)
+        repository.issues.value = listOf(
+            Issue(id = "i1", projectId = "p1"),
+            Issue(id = "i2", projectId = "p2"),
+            Issue(id = "i3", projectId = "p3")
+        )
+
+        val viewModel = IssuesViewModel(repository)
+        backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+        assertEquals(setOf("i1", "i2"), viewModel.uiState.value.issues.map { it.id }.toSet())
+
+        repository.projects.value = listOf(project2)
+        assertEquals(listOf("i2"), viewModel.uiState.value.issues.map { it.id })
+
+        repository.projects.value = listOf(project2, project3)
+        assertEquals(setOf("i2", "i3"), viewModel.uiState.value.issues.map { it.id }.toSet())
+    }
+
+    @Test
+    fun selectedProjectLabelFollowsTheLatestAuthorizedProjectRecord() = runTest {
+        val project = Project(id = "p1", name = "Alpha", ownerId = "u1")
+        repository.projects.value = listOf(project)
+
+        val viewModel = IssuesViewModel(repository, initialProjectId = "p1")
+        backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+        repository.projects.value = listOf(project.copy(name = "Renamed Alpha"))
+
+        assertEquals("Renamed Alpha", viewModel.uiState.value.selectedProject?.name)
+    }
+
+    @Test
+    fun selectingAProjectOutsideTheAuthorizedListFailsClosed() = runTest {
+        repository.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "u1"))
+        val viewModel = IssuesViewModel(repository)
+        backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+        viewModel.selectProject(Project(id = "p2", name = "Foreign", ownerId = "u2"))
+
+        assertNull(viewModel.uiState.value.selectedProject)
+        assertTrue(viewModel.uiState.value.issues.isEmpty())
+        assertEquals(IssuesViewModel.ERROR_PROJECT_UNAVAILABLE, viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun retryAfterSyncFailureRepeatsTheSyncOperation() = runTest {
+        val backing = FakeCrashRepository()
+        backing.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "u1"))
+        var syncAttempts = 0
+        val flakyRepository = object : CrashRepository by backing {
+            override suspend fun syncCrashes(projectId: String): Result<Unit> {
+                syncAttempts++
+                return if (syncAttempts == 1) {
+                    Result.failure(IllegalStateException("offline"))
+                } else {
+                    Result.success(Unit)
+                }
+            }
+        }
+
+        val viewModel = IssuesViewModel(flakyRepository, initialProjectId = "p1")
+        backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+        viewModel.syncIssues()
+        assertEquals(IssuesViewModel.ERROR_SYNC, viewModel.uiState.value.error)
+
+        viewModel.retry()
+
+        assertEquals(2, syncAttempts)
+        assertNull(viewModel.uiState.value.error)
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.example.presentation.ui.screens
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,11 +13,14 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
 import androidx.navigation.NavController
 import com.example.R
 import com.example.domain.model.Issue
@@ -23,6 +28,7 @@ import com.example.domain.model.IssueStatus
 import com.example.domain.model.Severity
 import com.example.presentation.navigation.Screen
 import com.example.presentation.viewmodel.IssuesViewModel
+import com.example.ui.theme.VibeDesignTokens
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.*
@@ -47,37 +53,58 @@ fun IssuesScreen(
             DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(timestamp))
         )
     } ?: stringResource(R.string.issues_no_successful_sync)
+    val refreshContentDescription = stringResource(R.string.issues_refresh_content_description)
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 title = {
                     Column {
                         Text(stringResource(R.string.issues), style = MaterialTheme.typography.titleLarge)
-                        Text(projectScopeLabel, style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            projectScopeLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Text(
                             lastSyncLabel,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
                 actions = {
                     IconButton(onClick = { showProjectDialog = true }) {
-                        Icon(Icons.Default.FilterList, null)
+                        Icon(
+                            Icons.Default.FilterList,
+                            contentDescription = stringResource(R.string.issues_filter_content_description)
+                        )
                     }
-                    IconButton(onClick = { viewModel.syncIssues() }, enabled = uiState.projects.isNotEmpty() && !uiState.isSyncing) {
+                    IconButton(
+                        onClick = viewModel::syncIssues,
+                        modifier = Modifier.semantics {
+                            contentDescription = refreshContentDescription
+                        },
+                        enabled = uiState.projects.isNotEmpty() && !uiState.isSyncing
+                    ) {
                         if (uiState.isSyncing) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         } else {
-                            Icon(Icons.Default.Refresh, null)
+                            Icon(Icons.Default.Refresh, contentDescription = null)
                         }
                     }
                 }
             )
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             val errorMessage = when (uiState.error) {
                 IssuesViewModel.ERROR_PROJECT_UNAVAILABLE -> stringResource(R.string.issues_project_unavailable)
                 IssuesViewModel.ERROR_SYNC -> stringResource(R.string.issues_sync_error)
@@ -86,8 +113,13 @@ fun IssuesScreen(
             }
             if (errorMessage != null) {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .testTag("issues_error_card"),
+                    shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f))
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(errorMessage, color = MaterialTheme.colorScheme.onErrorContainer)
@@ -101,17 +133,53 @@ fun IssuesScreen(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-            } else if (uiState.issues.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.no_issues_found))
+            } else if (
+                uiState.issues.isEmpty() &&
+                uiState.error != IssuesViewModel.ERROR_LOAD &&
+                uiState.error != IssuesViewModel.ERROR_PROJECT_UNAVAILABLE
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().testTag("issues_empty_state"),
+                        shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.BugReport,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Text(
+                                stringResource(R.string.no_issues_found),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                stringResource(R.string.issues_empty_description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
-            } else {
+            } else if (uiState.issues.isNotEmpty()) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(uiState.issues) { issue ->
+                    items(uiState.issues, key = { it.id }) { issue ->
                         IssueItem(issue = issue) {
                             // Navigate to crashes for this issue
                             navController.navigate(Screen.Crashes(projectId = issue.projectId, applicationId = issue.applicationId))
@@ -130,18 +198,38 @@ fun IssuesScreen(
                         item {
                             ListItem(
                                 headlineContent = { Text(stringResource(R.string.issues_all_projects)) },
-                                modifier = Modifier.clickable {
-                                    viewModel.selectAllProjects()
-                                    showProjectDialog = false
+                                modifier = Modifier
+                                    .testTag("issues_scope_all_projects")
+                                    .selectable(
+                                        selected = uiState.isAllProjectsScope,
+                                        role = Role.RadioButton
+                                    ) {
+                                        viewModel.selectAllProjects()
+                                        showProjectDialog = false
+                                    },
+                                trailingContent = {
+                                    if (uiState.isAllProjectsScope) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    }
                                 }
                             )
                         }
                         items(uiState.projects) { project ->
                             ListItem(
                                 headlineContent = { Text(project.name) },
-                                modifier = Modifier.clickable {
-                                    viewModel.selectProject(project)
-                                    showProjectDialog = false
+                                modifier = Modifier
+                                    .testTag("issues_scope_project_" + project.id)
+                                    .selectable(
+                                        selected = uiState.selectedProject?.id == project.id,
+                                        role = Role.RadioButton
+                                    ) {
+                                        viewModel.selectProject(project)
+                                        showProjectDialog = false
+                                    },
+                                trailingContent = {
+                                    if (uiState.selectedProject?.id == project.id) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    }
                                 }
                             )
                         }
@@ -155,12 +243,22 @@ fun IssuesScreen(
 
 @Composable
 fun IssueItem(issue: Issue, onClick: () -> Unit) {
+    val severityAccent = when (issue.severity) {
+        Severity.LOW -> VibeDesignTokens.Color.Cyan
+        Severity.MEDIUM -> VibeDesignTokens.Color.Warning
+        Severity.HIGH, Severity.CRITICAL -> VibeDesignTokens.Color.Error
+    }
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize(),
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Panel),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, severityAccent.copy(alpha = 0.32f))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusBadge(issue.status)
                 Spacer(Modifier.width(8.dp))
@@ -171,41 +269,59 @@ fun IssueItem(issue: Issue, onClick: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             if (isPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
-                            null,
-                            tint = if (isPositive) Color(0xFFF44336) else Color(0xFF4CAF50),
+                            contentDescription = null,
+                            tint = if (isPositive) VibeDesignTokens.Color.Error else VibeDesignTokens.Color.Success,
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
                             "${Math.abs(issue.trend).toInt()}%",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (isPositive) Color(0xFFF44336) else Color(0xFF4CAF50)
+                            color = if (isPositive) VibeDesignTokens.Color.Error else VibeDesignTokens.Color.Success
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
                 }
-                Text(
-                    text = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(issue.lastOccurrence)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
-            Spacer(Modifier.height(12.dp))
-            Text(issue.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                text = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(issue.lastOccurrence)),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                maxLines = 1
+            )
+            Text(
+                issue.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
             Text(
                 issue.subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                maxLines = 2,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                overflow = TextOverflow.Ellipsis
             )
-            
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                StatItem(label = stringResource(R.string.occurrences), value = issue.occurrenceCount.toString())
-                StatItem(label = stringResource(R.string.affected_users), value = issue.affectedUsers.toString())
+            HorizontalDivider()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatItem(
+                    label = stringResource(R.string.occurrences),
+                    value = issue.occurrenceCount.toString(),
+                    modifier = Modifier.weight(1f)
+                )
+                StatItem(
+                    label = stringResource(R.string.affected_users),
+                    value = issue.affectedUsers.toString(),
+                    modifier = Modifier.weight(1f)
+                )
                 StatItem(
                     label = stringResource(R.string.source),
-                    value = issue.source?.name?.replace("_", " ") ?: stringResource(R.string.issues_source_unknown)
+                    value = issue.source?.name?.replace("_", " ") ?: stringResource(R.string.issues_source_unknown),
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -215,15 +331,15 @@ fun IssueItem(issue: Issue, onClick: () -> Unit) {
 @Composable
 fun StatusBadge(status: IssueStatus) {
     val color = when (status) {
-        IssueStatus.NEW -> Color(0xFF2196F3)
-        IssueStatus.INVESTIGATING -> Color(0xFFFF9800)
-        IssueStatus.RESOLVED -> Color(0xFF4CAF50)
-        IssueStatus.REOPENED -> Color(0xFFF44336)
+        IssueStatus.NEW -> VibeDesignTokens.Color.Cyan
+        IssueStatus.INVESTIGATING -> VibeDesignTokens.Color.Warning
+        IssueStatus.RESOLVED -> VibeDesignTokens.Color.Success
+        IssueStatus.REOPENED -> VibeDesignTokens.Color.Error
     }
     Surface(
         color = color.copy(alpha = 0.1f),
         contentColor = color,
-        shape = MaterialTheme.shapes.small
+        shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact)
     ) {
         Text(
             text = when (status) {
@@ -240,9 +356,21 @@ fun StatusBadge(status: IssueStatus) {
 }
 
 @Composable
-fun StatItem(label: String, value: String) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+fun StatItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

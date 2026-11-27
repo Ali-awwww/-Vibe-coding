@@ -70,6 +70,9 @@
     <string name="dashboard_issue_status_resolved">تم حلها</string>
     <string name="dashboard_issue_status_reopened">أعيد فتحها</string>
     <string name="issues_all_projects">كل المشاريع</string>
+    <string name="issues_filter_content_description">تصفية المشكلات حسب المشروع</string>
+    <string name="issues_refresh_content_description">تحديث المشكلات</string>
+    <string name="issues_empty_description">ستظهر هنا المشكلات الواردة من المصادر المهيأة ضمن نطاق المشروع المحدد.</string>
     <string name="issues_project_unavailable">المشروع المطلوب غير متاح لهذا الحساب.</string>
     <string name="issues_load_error">تعذر تحميل المشكلات. تحقق من الاتصال ثم أعد المحاولة.</string>
     <string name="issues_sync_error">تعذرت مزامنة مشروع واحد أو أكثر.</string>

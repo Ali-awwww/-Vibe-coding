@@ -70,6 +70,9 @@
     <string name="dashboard_issue_status_resolved">Resolved</string>
     <string name="dashboard_issue_status_reopened">Reopened</string>
     <string name="issues_all_projects">All projects</string>
+    <string name="issues_filter_content_description">Filter issues by project</string>
+    <string name="issues_refresh_content_description">Refresh issues</string>
+    <string name="issues_empty_description">Issues from the selected project scope will appear here when a configured source reports them.</string>
     <string name="issues_project_unavailable">The requested project is not available to this account.</string>
     <string name="issues_load_error">Could not load issues. Check the connection and retry.</string>
     <string name="issues_sync_error">One or more projects could not be synchronized.</string>

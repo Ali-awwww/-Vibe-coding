@@ -4205,3 +4205,37 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - CI for `894d5b220f5cbf128bdb9416ee08568aecd6d9db` exposed a Kotlin compile error in `IssuesScreen`: the delegated `uiState.selectedProject` property could not be smart-cast after a null check.
 - Captured the selected project in a local immutable value before branching. This preserves the same project-scope behavior and does not weaken validation.
 - The new sync-provenance tests and UI code remain pending a clean compile/test run on the corrected main head.
+
+## 2026-11-28 — Issues authorization-scope and failure-state hardening
+
+**Confirmed defects**
+- The all-project issue observer captured authorized project IDs only when it first subscribed. Subsequent project-list emissions updated the sync timestamp but did not restart/filter the issue stream, so removed projects could remain visible in an already-open screen and newly authorized projects could be omitted.
+- The selected-project header retained an older Project object after a project rename.
+- A load failure with an empty issue list rendered the healthy “No issues found” state beside the error. The generic Retry action also reloaded the list after a sync failure instead of repeating synchronization.
+- Filter and refresh icon actions had no TalkBack content descriptions, project-scope choices did not expose radio selection semantics, and the three issue statistics used a fixed-width row that could overflow narrow layouts.
+
+**Implementation**
+- Re-scope the all-project issue subscription whenever the authorized project-ID set changes and filter every emitted record against that exact set. Clear old records before switching scopes; an empty authorized set now clears the list without querying all issues.
+- Validate project selection against the currently loaded authorized project list, refresh selected-project metadata when it changes, and fail closed when a selected project disappears.
+- Route Retry according to the actual failure (sync failures retry synchronization; load/route errors reload data) and reject overlapping sync requests.
+- Separate load/route errors from healthy empty results, add a localized explanatory empty panel, provide accessible filter/refresh labels and radio-selection semantics, and use severity-accented cards with weighted statistic columns for compact screens.
+- Added ViewModel regressions for authorization-set changes, renamed project metadata, unauthorized project selection and sync retry, plus a Compose regression for the load-error/empty-state distinction.
+
+**Files changed**
+- app/src/main/java/com/example/presentation/ui/screens/IssuesScreen.kt
+- app/src/main/java/com/example/presentation/viewmodel/IssuesViewModel.kt
+- app/src/test/java/com/example/presentation/viewmodel/IssuesViewModelTest.kt
+- app/src/test/java/com/example/presentation/ui/screens/IssuesScreenTest.kt
+- app/src/main/res/values/strings.xml
+- app/src/main/res/values-ar/strings.xml
+
+**Verification boundary**
+- Pre-change main head 63c015712fb16ef3b31c2927a74a5ec362e67fcc: Android Unit Tests, Android Code Quality & Security Audit, and Debug/Release APK workflows all completed successfully. Debug and release APK artifacts were uploaded. This is baseline evidence only; it does not verify the changes in this entry.
+- Local Gradle execution remains unavailable in this runner because it cannot resolve github.com; post-change CI must be inspected to terminal status. No Android emulator/ADB device is attached, so rendered RTL/LTR, TalkBack, IME and device visual review remain BLOCKED. The live Supabase read-only permission denial remains unchanged; no production data or schema was modified.
+
+**Criterion state**
+- Issues authorization-scope lifecycle, project metadata, sync retry, load/error/empty distinction, accessible actions and compact statistics: IN_PROGRESS pending post-change CI and rendered device verification.
+- Issues source provenance/last-successful-sync implementation remains IN_PROGRESS pending full screen acceptance review and device verification.
+
+**Next exact step**
+- Inspect the new main-head Unit Tests, Lint and Debug/Release APK runs to terminal status. Fix only failures proven by CI logs. Then continue the Dashboard selected-project revocation/refresh audit and its regression tests; do not mark Issues or Dashboard complete without emulator RTL/LTR and accessibility evidence.
