@@ -4239,3 +4239,9 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the new main-head Unit Tests, Lint and Debug/Release APK runs to terminal status. Fix only failures proven by CI logs. Then continue the Dashboard selected-project revocation/refresh audit and its regression tests; do not mark Issues or Dashboard complete without emulator RTL/LTR and accessibility evidence.
+
+## 2026-11-28 — CI regression fix: Compose semantics property import
+
+- Post-change CI for 43257e94210236dee578550253fac7838daf1375 failed both Android Code Quality & Security Audit and Debug APK compilation at IssuesScreen.kt:93: the contentDescription semantics property was not imported. The lint and APK failures share this single Kotlin compile error; they are not independent defects.
+- Added the explicit androidx.compose.ui.semantics.contentDescription import. The Unit Tests run was still executing when this failure was identified; its terminal result must also be checked.
+- The failed run did not produce Debug/Release APK artifacts. Re-run all main-head workflows after this fix and inspect each to terminal status.
