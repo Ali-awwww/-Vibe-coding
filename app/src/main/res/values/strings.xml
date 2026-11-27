@@ -31,6 +31,19 @@
     <string name="settings">Settings</string>
     <string name="overview">Overview</string>
     <string name="recent_crashes">Recent Crashes</string>
+    <string name="dashboard_recent_issues">Recent Issues</string>
+    <string name="dashboard_empty_issues">No issues are recorded for this project scope.</string>
+    <string name="dashboard_issue_occurrences">%1$d occurrences</string>
+    <string name="dashboard_untitled_issue">Untitled issue</string>
+    <string name="dashboard_issue_status_new">New</string>
+    <string name="dashboard_issue_status_investigating">Investigating</string>
+    <string name="dashboard_issue_status_resolved">Resolved</string>
+    <string name="dashboard_issue_status_reopened">Reopened</string>
+    <string name="issues_all_projects">All projects</string>
+    <string name="issues_project_unavailable">The requested project is not available to this account.</string>
+    <string name="issues_load_error">Could not load issues. Check the connection and retry.</string>
+    <string name="issues_sync_error">One or more projects could not be synchronized.</string>
+    <string name="issues_retry">Retry</string>
     <string name="no_recent_crashes">No recent crashes found. Great job!</string>
 
     <!-- Analytics Section -->

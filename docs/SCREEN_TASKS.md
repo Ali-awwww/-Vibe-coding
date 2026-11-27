@@ -4089,3 +4089,30 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the new main-head Unit Tests, Lint and Debug/Release APK runs to terminal status. Fix only failures evidenced by CI logs, then continue the Dashboard project-context and metric-source audit. Revisit the Login Supabase/device blockers only when project access or Android hardware changes.
+
+
+## 2026-11-28 — Dashboard recent issues and project-scoped navigation
+
+**Confirmed gaps**
+- The Dashboard did not render recent issues even though it loaded issue records and showed an aggregate issue KPI.
+- The Issues destination ignored `Screen.Issues.projectId`; it always selected the first project. Dashboard KPI and issue-row navigation could therefore display a different project's issues from the project the user selected.
+- The Applications KPI aggregated across projects but silently opened the first project's applications when no project filter was selected.
+
+**Implementation**
+- Added the five most recently updated, non-`INTERNAL_QA` issues to Dashboard state, sorted by `lastOccurrence` descending with a deterministic ID tie-breaker. The aggregate issue count excludes internal QA fixtures.
+- Added a compact, localized Vibe issue row with severity/status/occurrence context; selecting it opens the Issues destination scoped to that exact project.
+- Applications KPI now routes to Projects when no project is selected rather than presenting one project's application list as the aggregate result.
+- AppNavigation now decodes the Issues route and passes its optional project ID into IssuesViewModel. The Issues screen supports an explicit all-projects view, validates scoped project IDs against the authenticated project's list, avoids silently falling back to a different project, cancels stale issue subscriptions on project changes, and exposes localized load/sync/project-unavailable states.
+- Added ViewModel and Compose regressions for recent issue ordering/QA exclusion, issue navigation, unscoped Applications KPI behavior, all-project issue listing, exact route-project selection and invalid-project fail-closed behavior.
+
+**Verification boundary**
+- Regression tests are committed; CI execution for the Dashboard/Issues batch is pending. The preceding Dashboard data-integrity batch is also awaiting its own terminal CI result.
+- No Android device/emulator is attached, so Dashboard/Issues rendered RTL/LTR, small-screen, TalkBack and lifecycle/device review remain BLOCKED. Live Supabase project access remains BLOCKED by the previously recorded read-only permission denial. No live backend or production data was modified.
+
+**Criterion state**
+- Dashboard recent real issues, complete issue count, project-specific issue navigation and unscoped project-selection behavior: **IN_PROGRESS** — implementation and regression tests committed; CI pending.
+- Issues route parameter handling, all-project mode and invalid-project isolation: **IN_PROGRESS** — implementation and ViewModel regressions committed; CI pending.
+- Dashboard visual/device sign-off and live Supabase-backed metrics remain BLOCKED pending the documented hardware/project access.
+
+**Next exact step**
+- Inspect Unit Tests, Lint and Debug/Release APK workflows for the new main head to terminal status. Fix only failures evidenced by their reports, then continue the Dashboard metric provenance/refresh and accessibility audit without repeating Login's unchanged external blockers.

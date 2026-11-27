@@ -31,6 +31,19 @@
     <string name="settings">الإعدادات</string>
     <string name="overview">نظرة عامة</string>
     <string name="recent_crashes">أحدث الانهيارات</string>
+    <string name="dashboard_recent_issues">أحدث المشكلات</string>
+    <string name="dashboard_empty_issues">لا توجد مشكلات مسجلة ضمن نطاق المشروع المحدد.</string>
+    <string name="dashboard_issue_occurrences">%1$d مرة</string>
+    <string name="dashboard_untitled_issue">مشكلة بلا عنوان</string>
+    <string name="dashboard_issue_status_new">جديدة</string>
+    <string name="dashboard_issue_status_investigating">قيد التحقيق</string>
+    <string name="dashboard_issue_status_resolved">تم حلها</string>
+    <string name="dashboard_issue_status_reopened">أعيد فتحها</string>
+    <string name="issues_all_projects">كل المشاريع</string>
+    <string name="issues_project_unavailable">المشروع المطلوب غير متاح لهذا الحساب.</string>
+    <string name="issues_load_error">تعذر تحميل المشكلات. تحقق من الاتصال ثم أعد المحاولة.</string>
+    <string name="issues_sync_error">تعذرت مزامنة مشروع واحد أو أكثر.</string>
+    <string name="issues_retry">إعادة المحاولة</string>
     <string name="no_recent_crashes">لم يتم العثور على انهيارات حديثة. عمل رائع!</string>
 
     <!-- Analytics Section -->
