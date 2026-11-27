@@ -1,5 +1,7 @@
 package com.example.presentation.viewmodel
 
+import com.example.domain.model.Integration
+import com.example.domain.model.IntegrationType
 import com.example.domain.model.Issue
 import com.example.domain.model.Project
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +74,58 @@ class IssuesViewModelTest {
         assertTrue(viewModel.uiState.value.issues.isEmpty())
         assertEquals(IssuesViewModel.ERROR_PROJECT_UNAVAILABLE, viewModel.uiState.value.error)
         assertEquals(0, repository.getAllIssuesCalls)
+    }
+
+    @Test
+    fun `all projects view exposes the newest successful integration sync time`() = runTest {
+        repository.projects.value = listOf(
+            Project(id = "p1", name = "Alpha", ownerId = "u1"),
+            Project(id = "p2", name = "Beta", ownerId = "u1")
+        )
+        repository.integrations.value = listOf(
+            Integration(id = "s1", projectId = "p1", name = "Sentry", type = IntegrationType.SENTRY, lastSyncedAt = 100L),
+            Integration(id = "s2", projectId = "p2", name = "Bugsnag", type = IntegrationType.BUGSNAG, lastSyncedAt = 300L),
+            Integration(id = "qa", projectId = "p2", name = "QA", type = IntegrationType.INTERNAL_QA, lastSyncedAt = 900L)
+        )
+
+        val viewModel = IssuesViewModel(repository)
+        backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+        assertTrue(viewModel.uiState.value.isAllProjectsScope)
+        assertEquals(300L, viewModel.uiState.value.lastSyncAt)
+    }
+
+    @Test
+    fun `project scope reports only that projects successful sync time`() = runTest {
+        repository.projects.value = listOf(
+            Project(id = "p1", name = "Alpha", ownerId = "u1"),
+            Project(id = "p2", name = "Beta", ownerId = "u1")
+        )
+        repository.integrations.value = listOf(
+            Integration(id = "s1", projectId = "p1", name = "Sentry", type = IntegrationType.SENTRY, lastSyncedAt = 900L),
+            Integration(id = "s2", projectId = "p2", name = "Bugsnag", type = IntegrationType.BUGSNAG, lastSyncedAt = 300L)
+        )
+
+        val viewModel = IssuesViewModel(repository, initialProjectId = "p2")
+        backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+        assertFalse(viewModel.uiState.value.isAllProjectsScope)
+        assertEquals(300L, viewModel.uiState.value.lastSyncAt)
+    }
+
+    @Test
+    fun `successful sync refreshes the visible integration timestamp`() = runTest {
+        repository.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "u1"))
+        repository.integrations.value = listOf(
+            Integration(id = "s1", projectId = "p1", name = "Sentry", type = IntegrationType.SENTRY, lastSyncedAt = 100L)
+        )
+        val viewModel = IssuesViewModel(repository, initialProjectId = "p1")
+        backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+        viewModel.syncIssues()
+
+        assertNotNull(viewModel.uiState.value.lastSyncAt)
+        assertTrue(viewModel.uiState.value.lastSyncAt!! > 100L)
     }
 
     @Test

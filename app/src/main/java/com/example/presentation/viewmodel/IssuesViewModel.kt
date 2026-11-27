@@ -2,6 +2,8 @@ package com.example.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.domain.model.Integration
+import com.example.domain.model.IntegrationType
 import com.example.domain.model.Issue
 import com.example.domain.model.Project
 import com.example.domain.repository.CrashRepository
@@ -16,7 +18,9 @@ data class IssuesUiState(
     val issues: List<Issue> = emptyList(),
     val isLoading: Boolean = true,
     val isSyncing: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val isAllProjectsScope: Boolean = false,
+    val lastSyncAt: Long? = null
 )
 
 class IssuesViewModel(
@@ -29,6 +33,7 @@ class IssuesViewModel(
 
     private var projectsJob: Job? = null
     private var issuesJob: Job? = null
+    private var syncTimeJob: Job? = null
     private var initialSelectionResolved = false
 
     init {
@@ -59,17 +64,25 @@ class IssuesViewModel(
                             }
                         }
                     } else {
-                        val selectedId = _uiState.value.selectedProject?.id
+                        val state = _uiState.value
+                        val selectedId = state.selectedProject?.id
                         if (selectedId != null && projects.none { it.id == selectedId }) {
                             issuesJob?.cancel()
+                            syncTimeJob?.cancel()
                             _uiState.update {
                                 it.copy(
                                     selectedProject = null,
+                                    isAllProjectsScope = false,
                                     issues = emptyList(),
+                                    lastSyncAt = null,
                                     isLoading = false,
                                     error = ERROR_PROJECT_UNAVAILABLE
                                 )
                             }
+                        } else if (state.isAllProjectsScope) {
+                            observeSyncTime(projects, selectedProjectId = null)
+                        } else if (selectedId != null) {
+                            observeSyncTime(projects, selectedProjectId = selectedId)
                         }
                     }
                 }
@@ -79,7 +92,17 @@ class IssuesViewModel(
     fun selectAllProjects() {
         initialSelectionResolved = true
         issuesJob?.cancel()
-        _uiState.update { it.copy(selectedProject = null, isLoading = true, error = null) }
+        val projects = _uiState.value.projects
+        _uiState.update {
+            it.copy(
+                selectedProject = null,
+                isAllProjectsScope = true,
+                lastSyncAt = null,
+                isLoading = true,
+                error = null
+            )
+        }
+        observeSyncTime(projects, selectedProjectId = null)
         issuesJob = viewModelScope.launch {
             repository.getAllIssues()
                 .catch { failure ->
@@ -95,7 +118,17 @@ class IssuesViewModel(
     fun selectProject(project: Project) {
         initialSelectionResolved = true
         issuesJob?.cancel()
-        _uiState.update { it.copy(selectedProject = project, isLoading = true, error = null) }
+        val projects = _uiState.value.projects
+        _uiState.update {
+            it.copy(
+                selectedProject = project,
+                isAllProjectsScope = false,
+                lastSyncAt = null,
+                isLoading = true,
+                error = null
+            )
+        }
+        observeSyncTime(projects, selectedProjectId = project.id)
         issuesJob = viewModelScope.launch {
             repository.getIssues(project.id)
                 .catch { failure ->
@@ -111,10 +144,39 @@ class IssuesViewModel(
     fun retry() {
         val selected = _uiState.value.selectedProject
         if (selected == null) {
-            if (initialProjectId != null && !initialSelectionResolved) loadProjects()
+            if (initialProjectId != null && !_uiState.value.isAllProjectsScope) loadProjects()
             else selectAllProjects()
         } else {
             selectProject(selected)
+        }
+    }
+
+
+    private fun observeSyncTime(projects: List<Project>, selectedProjectId: String?) {
+        syncTimeJob?.cancel()
+        val scopedProjects = selectedProjectId?.let { id ->
+            projects.filter { it.id == id }
+        } ?: projects
+        if (scopedProjects.isEmpty()) {
+            _uiState.update { it.copy(lastSyncAt = null) }
+            return
+        }
+        val integrationFlows = scopedProjects.map { repository.getIntegrations(it.id) }
+        syncTimeJob = viewModelScope.launch {
+            combine(integrationFlows) { snapshots ->
+                snapshots.asList()
+                    .flatten()
+                    .filterNot { it.type == IntegrationType.INTERNAL_QA }
+                    .mapNotNull(Integration::lastSyncedAt)
+                    .maxOrNull()
+            }
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    _uiState.update { it.copy(lastSyncAt = null) }
+                }
+                .collect { timestamp ->
+                    _uiState.update { it.copy(lastSyncAt = timestamp) }
+                }
         }
     }
 

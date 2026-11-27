@@ -42,6 +42,7 @@ class FakeCrashRepository : CrashRepository {
     var applications = MutableStateFlow<List<Application>>(emptyList())
     var crashes = MutableStateFlow<List<CrashReport>>(emptyList())
     var issues = MutableStateFlow<List<Issue>>(emptyList())
+    var integrations = MutableStateFlow<List<Integration>>(emptyList())
     var members = MutableStateFlow<List<ProjectMember>>(emptyList())
     var auditLogs = MutableStateFlow<List<AuditLog>>(emptyList())
     var notifications = MutableStateFlow<List<SystemNotification>>(emptyList())
@@ -187,7 +188,8 @@ class FakeCrashRepository : CrashRepository {
     override suspend fun addCrash(crash: CrashReport) {}
     override suspend fun updateCrashStatus(crashId: String, isResolved: Boolean) {}
     override suspend fun getAIDiagnosis(crashReport: CrashReport): AIDiagnosis = AIDiagnosis()
-    override fun getIntegrations(projectId: String): Flow<List<Integration>> = flowOf(emptyList())
+    override fun getIntegrations(projectId: String): Flow<List<Integration>> =
+        integrations.map { records -> records.filter { it.projectId == projectId } }
     override suspend fun addIntegration(integration: Integration) {}
     override suspend fun deleteIntegration(integrationId: String, projectId: String, callerUserId: String): Result<Unit> = Result.success(Unit)
     override suspend fun validateWebhook(projectId: String, integrationId: String, payload: String, signatureHeader: String?): Result<Boolean> = Result.success(true)
@@ -203,7 +205,17 @@ class FakeCrashRepository : CrashRepository {
     override suspend fun updateIssueStatus(issueId: String, status: IssueStatus) {}
     override suspend fun getVersionStats(projectId: String, version: String): VersionStats =
         VersionStats(version, 0, 0, emptyList(), 0, 0, 0f)
-    override suspend fun syncCrashes(projectId: String): Result<Unit> = Result.success(Unit)
+    override suspend fun syncCrashes(projectId: String): Result<Unit> {
+        val syncedAt = System.currentTimeMillis()
+        integrations.value = integrations.value.map { integration ->
+            if (integration.projectId == projectId && integration.type != IntegrationType.INTERNAL_QA) {
+                integration.copy(lastSyncedAt = syncedAt)
+            } else {
+                integration
+            }
+        }
+        return Result.success(Unit)
+    }
 
     override fun getProjectMembers(projectId: String): Flow<List<ProjectMember>> =
         flowOf(members.value.filter { it.projectId == projectId })

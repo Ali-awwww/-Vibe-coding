@@ -23,6 +23,7 @@ import com.example.domain.model.IssueStatus
 import com.example.domain.model.Severity
 import com.example.presentation.navigation.Screen
 import com.example.presentation.viewmodel.IssuesViewModel
+import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -34,6 +35,17 @@ fun IssuesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showProjectDialog by remember { mutableStateOf(false) }
+    val projectScopeLabel = when {
+        uiState.isAllProjectsScope -> stringResource(R.string.issues_all_projects)
+        uiState.selectedProject != null -> uiState.selectedProject.name
+        else -> stringResource(R.string.issues_project_unavailable)
+    }
+    val lastSyncLabel = uiState.lastSyncAt?.let { timestamp ->
+        stringResource(
+            R.string.issues_last_successful_sync,
+            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(timestamp))
+        )
+    } ?: stringResource(R.string.issues_no_successful_sync)
 
     Scaffold(
         topBar = {
@@ -41,9 +53,11 @@ fun IssuesScreen(
                 title = {
                     Column {
                         Text(stringResource(R.string.issues), style = MaterialTheme.typography.titleLarge)
+                        Text(projectScopeLabel, style = MaterialTheme.typography.labelSmall)
                         Text(
-                            uiState.selectedProject?.name ?: stringResource(R.string.issues_all_projects),
-                            style = MaterialTheme.typography.labelSmall
+                            lastSyncLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
@@ -188,7 +202,10 @@ fun IssueItem(issue: Issue, onClick: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 StatItem(label = stringResource(R.string.occurrences), value = issue.occurrenceCount.toString())
                 StatItem(label = stringResource(R.string.affected_users), value = issue.affectedUsers.toString())
-                StatItem(label = stringResource(R.string.source), value = issue.source?.name?.replace("_", " ") ?: "UNKNOWN")
+                StatItem(
+                    label = stringResource(R.string.source),
+                    value = issue.source?.name?.replace("_", " ") ?: stringResource(R.string.issues_source_unknown)
+                )
             }
         }
     }
@@ -208,7 +225,12 @@ fun StatusBadge(status: IssueStatus) {
         shape = MaterialTheme.shapes.small
     ) {
         Text(
-            text = status.name,
+            text = when (status) {
+                IssueStatus.NEW -> stringResource(R.string.dashboard_issue_status_new)
+                IssueStatus.INVESTIGATING -> stringResource(R.string.dashboard_issue_status_investigating)
+                IssueStatus.RESOLVED -> stringResource(R.string.dashboard_issue_status_resolved)
+                IssueStatus.REOPENED -> stringResource(R.string.dashboard_issue_status_reopened)
+            },
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold
