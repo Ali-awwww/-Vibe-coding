@@ -4133,3 +4133,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Added the missing `@Composable` annotation. No acceptance assertion was weakened.
 - The separate test-only missing import from `37e8b112` was corrected in `b0b26503`.
 - Next: inspect CI for the current main head, where both corrections and the full issue resources are present; fix any remaining errors from actual job logs.
+
+
+## 2026-11-28 — Correct composable annotations on both Dashboard rows
+
+- CI for `6a77b4e6690a8e72cfe6e306ca8d96534b9bedab` found the prior annotation fix had been inserted between the existing `@Composable` marker and `DashboardCrashRow`, resulting in a duplicate annotation on `DashboardIssueRow` and no annotation on `DashboardCrashRow`.
+- Corrected the declarations so each row has exactly one `@Composable` annotation.
+- The Unit Tests and Debug APK builds for that commit stopped at main-source compilation; no tests ran and no APK was produced. The current main commit must be rechecked from a fresh CI run.

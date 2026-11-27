@@ -545,7 +545,6 @@ internal fun DashboardCompactToolCard(
 }
 
 @Composable
-@Composable
 internal fun DashboardIssueRow(issue: Issue, onClick: () -> Unit) {
     val severityColor = when (issue.severity) {
         Severity.LOW -> VibeDesignTokens.Color.Cyan
@@ -611,6 +610,7 @@ internal fun DashboardIssueRow(issue: Issue, onClick: () -> Unit) {
     }
 }
 
+@Composable
 internal fun DashboardCrashRow(
     crash: CrashReport,
     onClick: () -> Unit
