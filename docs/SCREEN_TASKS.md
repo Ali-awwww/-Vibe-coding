@@ -4275,3 +4275,8 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the 2fb8d02 main-head workflows to terminal status. Then inspect the Dashboard change's Unit Tests, Lint and Debug/Release APK runs; fix only evidence-backed failures and continue the next independent Dashboard criterion without marking the screen complete.
+
+## 2026-11-28 — CI regression fix: Compose test assertions
+
+- The 2fb8d02 Unit Tests workflow reached Kotlin test compilation and failed because assertDoesNotExist and assertExists were imported as top-level functions; this project’s Compose test API exposes them through the package wildcard used by its existing DashboardScreenTest.
+- Switched IssuesScreenTest to the same androidx.compose.ui.test.* import pattern already used by the existing screen tests. The Dashboard commit inherited this test compilation failure and must be revalidated after the fix.
