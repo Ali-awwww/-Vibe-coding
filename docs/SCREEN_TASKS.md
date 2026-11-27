@@ -4021,3 +4021,19 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect Unit Tests, Lint and Debug/Release APK runs for the corrected main head through terminal status. Resolve any further compiler or assertion failure from the actual logs before returning to Login's open provider/device gates.
+
+
+## 2026-11-28 — Restore the Compose JUnit rule import
+
+**CI evidence for `12b47381e474a72fff59455f000db11aaa8c5d0c`**
+- Android Unit Tests again stopped at `compileDebugUnitTestKotlin`: `createComposeRule` was unresolved after switching to the Compose test wildcard import; the resulting unresolved rule also caused the composable-lambda diagnostic at the theme call. No tests ran on that commit.
+- Android Lint: **PASS** (`lintDebug`). Debug and signed Release APK build/artifact upload steps: **PASS**.
+
+**Correction**
+- Added the explicit `androidx.compose.ui.test.junit4.createComposeRule` import, matching the existing `LoginScreenTest` import pattern. The wildcard import remains for Compose assertion extensions.
+
+**Verification boundary**
+- This import correction is committed but not yet executed. No test/build pass is claimed for the Settings change until the new main-head workflows finish.
+
+**Next exact step**
+- Inspect the new main-head Unit Tests, Lint and Debug/Release APK runs to terminal status; resolve any remaining compile or assertion errors from their logs.

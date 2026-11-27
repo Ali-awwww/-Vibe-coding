@@ -2,6 +2,7 @@ package com.example.presentation.ui.screens
 
 import android.content.Context
 import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
 import com.example.R
