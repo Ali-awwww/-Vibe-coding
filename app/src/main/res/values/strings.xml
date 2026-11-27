@@ -808,4 +808,8 @@
     <string name="settings_last_login_unavailable">Not available</string>
     <string name="settings_authenticated_session">Authenticated session</string>
     <string name="settings_no_active_session">No active session</string>
+    <string name="settings_pii_scrubbing_description">PII scrubbing is configured per project and can be changed in project security settings.</string>
+    <string name="settings_pii_scrubbing_status">Per project</string>
+    <string name="settings_rate_limit_description">In-process per-project throttling; it does not replace server-side rate limiting.</string>
+    <string name="settings_rate_limit_status">Local only</string>
 </resources>

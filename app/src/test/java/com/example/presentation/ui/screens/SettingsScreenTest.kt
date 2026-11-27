@@ -50,6 +50,21 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun securityStatusDisclosesPerProjectPiiAndLocalRateLimitScope() {
+        val context = appContext()
+        setContent(user = null)
+
+        composeRule.onNodeWithText(context.getString(R.string.settings_pii_scrubbing_description))
+            .assertExists()
+        composeRule.onNodeWithText(context.getString(R.string.settings_pii_scrubbing_status))
+            .assertExists()
+        composeRule.onNodeWithText(context.getString(R.string.settings_rate_limit_description))
+            .assertExists()
+        composeRule.onNodeWithText(context.getString(R.string.settings_rate_limit_status))
+            .assertExists()
+    }
+
+    @Test
     fun authenticatedProfileShowsRealAccountAndProviderNeutralSessionStatus() {
         val user = UserAccount(
             id = "user-1",

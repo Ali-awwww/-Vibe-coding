@@ -3961,13 +3961,13 @@ The project must not stall while the Supabase migration is in progress. Work is 
 - Supabase live Auth verification remains **BLOCKED** by the previously recorded read-only project-access permission denial. No production DDL/DML, Auth, RLS, key or data changes were attempted. No `AGENTS.md` or `agents.md` was found (root path fetches returned 404 and repository code search returned no matches).
 
 **Criterion state**
-- Login signed-out password-reset contract and navigation correction: **IN_PROGRESS** — implementation and regression tests are committed; execution evidence is still required.
+- Login signed-out password-reset contract, form validation, restored-session state handling, localized authentication errors, and Compose compact-viewport RTL/LTR behavior: **PASS** — verified by the 467-test main-head CI run (including `AuthRepositoryPasswordRecoveryTest`, `LoginFormValidationTest`, `LoginScreenTest`, `MainViewModelAuthMessageTest`, `MainViewModelPasswordRecoveryTest`, and `PasswordRecoveryLinkParserTest`).
 - Login Supabase Auth lifecycle, session refresh/deep-link verification, and provider integration: **BLOCKED** pending authorized read access to the dedicated project.
 - Login rendered visual redesign and device verification (RTL/LTR, compact viewport, IME and accessibility): **BLOCKED** pending an Android device/emulator.
-- CI terminal verification for the current `main` head: **BLOCKED** because push-run enumeration is not exposed by the connected GitHub Actions operations.
+- CI terminal verification for main commit `95bdff34084ec96240d144770aac18ecfd034ef3`: **PASS** — 467 tests, 0 failures, 0 skipped; `lintDebug` passed; Debug and signed Release APK builds and artifact uploads passed.
 
 **Next exact step**
-- At the next meaningful verification point, inspect the Unit Tests, Lint and Debug/Release APK runs for `9298d9acf4adf3e28d5b975e716f92cc5e95d234` using a run-list-capable GitHub Actions endpoint; do not repeat the current PR-only lookup unless its capabilities change. Fix only failures evidenced by those logs. Then exercise recovery with a signed-out account and complete rendered Login RTL/LTR, IME and accessibility review on an Android device. Keep Login open until its design and functional gates are verified; do not mark it complete or advance to Dashboard while those gates remain open.
+- The local Login validation/recovery/session/error-message criteria are verified. Live Supabase Auth/provider lifecycle remains **BLOCKED** by the recorded read-only project-access permission denial; rendered device RTL/LTR, IME and accessibility review remains **BLOCKED** because no Android device/emulator is attached. Do not repeat either check without changed access or hardware. Proceed to Dashboard's first independent acceptance item while preserving these Login dependencies for automatic revisit; Login itself remains incomplete.
 
 
 ## 2026-11-28 — Correct Firestore notification unread-count test expectation
@@ -4037,3 +4037,27 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the new main-head Unit Tests, Lint and Debug/Release APK runs to terminal status; resolve any remaining compile or assertion errors from their logs.
+
+
+## 2026-11-28 — Close local Login verification and correct Settings security scope labels
+
+**CI verification for `95bdff34084ec96240d144770aac18ecfd034ef3`**
+- Android Unit Tests: **PASS**, 467 tests, 0 failures, 0 skipped. Both new Settings profile tests passed; the Login form, recovery, ViewModel messaging/session and compact LTR/RTL Compose tests also passed.
+- Android Code Quality & Security Audit: **PASS** (`lintDebug`).
+- Build Android APK: **PASS**; Debug and signed Release APKs were built and uploaded as workflow artifacts.
+- `gradlew` is now stored with executable mode `100755`.
+
+**Login criterion state**
+- Local validation, signed-out password reset without session creation, session-state handling, localized auth errors, and existing compact-viewport RTL/LTR Compose checks are **PASS** on the 467-test CI run.
+- Live Supabase Auth/provider lifecycle and real-device visual/accessibility review remain **BLOCKED** by the already-recorded dedicated-project permission denial and absent Android device/emulator. No production changes or visual device verification are claimed.
+
+**Confirmed Settings security-scope issue and correction**
+- `SecurityUtils.PiiScrubber` is applied according to each project's `piiScrubbingEnabled` flag (default true but configurable), not as an unconditional global guarantee.
+- `SecurityUtils.checkRateLimit` uses an in-process `ConcurrentHashMap`; it is local per-project throttling, not distributed/server-side DoS protection.
+- Settings now labels PII scrubbing as a per-project setting and rate limiting as local-only, with neutral status styling instead of claiming globally active protection. Added a Compose regression test for both disclosures.
+
+**Verification boundary**
+- The security-scope text/style and its new regression test are committed but not yet executed. The 467-test/Lint/APK pass applies to parent commit `95bdff34084ec96240d144770aac18ecfd034ef3` only.
+
+**Next exact step**
+- Verify the new Settings security-scope regression test and current main CI to terminal status. Then begin Dashboard's first independent acceptance item; revisit Login's live Supabase/device blockers only when the corresponding access or hardware becomes available.

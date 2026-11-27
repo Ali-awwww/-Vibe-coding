@@ -188,9 +188,10 @@ fun SettingsScreen(
                     HorizontalDivider()
                     SecurityStatusRow(
                         title = "تنقيح البيانات الشخصية (PII)",
-                        description = "حجب تلقائي لكلمات المرور والرموز والبريد وIP",
-                        statusText = "مفعّل",
-                        isGood = true
+                        description = stringResource(R.string.settings_pii_scrubbing_description),
+                        statusText = stringResource(R.string.settings_pii_scrubbing_status),
+                        isGood = false,
+                        isNeutral = true
                     )
                     HorizontalDivider()
                     SecurityStatusRow(
@@ -202,9 +203,10 @@ fun SettingsScreen(
                     HorizontalDivider()
                     SecurityStatusRow(
                         title = "حماية معدل الطلبات (Rate Limiting)",
-                        description = "حد أقصى 60 طلب/دقيقة لمنع هجمات الحرمان من الخدمة",
-                        statusText = "مفعّل",
-                        isGood = true
+                        description = stringResource(R.string.settings_rate_limit_description),
+                        statusText = stringResource(R.string.settings_rate_limit_status),
+                        isGood = false,
+                        isNeutral = true
                     )
                 }
             }
@@ -283,8 +285,30 @@ fun SecurityStatusRow(
     title: String,
     description: String,
     statusText: String,
-    isGood: Boolean
+    isGood: Boolean,
+    isNeutral: Boolean = false
 ) {
+    val statusContainerColor = when {
+        isGood -> Color(0xFFE8F5E9)
+        isNeutral -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.errorContainer
+    }
+    val statusForegroundColor = when {
+        isGood -> Color(0xFF1B5E20)
+        isNeutral -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onErrorContainer
+    }
+    val statusIconTint = when {
+        isGood -> Color(0xFF2E7D32)
+        isNeutral -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.error
+    }
+    val statusIcon = when {
+        isGood -> Icons.Default.CheckCircle
+        isNeutral -> Icons.Default.Info
+        else -> Icons.Default.Warning
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -296,7 +320,7 @@ fun SecurityStatusRow(
         }
 
         Surface(
-            color = if (isGood) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.errorContainer,
+            color = statusContainerColor,
             shape = RoundedCornerShape(6.dp)
         ) {
             Row(
@@ -305,14 +329,14 @@ fun SecurityStatusRow(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Icon(
-                    if (isGood) Icons.Default.CheckCircle else Icons.Default.Warning,
+                    statusIcon,
                     null,
-                    tint = if (isGood) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                    tint = statusIconTint,
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
                     statusText,
-                    color = if (isGood) Color(0xFF1B5E20) else MaterialTheme.colorScheme.onErrorContainer,
+                    color = statusForegroundColor,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold
                 )

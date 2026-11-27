@@ -808,4 +808,8 @@
     <string name="settings_last_login_unavailable">غير متاح</string>
     <string name="settings_authenticated_session">جلسة مصادق عليها</string>
     <string name="settings_no_active_session">لا توجد جلسة نشطة</string>
+    <string name="settings_pii_scrubbing_description">تنقيح البيانات الشخصية مضبوط لكل مشروع ويمكن تغييره من إعدادات أمان المشروع.</string>
+    <string name="settings_pii_scrubbing_status">حسب المشروع</string>
+    <string name="settings_rate_limit_description">تقييد محلي داخل التطبيق لكل مشروع؛ ولا يحل محل تحديد المعدل على الخادم.</string>
+    <string name="settings_rate_limit_status">محلي فقط</string>
 </resources>
