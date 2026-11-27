@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.domain.model.*
 import com.example.presentation.navigation.Screen
 import com.example.presentation.viewmodel.DashboardUiState
+import com.example.presentation.viewmodel.DashboardViewModel
 import com.example.presentation.ui.screens.dashboard.DeveloperSessionHeader
 import com.example.ui.theme.CrashIntelligenceTheme
 import org.junit.Assert.assertEquals
@@ -46,6 +47,35 @@ class DashboardScreenTest {
         composeRule.onNodeWithTag("dashboard_sign_in_button").performClick()
         assertTrue(signInClicked)
         composeRule.onNodeWithTag("dashboard_kpi_projects").assertDoesNotExist()
+    }
+
+    @Test
+    fun loadFailureDoesNotPresentEmptyDataAsAHealthyDashboard() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                DashboardScreenContent(
+                    uiState = DashboardUiState(
+                        isAuthenticated = true,
+                        currentUser = UserAccount(id = "u1", email = "dev@vibe.io"),
+                        isLoading = false,
+                        error = DashboardViewModel.ERROR_LOAD
+                    ),
+                    onNavigate = {},
+                    onSelectProject = {},
+                    onRefresh = {},
+                    onMarkNotificationRead = {},
+                    onMarkAllNotificationsRead = {},
+                    onClearNotifications = {},
+                    onSignOut = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("dashboard_error_card").assertExists()
+        composeRule.onNodeWithText("Could not load dashboard data. Check the connection and retry.").assertExists()
+        composeRule.onNodeWithTag("dashboard_empty_issues_card").assertDoesNotExist()
+        composeRule.onNodeWithTag("dashboard_empty_crashes_card").assertDoesNotExist()
     }
 
     @Test
@@ -133,7 +163,7 @@ class DashboardScreenTest {
                         applicationCount = 4,
                         issueCount = 3,
                         isCloudConfigured = false,
-                        error = "تعذر تحديث السجل السحابي"
+                        error = DashboardViewModel.ERROR_CONNECTION
                     ),
                     onNavigate = { navigatedRoutes.add(it) },
                     onSelectProject = { selectedProjectArg = it },

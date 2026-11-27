@@ -184,11 +184,15 @@ class DashboardViewModel(
     private fun safeLoadError(failure: Throwable): String {
         val raw = failure.message.orEmpty()
         return when {
-            raw.contains("expired", ignoreCase = true) ->
-                "انتهت صلاحية الجلسة السحابية؛ سجّل الدخول مجددًا لتحديث المشاريع."
-            raw.contains("connect", ignoreCase = true) || raw.contains("timeout", ignoreCase = true) ->
-                "تعذر الاتصال بالخادم السحابي. تحقق من الشبكة ثم أعد المحاولة."
-            else -> "تعذر تحميل بيانات لوحة التحكم. تحقق من الاتصال ثم أعد المحاولة."
+            raw.contains("expired", ignoreCase = true) -> ERROR_SESSION_EXPIRED
+            raw.contains("connect", ignoreCase = true) || raw.contains("timeout", ignoreCase = true) -> ERROR_CONNECTION
+            else -> ERROR_LOAD
         }
+    }
+
+    companion object {
+        const val ERROR_SESSION_EXPIRED = "SESSION_EXPIRED"
+        const val ERROR_CONNECTION = "CONNECTION_FAILED"
+        const val ERROR_LOAD = "LOAD_FAILED"
     }
 }

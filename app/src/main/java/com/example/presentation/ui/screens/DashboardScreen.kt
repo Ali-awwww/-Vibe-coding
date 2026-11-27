@@ -62,6 +62,11 @@ internal fun DashboardScreenContent(
     onSignIn: () -> Unit = {}
 ) {
     var showNotificationsSheet by remember { mutableStateOf(false) }
+    val dashboardErrorMessage = when (uiState.error) {
+        DashboardViewModel.ERROR_SESSION_EXPIRED -> stringResource(R.string.dashboard_error_session_expired)
+        DashboardViewModel.ERROR_CONNECTION -> stringResource(R.string.dashboard_error_connection)
+        else -> stringResource(R.string.dashboard_error_load)
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         CosmicDashboardBackdrop(modifier = Modifier.fillMaxSize())
@@ -103,7 +108,7 @@ internal fun DashboardScreenContent(
                                     .minimumInteractiveComponentSize()
                                     .testTag("dashboard_refresh_button")
                             ) {
-                                Icon(Icons.Default.Refresh, contentDescription = "تحديث")
+                                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.dashboard_refresh_content_description))
                             }
                             IconButton(
                                 onClick = { showNotificationsSheet = true },
@@ -120,7 +125,7 @@ internal fun DashboardScreenContent(
                                         }
                                     }
                                 ) {
-                                    Icon(Icons.Default.Notifications, contentDescription = "الإشعارات")
+                                    Icon(Icons.Default.Notifications, contentDescription = stringResource(R.string.dashboard_notifications_content_description))
                                 }
                             }
                             IconButton(
@@ -129,7 +134,7 @@ internal fun DashboardScreenContent(
                                     .minimumInteractiveComponentSize()
                                     .testTag("dashboard_sign_out_button")
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "تسجيل الخروج")
+                                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.dashboard_sign_out_content_description))
                             }
                         }
                     }
@@ -222,7 +227,7 @@ internal fun DashboardScreenContent(
                         if (!uiState.error.isNullOrBlank()) {
                             item {
                                 DashboardErrorBanner(
-                                    errorMessage = uiState.error,
+                                    errorMessage = dashboardErrorMessage,
                                     onRetry = onRefresh
                                 )
                             }
@@ -238,8 +243,8 @@ internal fun DashboardScreenContent(
                         if (uiState.projects.isNotEmpty()) {
                             item {
                                 DashboardSectionHeader(
-                                    title = "سياق المشروع النشط",
-                                    badge = if (uiState.selectedProjectId == null) "ALL" else "SCOPED"
+                                    title = stringResource(R.string.dashboard_active_project_context),
+                                    badge = stringResource(if (uiState.selectedProjectId == null) R.string.dashboard_scope_all else R.string.dashboard_scope_selected)
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 ProjectContextFilterRow(
@@ -254,6 +259,11 @@ internal fun DashboardScreenContent(
                             DashboardSectionHeader(
                                 title = stringResource(R.string.overview),
                                 badge = "${uiState.projectCount} PRJ"
+                            )
+                            Text(
+                                text = stringResource(R.string.dashboard_metrics_scope_description),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = VibeDesignTokens.Color.TextMuted
                             )
                             Spacer(Modifier.height(10.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -271,7 +281,7 @@ internal fun DashboardScreenContent(
                                         onClick = { onNavigate(Screen.Projects) }
                                     )
                                     DashboardStatCard(
-                                        label = "التطبيقات",
+                                        label = stringResource(R.string.dashboard_applications),
                                         value = uiState.applicationCount.toString(),
                                         icon = Icons.Default.Apps,
                                         accent = VibeDesignTokens.Color.Violet,
@@ -311,7 +321,7 @@ internal fun DashboardScreenContent(
                         }
 
                         item {
-                            DashboardSectionHeader(title = "أدوات الهندسة والذكاء الاصطناعي")
+                            DashboardSectionHeader(title = stringResource(R.string.dashboard_engineering_ai_tools))
                             Spacer(Modifier.height(10.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 DashboardToolCard(
@@ -323,16 +333,16 @@ internal fun DashboardScreenContent(
                                     onClick = { onNavigate(Screen.CrashWatcher) }
                                 )
                                 DashboardToolCard(
-                                    title = "AI Vibe Studio",
-                                    subtitle = "بيئة تطوير ذكية لبناء التطبيقات باللغة الطبيعية (Vibe Coding)",
+                                    title = stringResource(R.string.dashboard_vibe_studio_title),
+                                    subtitle = stringResource(R.string.dashboard_vibe_studio_description),
                                     icon = Icons.Default.AutoAwesome,
                                     accent = VibeDesignTokens.Color.Cyan,
                                     tag = "dashboard_tool_vibe_studio",
                                     onClick = { onNavigate(Screen.VibeStudio) }
                                 )
                                 DashboardToolCard(
-                                    title = "AI Model Teams",
-                                    subtitle = "تعاون ذكاء اصطناعي متعدد النماذج للمهام المعقدة والـ Multi-Agent",
+                                    title = stringResource(R.string.dashboard_model_teams_title),
+                                    subtitle = stringResource(R.string.dashboard_model_teams_description),
                                     icon = Icons.Default.GroupWork,
                                     accent = VibeDesignTokens.Color.Violet,
                                     tag = "dashboard_tool_model_teams",
@@ -350,7 +360,7 @@ internal fun DashboardScreenContent(
                         }
 
                         item {
-                            DashboardSectionHeader(title = "تحليل الأعطال والاختبار")
+                            DashboardSectionHeader(title = stringResource(R.string.dashboard_crash_analysis_testing))
                             Spacer(Modifier.height(10.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -370,16 +380,16 @@ internal fun DashboardScreenContent(
                                     )
                                 }
                                 DashboardToolCard(
-                                    title = "بوابة الاعتماد وجودة المنتج (Release Gate)",
-                                    subtitle = "فحص 13 معيارًا هندسيًا، التحقق من الشاشات، ومنع الإصدارات غير المكتملة",
+                                    title = stringResource(R.string.dashboard_release_gate_title),
+                                    subtitle = stringResource(R.string.dashboard_release_gate_description),
                                     icon = Icons.Default.FactCheck,
                                     accent = VibeDesignTokens.Color.Success,
                                     tag = "dashboard_tool_quality_gate",
                                     onClick = { onNavigate(Screen.ProductQualityCenter) }
                                 )
                                 DashboardToolCard(
-                                    title = "مركز التحقق والاعتماد (AI Teams E2E)",
-                                    subtitle = "فحص معايير التعاون الفعلي، عزل المفاتيح، والـ Sandboxes",
+                                    title = stringResource(R.string.dashboard_team_validation_title),
+                                    subtitle = stringResource(R.string.dashboard_team_validation_description),
                                     icon = Icons.Default.Verified,
                                     accent = VibeDesignTokens.Color.Violet,
                                     tag = "dashboard_tool_team_validation",
@@ -395,7 +405,7 @@ internal fun DashboardScreenContent(
                             )
                         }
 
-                        if (uiState.recentIssues.isEmpty()) {
+                        if (uiState.recentIssues.isEmpty() && uiState.error.isNullOrBlank()) {
                             item {
                                 DashboardPanel(
                                     modifier = Modifier.fillMaxWidth().testTag("dashboard_empty_issues_card")
@@ -425,7 +435,7 @@ internal fun DashboardScreenContent(
                             )
                         }
 
-                        if (uiState.recentCrashes.isEmpty()) {
+                        if (uiState.recentCrashes.isEmpty() && uiState.error.isNullOrBlank()) {
                             item {
                                 DashboardPanel(
                                     modifier = Modifier

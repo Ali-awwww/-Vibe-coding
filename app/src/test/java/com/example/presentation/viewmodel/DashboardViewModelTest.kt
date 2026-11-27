@@ -149,7 +149,7 @@ class DashboardViewModelTest {
 
         val failedState = viewModel.uiState.value
         assertFalse(failedState.isLoading)
-        assertNotNull(failedState.error)
+        assertEquals(DashboardViewModel.ERROR_LOAD, failedState.error)
         assertFalse(failedState.error!!.contains("secret"))
 
         viewModel.refresh()

@@ -168,14 +168,14 @@ internal fun DashboardAuthRequiredCard(
                     tint = VibeDesignTokens.Color.Violet
                 )
                 Text(
-                    text = "تسجيل الدخول مطلوب",
+                    text = stringResource(R.string.dashboard_auth_required_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = VibeDesignTokens.Color.TextPrimary
                 )
             }
             Text(
-                text = "لحماية مشاريعك وبيانات الأعطال، يرجى تسجيل الدخول لعرض لوحة التحكم والإحصائيات.",
+                text = stringResource(R.string.dashboard_auth_required_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = VibeDesignTokens.Color.TextMuted
             )
@@ -193,7 +193,7 @@ internal fun DashboardAuthRequiredCard(
             ) {
                 Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("تسجيل الدخول", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.dashboard_sign_in), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -234,7 +234,7 @@ internal fun DashboardErrorBanner(
                 border = BorderStroke(1.dp, VibeDesignTokens.Color.Error.copy(alpha = 0.7f)),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = VibeDesignTokens.Color.Error)
             ) {
-                Text("إعادة المحاولة")
+                Text(stringResource(R.string.dashboard_retry))
             }
         }
     }
@@ -356,7 +356,7 @@ internal fun ProjectContextFilterRow(
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .testTag("dashboard_project_chip_all"),
-                label = { Text("الكل (${projects.size})") },
+                label = { Text(stringResource(R.string.dashboard_all_projects_filter, projects.size)) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = VibeDesignTokens.Color.Cyan.copy(alpha = 0.2f),
                     selectedLabelColor = VibeDesignTokens.Color.Cyan,
@@ -696,7 +696,7 @@ internal fun DashboardNotificationsSheetContent(
             ) {
                 Icon(Icons.Default.Notifications, contentDescription = null, tint = VibeDesignTokens.Color.Cyan)
                 Text(
-                    text = "مركز الإشعارات والتنبيهات",
+                    text = stringResource(R.string.dashboard_notifications_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = VibeDesignTokens.Color.TextPrimary
@@ -708,13 +708,13 @@ internal fun DashboardNotificationsSheetContent(
                         onClick = onMarkAllRead,
                         modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
-                        Text("قراءة الكل", color = VibeDesignTokens.Color.Cyan)
+                        Text(stringResource(R.string.dashboard_mark_all_read), color = VibeDesignTokens.Color.Cyan)
                     }
                     TextButton(
                         onClick = onClearAll,
                         modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
-                        Text("مسح", color = VibeDesignTokens.Color.Error)
+                        Text(stringResource(R.string.dashboard_clear_notifications), color = VibeDesignTokens.Color.Error)
                     }
                 }
             }
@@ -738,7 +738,7 @@ internal fun DashboardNotificationsSheetContent(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "لا توجد إشعارات جديدة",
+                        text = stringResource(R.string.dashboard_no_notifications),
                         style = MaterialTheme.typography.bodyMedium,
                         color = VibeDesignTokens.Color.TextMuted
                     )
