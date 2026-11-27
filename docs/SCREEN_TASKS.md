@@ -4061,3 +4061,31 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Verify the new Settings security-scope regression test and current main CI to terminal status. Then begin Dashboard's first independent acceptance item; revisit Login's live Supabase/device blockers only when the corresponding access or hardware becomes available.
+
+
+## 2026-11-28 — Dashboard first data-integrity and status-truthfulness slice
+
+**Confirmed defects**
+- The dashboard displayed `FIREBASE SYNC` and a green success treatment whenever Firebase configuration existed. The value is passed from `isFirebaseConfigured(context)`; it is not evidence of a successful connection or synchronization.
+- The crash KPI used `recentCrashes.size`, which is capped at ten, so the summary under-reported accounts with more than ten authorized crashes.
+- The dashboard selected its “recent” ten crashes from repository emission order. The Firestore collection-group query and Room `getAllCrashes()` query do not guarantee timestamp ordering.
+- The session header displayed the fixed `WORKSPACE // SECURE_ENV_01` label even though it was not derived from a workspace record.
+
+**Implementation**
+- Replaced the success claim with a localized amber `FIREBASE CONFIGURED • SYNC UNVERIFIED` state; the unconfigured branch remains explicitly local-cache-only. Configuration is no longer rendered as a successful cloud sync.
+- Replaced the synthetic workspace label with an account-context label and removed the `Developer` greeting fallback when the authenticated profile has no display name or email.
+- Added an all-record `crashCount` to `DashboardUiState`; the crash KPI now uses the complete authorized, non-QA count while the recent list remains limited to ten.
+- Sort the recent crash list by timestamp descending, then ID descending for deterministic ties.
+- Added ViewModel and Compose regressions for the full count/newest-ten contract and for configured-but-unverified cloud status.
+
+**Verification boundary**
+- Tests are committed with the implementation; CI for this Dashboard batch is pending. The current Settings-head Unit Tests and Lint workflows completed successfully; its Debug/Release APK workflow was still running when this batch began.
+- No Android device/emulator is attached, so rendered Dashboard RTL/LTR screenshots, TalkBack, IME and device-level responsive review remain BLOCKED. Live Supabase data verification remains BLOCKED by the previously recorded project-access permission denial. No production data or configuration was changed.
+
+**Criterion state**
+- Dashboard crash KPI count and deterministic recent-crash ordering: **IN_PROGRESS** — regression tests added; CI execution pending.
+- Dashboard cloud status/account labels: **IN_PROGRESS** — Compose regression added; CI execution pending.
+- Dashboard selected-project context, verified source metrics, refresh/error/offline behavior and route-level end-to-end checks remain open pending the next targeted audit.
+
+**Next exact step**
+- Inspect the new main-head Unit Tests, Lint and Debug/Release APK runs to terminal status. Fix only failures evidenced by CI logs, then continue the Dashboard project-context and metric-source audit. Revisit the Login Supabase/device blockers only when project access or Android hardware changes.

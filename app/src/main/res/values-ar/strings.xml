@@ -21,6 +21,11 @@
     <string name="analytics">التحليلات</string>
     <string name="version_comparison">مقارنة الإصدارات</string>
     <string name="dashboard">لوحة التحكم</string>
+    <string name="dashboard_firebase_configured_sync_unverified">FIREBASE مُهيّأ • المزامنة غير متحققة</string>
+    <string name="dashboard_local_cache_cloud_unconfigured">ذاكرة محلية • السحابة غير مهيأة</string>
+    <string name="dashboard_greeting">مرحبًا، %1$s</string>
+    <string name="dashboard_account_label">الحساب</string>
+    <string name="dashboard_account_context">VIBE ENGINEERING • سياق الحساب</string>
     <string name="projects">المشاريع</string>
     <string name="crashes">الانهيارات</string>
     <string name="settings">الإعدادات</string>

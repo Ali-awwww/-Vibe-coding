@@ -303,7 +303,7 @@ internal fun DashboardScreenContent(
                                     )
                                     DashboardStatCard(
                                         label = stringResource(R.string.crashes),
-                                        value = uiState.recentCrashes.size.toString(),
+                                        value = uiState.crashCount.toString(),
                                         icon = Icons.Default.BugReport,
                                         accent = VibeDesignTokens.Color.Error,
                                         tag = "dashboard_kpi_crashes",

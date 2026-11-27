@@ -20,6 +20,7 @@ data class DashboardUiState(
     val projects: List<Project> = emptyList(),
     val selectedProjectId: String? = null,
     val recentCrashes: List<CrashReport> = emptyList(),
+    val crashCount: Int = 0,
     val notifications: List<SystemNotification> = emptyList(),
     val unreadNotificationCount: Int = 0,
     val projectCount: Int = 0,
@@ -101,7 +102,10 @@ class DashboardViewModel(
                             currentUser = user,
                             projects = userProjects,
                             selectedProjectId = activeProjectId,
-                            recentCrashes = userCrashes.take(10),
+                            recentCrashes = userCrashes
+                                .sortedWith(compareByDescending<CrashReport> { it.timestamp }.thenByDescending { it.id })
+                                .take(10),
+                            crashCount = userCrashes.size,
                             notifications = notifData.first,
                             unreadNotificationCount = notifData.second,
                             projectCount = userProjects.size,

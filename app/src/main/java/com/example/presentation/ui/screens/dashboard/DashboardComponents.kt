@@ -23,11 +23,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.domain.model.*
 import com.example.presentation.viewmodel.DashboardUiState
 import com.example.ui.theme.JetBrainsMono
@@ -243,8 +245,15 @@ internal fun DeveloperSessionHeader(
     user: UserAccount?,
     isCloudConfigured: Boolean
 ) {
-    val badgeColor = if (isCloudConfigured) VibeDesignTokens.Color.Success else VibeDesignTokens.Color.Warning
-    val badgeLabel = if (isCloudConfigured) "FIREBASE SYNC" else "LOCAL CACHE • CLOUD UNCONFIGURED"
+    // Configuration presence is not proof that a remote sync has succeeded.
+    val badgeColor = VibeDesignTokens.Color.Warning
+    val badgeLabel = stringResource(
+        if (isCloudConfigured) R.string.dashboard_firebase_configured_sync_unverified
+        else R.string.dashboard_local_cache_cloud_unconfigured
+    )
+    val accountLabel = user?.displayName?.takeIf { it.isNotBlank() }
+        ?: user?.email?.takeIf { it.isNotBlank() }
+        ?: stringResource(R.string.dashboard_account_label)
 
     DashboardPanel(
         modifier = Modifier
@@ -279,7 +288,7 @@ internal fun DeveloperSessionHeader(
                     }
                     Column {
                         Text(
-                            text = "مرحبًا، ${user?.displayName?.ifBlank { user.email } ?: "Developer"}",
+                            text = stringResource(R.string.dashboard_greeting, accountLabel),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = VibeDesignTokens.Color.TextPrimary,
@@ -287,7 +296,7 @@ internal fun DeveloperSessionHeader(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "WORKSPACE // SECURE_ENV_01",
+                            text = stringResource(R.string.dashboard_account_context),
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = JetBrainsMono,
                             color = VibeDesignTokens.Color.TextMuted
@@ -310,7 +319,7 @@ internal fun DeveloperSessionHeader(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        imageVector = if (isCloudConfigured) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                        imageVector = if (isCloudConfigured) Icons.Default.Cloud else Icons.Default.CloudOff,
                         contentDescription = null,
                         tint = badgeColor,
                         modifier = Modifier.size(14.dp)

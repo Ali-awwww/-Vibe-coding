@@ -87,6 +87,37 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `crash summary counts all authorized reports and shows the newest ten in order`() = runTest {
+        authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
+        crashRepo.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "user-1"))
+        val realCrashes = (0L..11L).map { timestamp ->
+            CrashReport(
+                id = "crash-$timestamp",
+                projectId = "p1",
+                timestamp = timestamp
+            )
+        }
+        crashRepo.crashes.value = realCrashes.reversed() + CrashReport(
+            id = "qa-only",
+            projectId = "p1",
+            timestamp = 99L,
+            source = IntegrationType.INTERNAL_QA
+        )
+
+        val viewModel = DashboardViewModel(crashRepo, authRepo, isCloudConfigured = true)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+
+        val state = viewModel.uiState.value
+        assertEquals(12, state.crashCount)
+        assertEquals(10, state.recentCrashes.size)
+        assertEquals(
+            (11L downTo 2L).map { "crash-$it" },
+            state.recentCrashes.map { it.id }
+        )
+        assertFalse(state.recentCrashes.any { it.id == "qa-only" })
+    }
+
+    @Test
     fun `stream failure emits user safe error and refresh recovers`() = runTest {
         authRepo.userFlow.value = UserAccount(id = "user-1", email = "dev@vibe.io")
         crashRepo.projects.value = listOf(Project(id = "p1", name = "Alpha", ownerId = "user-1"))

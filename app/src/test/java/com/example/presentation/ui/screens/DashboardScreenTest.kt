@@ -48,6 +48,27 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun configuredFirebaseIsNotPresentedAsSuccessfulSyncOrARealWorkspace() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                DeveloperSessionHeader(
+                    user = UserAccount(id = "u1", email = "", displayName = ""),
+                    isCloudConfigured = true
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("dashboard_sync_badge")
+            .assertIsDisplayed()
+            .assertTextContains("FIREBASE CONFIGURED • SYNC UNVERIFIED")
+        composeRule.onNodeWithText("FIREBASE SYNC").assertDoesNotExist()
+        composeRule.onNodeWithText("Welcome, Account").assertExists()
+        composeRule.onNodeWithText("VIBE ENGINEERING • ACCOUNT CONTEXT").assertExists()
+        composeRule.onNodeWithText("WORKSPACE // SECURE_ENV_01").assertDoesNotExist()
+    }
+
+    @Test
     fun authenticatedStateDisplaysCloudStatusProjectFiltersAndKpiNavigation() {
         val navigatedRoutes = mutableListOf<Screen>()
         var selectedProjectArg: String? = "unset"
@@ -72,6 +93,7 @@ class DashboardScreenTest {
                         projects = listOf(project1, project2),
                         selectedProjectId = "p1",
                         recentCrashes = listOf(crash),
+                        crashCount = 42,
                         projectCount = 2,
                         applicationCount = 4,
                         issueCount = 3,
@@ -94,6 +116,7 @@ class DashboardScreenTest {
             .assertIsDisplayed()
             .assertTextContains("LOCAL CACHE • CLOUD UNCONFIGURED")
 
+        composeRule.onNodeWithTag("dashboard_kpi_crashes").assertTextContains("42")
         composeRule.onNodeWithTag("dashboard_error_card").assertIsDisplayed()
         composeRule.onNodeWithTag("dashboard_retry_button").performClick()
         assertTrue(retryClicked)

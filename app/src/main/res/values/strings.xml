@@ -21,6 +21,11 @@
     <string name="analytics">Analytics</string>
     <string name="version_comparison">Version Comparison</string>
     <string name="dashboard">Dashboard</string>
+    <string name="dashboard_firebase_configured_sync_unverified">FIREBASE CONFIGURED • SYNC UNVERIFIED</string>
+    <string name="dashboard_local_cache_cloud_unconfigured">LOCAL CACHE • CLOUD UNCONFIGURED</string>
+    <string name="dashboard_greeting">Welcome, %1$s</string>
+    <string name="dashboard_account_label">Account</string>
+    <string name="dashboard_account_context">VIBE ENGINEERING • ACCOUNT CONTEXT</string>
     <string name="projects">Projects</string>
     <string name="crashes">Crashes</string>
     <string name="settings">Settings</string>
