@@ -35,9 +35,10 @@ fun IssuesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showProjectDialog by remember { mutableStateOf(false) }
+    val selectedProject = uiState.selectedProject
     val projectScopeLabel = when {
         uiState.isAllProjectsScope -> stringResource(R.string.issues_all_projects)
-        uiState.selectedProject != null -> uiState.selectedProject.name
+        selectedProject != null -> selectedProject.name
         else -> stringResource(R.string.issues_project_unavailable)
     }
     val lastSyncLabel = uiState.lastSyncAt?.let { timestamp ->

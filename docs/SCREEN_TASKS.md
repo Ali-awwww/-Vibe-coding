@@ -4198,3 +4198,10 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Inspect the `bcf5739` main-head Unit Tests, Lint and Debug/Release APK workflows to terminal status. Fix only evidence-backed failures, then continue the Issues screen lifecycle/error/accessibility audit and Dashboard device-independent criteria.
+
+
+## 2026-11-28 — Fix Issues project-label smart-cast compile error
+
+- CI for `894d5b220f5cbf128bdb9416ee08568aecd6d9db` exposed a Kotlin compile error in `IssuesScreen`: the delegated `uiState.selectedProject` property could not be smart-cast after a null check.
+- Captured the selected project in a local immutable value before branching. This preserves the same project-scope behavior and does not weaken validation.
+- The new sync-provenance tests and UI code remain pending a clean compile/test run on the corrected main head.
