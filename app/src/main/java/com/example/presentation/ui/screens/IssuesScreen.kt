@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,7 +32,7 @@ fun IssuesScreen(
     navController: NavController,
     viewModel: IssuesViewModel
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showProjectDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -40,16 +41,17 @@ fun IssuesScreen(
                 title = {
                     Column {
                         Text(stringResource(R.string.issues), style = MaterialTheme.typography.titleLarge)
-                        uiState.selectedProject?.let {
-                            Text(it.name, style = MaterialTheme.typography.labelSmall)
-                        }
+                        Text(
+                            uiState.selectedProject?.name ?: stringResource(R.string.issues_all_projects),
+                            style = MaterialTheme.typography.labelSmall
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = { showProjectDialog = true }) {
                         Icon(Icons.Default.FilterList, null)
                     }
-                    IconButton(onClick = { viewModel.syncIssues() }) {
+                    IconButton(onClick = { viewModel.syncIssues() }, enabled = uiState.projects.isNotEmpty() && !uiState.isSyncing) {
                         if (uiState.isSyncing) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         } else {
@@ -61,6 +63,25 @@ fun IssuesScreen(
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
+            val errorMessage = when (uiState.error) {
+                IssuesViewModel.ERROR_PROJECT_UNAVAILABLE -> stringResource(R.string.issues_project_unavailable)
+                IssuesViewModel.ERROR_SYNC -> stringResource(R.string.issues_sync_error)
+                IssuesViewModel.ERROR_LOAD -> stringResource(R.string.issues_load_error)
+                else -> null
+            }
+            if (errorMessage != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(errorMessage, color = MaterialTheme.colorScheme.onErrorContainer)
+                        TextButton(onClick = viewModel::retry) {
+                            Text(stringResource(R.string.issues_retry))
+                        }
+                    }
+                }
+            }
             if (uiState.isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -91,6 +112,15 @@ fun IssuesScreen(
                 title = { Text(stringResource(R.string.select_project)) },
                 text = {
                     LazyColumn {
+                        item {
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.issues_all_projects)) },
+                                modifier = Modifier.clickable {
+                                    viewModel.selectAllProjects()
+                                    showProjectDialog = false
+                                }
+                            )
+                        }
                         items(uiState.projects) { project ->
                             ListItem(
                                 headlineContent = { Text(project.name) },

@@ -178,8 +178,12 @@ fun AppNavigation(
         }
 
         composable<Screen.Issues> { backStackEntry ->
+            val route: Screen.Issues = backStackEntry.toRoute()
             val issuesViewModel: IssuesViewModel = viewModel {
-                IssuesViewModel(DependencyProvider.provideCrashRepository(context))
+                IssuesViewModel(
+                    repository = DependencyProvider.provideCrashRepository(context),
+                    initialProjectId = route.projectId
+                )
             }
             IssuesScreen(navController = navController, viewModel = issuesViewModel)
         }
