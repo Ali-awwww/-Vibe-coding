@@ -4167,3 +4167,11 @@ The project must not stall while the Supabase migration is in progress. Work is 
 
 **Next exact step**
 - Verify the latest main-head Unit Tests, Lint and Debug/Release APK workflows to terminal status. Correct only failures demonstrated by logs; then complete Dashboard project-context/refresh/accessibility checks before closing the screen.
+
+
+## 2026-11-28 — Dashboard regression results and test expectation correction
+
+- The corrected row-annotation CI run reached the test suite: **476 tests executed, 2 failed**. The four new IssuesViewModel route/all-project tests passed, as did the new all-time crash-count/newest-ten test and real-issue ordering/QA-exclusion test.
+- Failure 1: the existing project-scope ViewModel test expected repository order `[c2, c3]`; the implemented timestamp-descending contract correctly returned `[c3, c2]`. Updated the stale expectation to the deterministic recent-first order.
+- Failure 2: the Dashboard Compose test queried the crash KPI before the LazyColumn had composed the off-screen KPI row. Updated the test to scroll to the error and KPI items before asserting/clicking them; the retry action is exercised while its banner is visible.
+- The 30c unit-test run failed only on these two assertions; the current follow-up must rerun the suite. Lint/APK workflows for that commit were still being monitored when the report was read.

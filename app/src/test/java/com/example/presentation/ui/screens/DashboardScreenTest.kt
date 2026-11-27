@@ -181,12 +181,17 @@ class DashboardScreenTest {
             .assertIsDisplayed()
             .assertTextContains("LOCAL CACHE • CLOUD UNCONFIGURED")
 
-        composeRule.onNodeWithTag("dashboard_kpi_crashes").assertTextContains("42")
-        composeRule.onNodeWithTag("dashboard_kpi_issues").performClick()
-        assertEquals(Screen.Issues(projectId = "p1"), navigatedRoutes.last())
+        composeRule.onNodeWithTag("dashboard_lazy_column")
+            .performScrollToNode(hasTestTag("dashboard_error_card"))
         composeRule.onNodeWithTag("dashboard_error_card").assertIsDisplayed()
         composeRule.onNodeWithTag("dashboard_retry_button").performClick()
         assertTrue(retryClicked)
+
+        composeRule.onNodeWithTag("dashboard_lazy_column")
+            .performScrollToNode(hasTestTag("dashboard_kpi_crashes"))
+        composeRule.onNodeWithTag("dashboard_kpi_crashes").assertTextContains("42")
+        composeRule.onNodeWithTag("dashboard_kpi_issues").performClick()
+        assertEquals(Screen.Issues(projectId = "p1"), navigatedRoutes.last())
 
         composeRule.onNodeWithTag("dashboard_lazy_column")
             .performScrollToNode(hasTestTag("dashboard_project_filter_row"))

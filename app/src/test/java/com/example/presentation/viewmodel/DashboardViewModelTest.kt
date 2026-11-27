@@ -83,7 +83,7 @@ class DashboardViewModelTest {
         assertEquals(2, scopedState.projectCount)
         assertEquals(2, scopedState.applicationCount)
         assertEquals(1, scopedState.issueCount)
-        assertEquals(listOf("c2", "c3"), scopedState.recentCrashes.map { it.id })
+        assertEquals(listOf("c3", "c2"), scopedState.recentCrashes.map { it.id })
     }
 
     @Test
