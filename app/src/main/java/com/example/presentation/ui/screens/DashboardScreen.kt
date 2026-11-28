@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.R
 import com.example.presentation.navigation.Screen
+import com.example.presentation.ui.components.UpdateCheckHost
 import com.example.presentation.ui.screens.dashboard.*
 import com.example.presentation.viewmodel.DashboardUiState
 import com.example.presentation.viewmodel.DashboardViewModel
@@ -236,6 +237,9 @@ internal fun DashboardScreenContent(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
                     ) {
+                item {
+                    UpdateCheckHost()
+                }
                         if (!uiState.isAuthenticated) {
                             item {
                                 DashboardAuthRequiredCard(onSignIn = onSignIn)
