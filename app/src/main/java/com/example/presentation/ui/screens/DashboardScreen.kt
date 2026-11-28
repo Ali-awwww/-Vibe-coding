@@ -62,6 +62,7 @@ internal fun DashboardScreenContent(
     onSignIn: () -> Unit = {}
 ) {
     var showNotificationsSheet by remember { mutableStateOf(false) }
+
     val isProjectScopeUnavailable = uiState.error == DashboardViewModel.ERROR_PROJECT_UNAVAILABLE
     val dashboardErrorMessage = when (uiState.error) {
         DashboardViewModel.ERROR_SESSION_EXPIRED -> stringResource(R.string.dashboard_error_session_expired)
@@ -110,7 +111,10 @@ internal fun DashboardScreenContent(
                                     .minimumInteractiveComponentSize()
                                     .testTag("dashboard_refresh_button")
                             ) {
-                                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.dashboard_refresh_content_description))
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = stringResource(R.string.dashboard_refresh_content_description)
+                                )
                             }
                             IconButton(
                                 onClick = { showNotificationsSheet = true },
@@ -127,7 +131,10 @@ internal fun DashboardScreenContent(
                                         }
                                     }
                                 ) {
-                                    Icon(Icons.Default.Notifications, contentDescription = stringResource(R.string.dashboard_notifications_content_description))
+                                    Icon(
+                                        Icons.Default.Notifications,
+                                        contentDescription = stringResource(R.string.dashboard_notifications_content_description)
+                                    )
                                 }
                             }
                             IconButton(
@@ -136,7 +143,10 @@ internal fun DashboardScreenContent(
                                     .minimumInteractiveComponentSize()
                                     .testTag("dashboard_sign_out_button")
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.dashboard_sign_out_content_description))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Logout,
+                                    contentDescription = stringResource(R.string.dashboard_sign_out_content_description)
+                                )
                             }
                         }
                     }
@@ -182,6 +192,13 @@ internal fun DashboardScreenContent(
                         onClick = { onNavigate(Screen.Issues(uiState.selectedProjectId)) },
                         icon = { Icon(Icons.Default.Warning, contentDescription = null) },
                         label = { Text(stringResource(R.string.issues), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        colors = navItemColors
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = { onNavigate(Screen.CrashWatcher) },
+                        icon = { Icon(Icons.Default.Visibility, contentDescription = null) },
+                        label = { Text(stringResource(R.string.crash_watcher_title), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         colors = navItemColors
                     )
                     NavigationBarItem(
@@ -254,7 +271,10 @@ internal fun DashboardScreenContent(
                             item {
                                 DashboardSectionHeader(
                                     title = stringResource(R.string.dashboard_active_project_context),
-                                    badge = stringResource(if (uiState.selectedProjectId == null) R.string.dashboard_scope_all else R.string.dashboard_scope_selected)
+                                    badge = stringResource(
+                                        if (uiState.selectedProjectId == null) R.string.dashboard_scope_all
+                                        else R.string.dashboard_scope_selected
+                                    )
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 ProjectContextFilterRow(
@@ -266,71 +286,70 @@ internal fun DashboardScreenContent(
                         }
 
                         if (!isProjectScopeUnavailable) {
-                        item {
-                            DashboardSectionHeader(
-                                title = stringResource(R.string.overview),
-                                badge = "${uiState.projectCount} PRJ"
-                            )
-                            Text(
-                                text = stringResource(R.string.dashboard_metrics_scope_description),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = VibeDesignTokens.Color.TextMuted
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    DashboardStatCard(
-                                        label = stringResource(R.string.projects),
-                                        value = uiState.projectCount.toString(),
-                                        icon = Icons.Default.Folder,
-                                        accent = VibeDesignTokens.Color.Cyan,
-                                        tag = "dashboard_kpi_projects",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onNavigate(Screen.Projects) }
-                                    )
-                                    DashboardStatCard(
-                                        label = stringResource(R.string.dashboard_applications),
-                                        value = uiState.applicationCount.toString(),
-                                        icon = Icons.Default.Apps,
-                                        accent = VibeDesignTokens.Color.Violet,
-                                        tag = "dashboard_kpi_applications",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            uiState.selectedProjectId?.let { projectId ->
-                                                onNavigate(Screen.Applications(projectId))
-                                            } ?: onNavigate(Screen.Projects)
-                                        }
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    DashboardStatCard(
-                                        label = stringResource(R.string.issues),
-                                        value = uiState.issueCount.toString(),
-                                        icon = Icons.Default.Warning,
-                                        accent = VibeDesignTokens.Color.Success,
-                                        tag = "dashboard_kpi_issues",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onNavigate(Screen.Issues(uiState.selectedProjectId)) }
-                                    )
-                                    DashboardStatCard(
-                                        label = stringResource(R.string.crashes),
-                                        value = uiState.crashCount.toString(),
-                                        icon = Icons.Default.BugReport,
-                                        accent = VibeDesignTokens.Color.Error,
-                                        tag = "dashboard_kpi_crashes",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onNavigate(Screen.Crashes(projectId = uiState.selectedProjectId)) }
-                                    )
+                            item {
+                                DashboardSectionHeader(
+                                    title = stringResource(R.string.overview),
+                                    badge = "${uiState.projectCount} PRJ"
+                                )
+                                Text(
+                                    text = stringResource(R.string.dashboard_metrics_scope_description),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = VibeDesignTokens.Color.TextMuted
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        DashboardStatCard(
+                                            label = stringResource(R.string.projects),
+                                            value = uiState.projectCount.toString(),
+                                            icon = Icons.Default.Folder,
+                                            accent = VibeDesignTokens.Color.Cyan,
+                                            tag = "dashboard_kpi_projects",
+                                            modifier = Modifier.weight(1f),
+                                            onClick = { onNavigate(Screen.Projects) }
+                                        )
+                                        DashboardStatCard(
+                                            label = stringResource(R.string.dashboard_applications),
+                                            value = uiState.applicationCount.toString(),
+                                            icon = Icons.Default.Apps,
+                                            accent = VibeDesignTokens.Color.Violet,
+                                            tag = "dashboard_kpi_applications",
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                uiState.selectedProjectId?.let { projectId ->
+                                                    onNavigate(Screen.Applications(projectId))
+                                                } ?: onNavigate(Screen.Projects)
+                                            }
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        DashboardStatCard(
+                                            label = stringResource(R.string.issues),
+                                            value = uiState.issueCount.toString(),
+                                            icon = Icons.Default.Warning,
+                                            accent = VibeDesignTokens.Color.Success,
+                                            tag = "dashboard_kpi_issues",
+                                            modifier = Modifier.weight(1f),
+                                            onClick = { onNavigate(Screen.Issues(uiState.selectedProjectId)) }
+                                        )
+                                        DashboardStatCard(
+                                            label = stringResource(R.string.crashes),
+                                            value = uiState.crashCount.toString(),
+                                            icon = Icons.Default.BugReport,
+                                            accent = VibeDesignTokens.Color.Error,
+                                            tag = "dashboard_kpi_crashes",
+                                            modifier = Modifier.weight(1f),
+                                            onClick = { onNavigate(Screen.Crashes(projectId = uiState.selectedProjectId)) }
+                                        )
+                                    }
                                 }
                             }
-                        }
-
                         }
 
                         item {
@@ -346,12 +365,20 @@ internal fun DashboardScreenContent(
                                     onClick = { onNavigate(Screen.CrashWatcher) }
                                 )
                                 DashboardToolCard(
+                                    title = stringResource(R.string.builder_dashboard_title),
+                                    subtitle = stringResource(R.string.builder_dashboard_subtitle),
+                                    icon = Icons.Default.RocketLaunch,
+                                    accent = VibeDesignTokens.Color.Cyan,
+                                    tag = "dashboard_tool_app_builder",
+                                    onClick = { onNavigate(Screen.AppBuilder) }
+                                )
+                                DashboardToolCard(
                                     title = stringResource(R.string.dashboard_vibe_studio_title),
                                     subtitle = stringResource(R.string.dashboard_vibe_studio_description),
                                     icon = Icons.Default.AutoAwesome,
                                     accent = VibeDesignTokens.Color.Cyan,
                                     tag = "dashboard_tool_vibe_studio",
-                                    onClick = { onNavigate(Screen.VibeStudio) }
+                                    onClick = { onNavigate(Screen.VibeStudio()) }
                                 )
                                 DashboardToolCard(
                                     title = stringResource(R.string.dashboard_model_teams_title),
@@ -412,80 +439,80 @@ internal fun DashboardScreenContent(
                         }
 
                         if (!isProjectScopeUnavailable) {
-                        item {
-                            DashboardSectionHeader(
-                                title = stringResource(R.string.dashboard_recent_issues),
-                                badge = "${uiState.recentIssues.size}"
-                            )
-                        }
-
-                        if (uiState.recentIssues.isEmpty() && uiState.error.isNullOrBlank()) {
                             item {
-                                DashboardPanel(
-                                    modifier = Modifier.fillMaxWidth().testTag("dashboard_empty_issues_card")
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.dashboard_empty_issues),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = VibeDesignTokens.Color.TextMuted,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            }
-                        } else {
-                            items(uiState.recentIssues, key = { "issue-${it.id}" }) { issue ->
-                                DashboardIssueRow(
-                                    issue = issue,
-                                    onClick = { onNavigate(Screen.Issues(issue.projectId)) }
+                                DashboardSectionHeader(
+                                    title = stringResource(R.string.dashboard_recent_issues),
+                                    badge = "${uiState.recentIssues.size}"
                                 )
                             }
-                        }
 
-                        item {
-                            DashboardSectionHeader(
-                                title = stringResource(R.string.recent_crashes),
-                                badge = "${uiState.recentCrashes.size}"
-                            )
-                        }
-
-                        if (uiState.recentCrashes.isEmpty() && uiState.error.isNullOrBlank()) {
-                            item {
-                                DashboardPanel(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("dashboard_empty_crashes_card")
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 12.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            if (uiState.recentIssues.isEmpty() && uiState.error.isNullOrBlank()) {
+                                item {
+                                    DashboardPanel(
+                                        modifier = Modifier.fillMaxWidth().testTag("dashboard_empty_issues_card")
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = null,
-                                            tint = VibeDesignTokens.Color.Success,
-                                            modifier = Modifier.size(40.dp)
-                                        )
                                         Text(
-                                            text = stringResource(R.string.no_recent_crashes),
+                                            text = stringResource(R.string.dashboard_empty_issues),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = VibeDesignTokens.Color.TextMuted,
-                                            textAlign = TextAlign.Center
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
                                         )
                                     }
                                 }
+                            } else {
+                                items(uiState.recentIssues, key = { "issue-${it.id}" }) { issue ->
+                                    DashboardIssueRow(
+                                        issue = issue,
+                                        onClick = { onNavigate(Screen.Issues(issue.projectId)) }
+                                    )
+                                }
                             }
-                        } else {
-                            items(uiState.recentCrashes, key = { it.id }) { crash ->
-                                DashboardCrashRow(
-                                    crash = crash,
-                                    onClick = { onNavigate(Screen.CrashDetail(crash.id)) }
+
+                            item {
+                                DashboardSectionHeader(
+                                    title = stringResource(R.string.recent_crashes),
+                                    badge = "${uiState.recentCrashes.size}"
                                 )
                             }
-                        }
+
+                            if (uiState.recentCrashes.isEmpty() && uiState.error.isNullOrBlank()) {
+                                item {
+                                    DashboardPanel(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("dashboard_empty_crashes_card")
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 12.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = null,
+                                                tint = VibeDesignTokens.Color.Success,
+                                                modifier = Modifier.size(40.dp)
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.no_recent_crashes),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = VibeDesignTokens.Color.TextMuted,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                items(uiState.recentCrashes, key = { it.id }) { crash ->
+                                    DashboardCrashRow(
+                                        crash = crash,
+                                        onClick = { onNavigate(Screen.CrashDetail(crash.id)) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }

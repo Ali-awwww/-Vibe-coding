@@ -241,7 +241,8 @@ object DependencyProvider {
             symbolicationRepository = provideSymbolicationRepository(appContext),
             aiModelRepository = provideAIModelRepository(appContext),
             auth = getFirebaseAuth(appContext),
-            authRepository = provideAuthRepository(appContext)
+            authRepository = provideAuthRepository(appContext),
+            vibeStudioDao = db.vibeStudioDao()
         ).also { crashRepository = it }
     }
 
@@ -293,14 +294,22 @@ object DependencyProvider {
     }
 
     fun provideLiveTestingRepository(context: Context): LiveTestingRepository {
+        val appContext = context.applicationContext
         return liveTestingRepository ?: LiveTestingRepositoryImpl(
-            getDatabase(context).crashDao()
+            crashDao = getDatabase(appContext).crashDao(),
+            transport = ShizukuLiveAgentTransport(appContext)
         ).also { liveTestingRepository = it }
     }
 
     fun provideSdkIntegrationRepository(context: Context? = null): SdkIntegrationRepository {
-        val dao = context?.let { getDatabase(it).crashDao() } ?: database?.crashDao()
-        return sdkIntegrationRepository ?: SdkIntegrationRepositoryImpl(dao).also { sdkIntegrationRepository = it }
+        val appContext = context?.applicationContext
+        val dao = appContext?.let { getDatabase(it).crashDao() } ?: database?.crashDao()
+        return sdkIntegrationRepository ?: SdkIntegrationRepositoryImpl(
+            crashDao = dao,
+            sentryApi = sentryApi,
+            bugsnagApi = bugsnagApi,
+            transport = ShizukuDiagnosticVerificationTransport()
+        ).also { sdkIntegrationRepository = it }
     }
 
     fun provideSetupGuideProgressStore(context: Context): SetupGuideProgressStore =

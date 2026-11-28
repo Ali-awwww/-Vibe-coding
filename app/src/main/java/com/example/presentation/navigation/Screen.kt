@@ -47,7 +47,9 @@ sealed class Screen {
     @Serializable
     data object AIModels : Screen()
     @Serializable
-    data object VibeStudio : Screen()
+    data class VibeStudio(val initialWorkspaceId: String? = null) : Screen()
+    @Serializable
+    data object AppBuilder : Screen()
     @Serializable
     data class DevDebugCenter(val workspaceId: String? = null) : Screen()
     @Serializable

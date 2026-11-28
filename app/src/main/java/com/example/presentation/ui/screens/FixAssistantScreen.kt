@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -188,6 +189,11 @@ fun FixAssistantScreen(
                 is FixAssistantContentState.ReadyWithFixes -> {
                     val crash = uiState.crash
                     if (crash != null) {
+                        var showVerifyDialog by remember(crash.id) { mutableStateOf(false) }
+                        var verifyVersion by remember(crash.id) { mutableStateOf(crash.appVersion) }
+                        var verifyBuildId by remember(crash.id) { mutableStateOf("") }
+                        var verifyScenario by remember(crash.id) { mutableStateOf("التحقق بعد الإصلاح") }
+
                         FixAssistantContent(
                             crash = crash,
                             uiState = uiState,
@@ -205,8 +211,30 @@ fun FixAssistantScreen(
                                 userId?.takeIf { it.isNotBlank() }?.let {
                                     viewModel.applyFixAndCreatePr(fix.id, it)
                                 }
-                            }
+                            },
+                            onOpenVerifyDialog = { showVerifyDialog = true }
                         )
+
+                        if (showVerifyDialog) {
+                            FixVerificationInputDialog(
+                                version = verifyVersion,
+                                buildId = verifyBuildId,
+                                scenario = verifyScenario,
+                                isVerifying = uiState.isVerifying,
+                                onVersionChange = { verifyVersion = it },
+                                onBuildIdChange = { verifyBuildId = it },
+                                onScenarioChange = { verifyScenario = it },
+                                onDismiss = { showVerifyDialog = false },
+                                onConfirm = {
+                                    showVerifyDialog = false
+                                    viewModel.verifyFix(
+                                        newVersion = verifyVersion,
+                                        buildId = verifyBuildId,
+                                        scenarioName = verifyScenario
+                                    )
+                                }
+                            )
+                        }
                     } else {
                         FixAssistantNoticePanel(
                             title = stringResource(R.string.fix_assistant_missing_crash_title),
@@ -232,7 +260,8 @@ private fun FixAssistantContent(
     onBack: () -> Unit,
     onGenerate: () -> Unit,
     onCopy: (FixSuggestion) -> Unit,
-    onCreatePr: (FixSuggestion) -> Unit
+    onCreatePr: (FixSuggestion) -> Unit,
+    onOpenVerifyDialog: () -> Unit
 ) {
     val latestVerification = uiState.verificationResult ?: uiState.verifications.firstOrNull()
 
@@ -247,7 +276,11 @@ private fun FixAssistantContent(
 
         uiState.diagnosis?.let { FixDiagnosisPanel(it) }
 
-        VerificationUnavailableBanner()
+        FixVerificationLaunchBanner(
+            isVerifying = uiState.isVerifying,
+            latestRecord = latestVerification,
+            onVerifyClick = onOpenVerifyDialog
+        )
 
         uiState.verificationsLoadError?.let { message ->
             FixAssistantNoticePanel(
@@ -259,8 +292,8 @@ private fun FixAssistantContent(
         }
 
         latestVerification?.let { record ->
-            SectionHeader("سجل تحقق سابق")
-            VerificationCard(record = record, onReVerify = null)
+            SectionHeader("نتيجة التحقق الحالية")
+            VerificationCard(record = record, onReVerify = onOpenVerifyDialog)
         }
 
         when (contentState) {
@@ -335,7 +368,8 @@ private fun FixAssistantContent(
                         prUrl = uiState.prUrl?.takeIf { it == fix.githubPrUrl },
                         canCreatePr = canCreatePr,
                         onCopy = { onCopy(fix) },
-                        onCreatePr = { onCreatePr(fix) }
+                        onCreatePr = { onCreatePr(fix) },
+                        onVerify = onOpenVerifyDialog
                     )
                 }
             }
@@ -456,41 +490,117 @@ private fun FixAssistantNoticePanel(
 }
 
 @Composable
-fun VerificationUnavailableBanner() {
+fun FixVerificationLaunchBanner(
+    isVerifying: Boolean,
+    latestRecord: CrashVerificationRecord?,
+    onVerifyClick: () -> Unit
+) {
     EngCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Medium)
+            verticalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Small)
         ) {
-            Icon(Icons.Default.Block, contentDescription = null, tint = VibeDesignTokens.Color.Error)
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    stringResource(R.string.verification_unavailable_title),
-                    color = VibeDesignTokens.Color.TextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    stringResource(R.string.verification_unavailable_desc),
-                    color = VibeDesignTokens.Color.TextMuted,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            Surface(
-                color = VibeDesignTokens.Color.Error.copy(alpha = 0.12f),
-                contentColor = VibeDesignTokens.Color.Error,
-                shape = RoundedCornerShape(VibeDesignTokens.Shape.Compact)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Medium)
             ) {
-                Text(
-                    "BLOCKED",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = JetBrainsMono,
-                    fontWeight = FontWeight.Bold
-                )
+                Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = VibeDesignTokens.Color.Cyan)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        stringResource(R.string.fix_verify_dialog_title),
+                        color = VibeDesignTokens.Color.TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        latestRecord?.comparisonSummary?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.fix_verify_dialog_desc),
+                        color = VibeDesignTokens.Color.TextMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            OutlinedButton(
+                onClick = onVerifyClick,
+                enabled = !isVerifying,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("fix_assistant_banner_verify_button")
+            ) {
+                if (isVerifying) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                } else {
+                    Icon(Icons.Default.FactCheck, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(stringResource(R.string.verify_fix))
             }
         }
     }
+}
+
+@Composable
+fun FixVerificationInputDialog(
+    version: String,
+    buildId: String,
+    scenario: String,
+    isVerifying: Boolean,
+    onVersionChange: (String) -> Unit,
+    onBuildIdChange: (String) -> Unit,
+    onScenarioChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.fix_verify_dialog_title), fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    stringResource(R.string.fix_verify_dialog_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = version,
+                    onValueChange = onVersionChange,
+                    label = { Text(stringResource(R.string.target_version)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("verify_dialog_version_input")
+                )
+                OutlinedTextField(
+                    value = buildId,
+                    onValueChange = onBuildIdChange,
+                    label = { Text(stringResource(R.string.tested_build)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("verify_dialog_build_input")
+                )
+                OutlinedTextField(
+                    value = scenario,
+                    onValueChange = onScenarioChange,
+                    label = { Text(stringResource(R.string.fix_verify_scenario_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("verify_dialog_scenario_input")
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isVerifying && (version.isNotBlank() || buildId.isNotBlank()),
+                modifier = Modifier.heightIn(min = 48.dp).testTag("verify_dialog_confirm_button")
+            ) {
+                Text(stringResource(R.string.fix_verify_run_now))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.setup_guide_back))
+            }
+        }
+    )
 }
 
 @Composable
@@ -779,7 +889,8 @@ fun FixSuggestionCard(
     prUrl: String?,
     canCreatePr: Boolean,
     onCopy: () -> Unit,
-    onCreatePr: () -> Unit
+    onCreatePr: () -> Unit,
+    onVerify: () -> Unit = {}
 ) {
     var expanded by remember(fix.id) { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
@@ -916,23 +1027,22 @@ fun FixSuggestionCard(
             }
 
             OutlinedButton(
-                onClick = {},
+                onClick = onVerify,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-                enabled = false,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    disabledContentColor = VibeDesignTokens.Color.TextMuted
-                )
+                    .heightIn(min = 48.dp)
+                    .testTag("fix_assistant_verify_button"),
+                enabled = !isVerifying
             ) {
                 if (isVerifying) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.verifying_fix))
                 } else {
-                    Icon(Icons.Default.Block, contentDescription = null)
+                    Icon(Icons.Default.FactCheck, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.verify_fix))
                 }
-                Text(stringResource(R.string.verification_unavailable_action))
             }
         }
     }

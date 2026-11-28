@@ -41,12 +41,20 @@ import com.example.ui.theme.JetBrainsMono
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VibeStudioScreen(
+    initialWorkspaceId: String? = null,
     navController: NavController,
     viewModel: VibeStudioViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val workspaces by viewModel.workspaces.collectAsState()
     var showNewProjectDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(initialWorkspaceId) {
+        val targetId = initialWorkspaceId?.takeIf { it.isNotBlank() }
+        if (targetId != null && uiState.activeWorkspace?.id != targetId) {
+            viewModel.selectWorkspaceById(targetId)
+        }
+    }
 
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
@@ -165,7 +173,7 @@ fun VibeStudioScreen(
                     workspaces = workspaces,
                     onSelect = { viewModel.selectWorkspace(it) },
                     onNew = { showNewProjectDialog = true },
-                    onBuildWithAi = { viewModel.openAppBuilder() },
+                    onBuildWithAi = { navController.navigate(Screen.AppBuilder) },
                     modifier = Modifier.weight(1f)
                 )
             } else {
@@ -507,22 +515,6 @@ fun VibeStudioScreen(
             onDisconnect = { viewModel.disconnectLocalAgent() },
             onDismiss = { viewModel.toggleLocalAgentModal(false) },
             errorMessage = uiState.error
-        )
-    }
-
-    if (uiState.isAppBuilderOpen) {
-        VibeAppBuilderDialog(
-            prompt = uiState.appBuilderPrompt,
-            preferredPlatform = uiState.appBuilderPreferredPlatform,
-            blueprint = uiState.appBuilderBlueprint,
-            isAnalyzing = uiState.isAnalyzingRequirements,
-            buildProgress = uiState.appBuildProgress,
-            onPromptChange = { viewModel.updateAppBuilderPrompt(it) },
-            onPlatformChange = { viewModel.updateAppBuilderPlatform(it) },
-            onAnalyze = { p, plat -> viewModel.analyzeAppRequirements(p, plat) },
-            onUpdateBlueprint = { viewModel.updateBlueprint(it) },
-            onBuildApp = { viewModel.buildApplication(it) },
-            onDismiss = { viewModel.closeAppBuilder() }
         )
     }
 

@@ -14,6 +14,7 @@ import com.example.util.handleFirestoreError
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -32,7 +33,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import android.util.Log
+import com.example.data.local.VibeStudioDao
+import com.example.util.logcat.LogcatCrashParser
+import com.example.util.shizuku.ShizukuManager
 
 internal data class VerifiedCrashSourceLocation(
     val pathHint: String,
@@ -105,7 +110,9 @@ class CrashRepositoryImpl(
     private val aiModelRepository: com.example.domain.repository.AIModelRepository,
     private val auth: FirebaseAuth? = null,
     private val authRepository: AuthRepository? = null,
-    private val currentUserIdProvider: (() -> String?)? = null
+    private val currentUserIdProvider: (() -> String?)? = null,
+    private val vibeStudioDao: VibeStudioDao? = null,
+    private val liveLogcatLineReader: ((Set<String>) -> List<String>)? = null
 ) : CrashRepository {
 
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
@@ -1916,19 +1923,299 @@ class CrashRepositoryImpl(
         buildId: String,
         scenarioName: String,
         simulatedOutcome: VerificationStatus?
-    ): Result<CrashVerificationRecord> = Result.failure(
-        UnsupportedOperationException(
-            "التحقق الآلي غير متاح: لا يوجد مشغل اختبار فعلي مرتبط بالتطبيق. لم تُنشأ جلسة أو نتيجة تحقق."
-        )
-    )
+    ): Result<CrashVerificationRecord> = runCatchingCancellable {
+        val crash = getCrashDetails(crashId).first()
+            ?: throw SecurityException("The crash is not available to the active account.")
+        requireOwnedProject(crash.projectId)
 
-        override suspend fun addVerificationRecord(record: CrashVerificationRecord) {
+        val trimmedVersion = newVersion.trim()
+        val trimmedBuildId = buildId.trim()
+        val trimmedScenario = scenarioName.trim().ifBlank { "التحقق من الإصلاح" }
+        require(trimmedVersion.isNotBlank() || trimmedBuildId.isNotBlank()) {
+            "يرجى تحديد رقم الإصدار الجديد أو معرّف البناء للتحقق."
+        }
+
+        val fixSuggestion = fixSuggestionId?.takeIf { it.isNotBlank() }?.let { id ->
+            crashDao.getFixSuggestionById(id)?.also { suggestion ->
+                require(suggestion.crashId == crash.id) {
+                    "مقترح الإصلاح المحدد لا يتبع هذا الانهيار."
+                }
+            }
+        }
+
+        val application = crash.applicationId.takeIf { it.isNotBlank() }?.let {
+            crashDao.getApplicationById(it)
+        }
+        val packageName = application?.packageName?.trim()?.takeIf { it.isNotBlank() }
+
+        val projectCrashes = crashDao.getCrashesByProject(crash.projectId).first()
+            .filter { !it.isSimulatedQa() && it.id != crash.id }
+        val targetVersionCrashes = projectCrashes.filter { candidate ->
+            val appMatches = crash.applicationId.isBlank() || candidate.applicationId == crash.applicationId
+            val versionMatches = trimmedVersion.isNotBlank() &&
+                candidate.appVersion.equals(trimmedVersion, ignoreCase = true)
+            appMatches && versionMatches
+        }
+
+        val allSessions = crashDao.getTestSessions(crash.projectId).first()
+        val matchedSessions = allSessions.filter { session ->
+            val appMatches = crash.applicationId.isBlank() || session.applicationId == crash.applicationId
+            val buildMatches = trimmedBuildId.isNotBlank() && (
+                session.id.equals(trimmedBuildId, ignoreCase = true) ||
+                    session.buildId.equals(trimmedBuildId, ignoreCase = true)
+                )
+            val versionMatches = trimmedVersion.isNotBlank() && session.version.equals(trimmedVersion, ignoreCase = true)
+            appMatches && (buildMatches || versionMatches)
+        }
+        val sessionEventsById = matchedSessions.associate { session ->
+            session.id to crashDao.getTestEvents(session.id).first()
+        }
+
+        val workspaceBuildLogs = vibeStudioDao?.getBuildLogs(crash.projectId)?.first().orEmpty()
+        val hasBuildFailure = workspaceBuildLogs.lastOrNull()?.type == LogType.ERROR
+
+        val targetPackages = packageName?.let { setOf(it) }.orEmpty()
+        var liveLogcatAttempted = false
+        var liveLogcatSucceeded = false
+        var logcatFailureMessage: String? = null
+        val logcatParsedCrashes = if (targetPackages.isNotEmpty()) {
+            val reader = liveLogcatLineReader
+            if (reader != null) {
+                liveLogcatAttempted = true
+                val readResult = runCatching {
+                    withContext(Dispatchers.IO) { reader.invoke(targetPackages) }
+                }
+                liveLogcatSucceeded = readResult.isSuccess
+                logcatFailureMessage = readResult.exceptionOrNull()?.message
+                LogcatCrashParser.parseLines(readResult.getOrNull().orEmpty(), targetPackages)
+            } else if (ShizukuManager.checkPermission()) {
+                liveLogcatAttempted = true
+                val readResult = runCatching {
+                    withContext(Dispatchers.IO) {
+                        val process = ShizukuManager.executeProcess(
+                            arrayOf("logcat", "-d", "-t", "150", "-v", "threadtime", "-b", "crash", "-b", "main")
+                        ) ?: throw IllegalStateException("تعذر قراءة logcat عبر Shizuku.")
+                        try {
+                            process.inputStream.bufferedReader().use { it.readLines() }
+                        } finally {
+                            process.destroy()
+                        }
+                    }
+                }
+                liveLogcatSucceeded = readResult.isSuccess
+                logcatFailureMessage = readResult.exceptionOrNull()?.message
+                LogcatCrashParser.parseLines(readResult.getOrNull().orEmpty(), targetPackages)
+            } else {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+
+        val targetExceptionSimple = simpleExceptionName(crash.exceptionType)
+        val reproducedTelemetry = targetVersionCrashes.firstOrNull {
+            simpleExceptionName(it.exceptionType).equals(targetExceptionSimple, ignoreCase = true)
+        }
+        val otherTelemetry = targetVersionCrashes.firstOrNull { it.id != reproducedTelemetry?.id }
+
+        val crashedSession = matchedSessions.firstOrNull {
+            it.status == TestSessionStatus.CRASH_DETECTED || !it.crashId.isNullOrBlank()
+        }
+        val sessionCrash = crashedSession?.crashId?.let { crashDao.getCrashDetails(it).first() }
+        val sessionCrashEvent = matchedSessions.asSequence()
+            .flatMap { s -> sessionEventsById[s.id].orEmpty().asSequence() }
+            .firstOrNull { it.type == TestEventType.CRASH || it.type == TestEventType.ANR }
+        val failedSession = matchedSessions.firstOrNull { it.status == TestSessionStatus.FAILED }
+        val passedSession = matchedSessions.firstOrNull { session ->
+            val events = sessionEventsById[session.id].orEmpty()
+            (session.status == TestSessionStatus.COMPLETED || session.status == TestSessionStatus.APP_RUNNING) &&
+                events.isNotEmpty() &&
+                events.none {
+                    it.type == TestEventType.CRASH ||
+                        it.type == TestEventType.ANR ||
+                        it.type == TestEventType.NON_FATAL_ERROR
+                }
+        }
+
+        val reproducedLogcat = logcatParsedCrashes.firstOrNull {
+            simpleExceptionName(it.exceptionType).equals(targetExceptionSimple, ignoreCase = true)
+        }
+        val otherLogcat = logcatParsedCrashes.firstOrNull { it != reproducedLogcat }
+        val sessionReproducedSame = sessionCrash != null &&
+            simpleExceptionName(sessionCrash.exceptionType).equals(targetExceptionSimple, ignoreCase = true)
+
+        val status: VerificationStatus
+        val newStackTrace: String?
+        val comparisonSummary: String
+
+        when {
+            reproducedTelemetry != null || reproducedLogcat != null || sessionReproducedSame -> {
+                status = VerificationStatus.CRASH_REPRODUCED
+                newStackTrace = reproducedTelemetry?.stackTrace
+                    ?: reproducedLogcat?.stackTrace
+                    ?: sessionCrash?.stackTrace
+                comparisonSummary = buildString {
+                    append("تمت إعادة رصد نفس الاستثناء ($targetExceptionSimple)")
+                    if (trimmedVersion.isNotBlank()) append(" في الإصدار $trimmedVersion")
+                    append(". المصدر: ")
+                    append(
+                        when {
+                            reproducedLogcat != null -> "بث logcat عبر Shizuku"
+                            sessionReproducedSame -> "جلسة الاختبار الحي (${crashedSession?.id})"
+                            else -> "تقارير الأعطال الفعلية"
+                        }
+                    )
+                    append(".")
+                }
+            }
+            otherTelemetry != null || otherLogcat != null || sessionCrash != null || sessionCrashEvent != null -> {
+                status = VerificationStatus.DIFFERENT_CRASH_DETECTED
+                val detectedType = otherTelemetry?.exceptionType
+                    ?: otherLogcat?.exceptionType
+                    ?: sessionCrash?.exceptionType
+                    ?: "خطأ غير متوقع"
+                newStackTrace = otherTelemetry?.stackTrace
+                    ?: otherLogcat?.stackTrace
+                    ?: sessionCrash?.stackTrace
+                    ?: sessionCrashEvent?.details
+                comparisonSummary = "لم يُرصد العطل الأصلي ($targetExceptionSimple)، لكن تم اكتشاف عطل آخر ($detectedType) أثناء التحقق."
+            }
+            failedSession != null || hasBuildFailure -> {
+                status = VerificationStatus.TEST_FAILED
+                newStackTrace = failedSession?.let {
+                    sessionEventsById[it.id].orEmpty().lastOrNull { ev -> ev.type == TestEventType.NON_FATAL_ERROR }?.details
+                } ?: workspaceBuildLogs.lastOrNull { it.type == LogType.ERROR }?.message
+                comparisonSummary = if (failedSession != null) {
+                    "فشلت جلسة الاختبار (${failedSession.id}) أثناء تنفيذ السيناريو '$trimmedScenario'."
+                } else {
+                    "فشل بناء مساحة العمل المرتبطة في آخر محاولة قبل اكتمال التحقق."
+                }
+            }
+            passedSession != null || (liveLogcatAttempted && liveLogcatSucceeded && logcatParsedCrashes.isEmpty()) -> {
+                status = VerificationStatus.FIX_VERIFIED_IN_TEST
+                newStackTrace = null
+                comparisonSummary = buildString {
+                    append("تم التحقق بنجاح: لم يُرصد العطل ($targetExceptionSimple)")
+                    if (trimmedVersion.isNotBlank()) append(" في الإصدار $trimmedVersion")
+                    if (passedSession != null) {
+                        val evCount = sessionEventsById[passedSession.id].orEmpty().size
+                        append(" استناداً إلى جلسة الاختبار ${passedSession.id} ($evCount أحداث دون أي انهيار)")
+                    }
+                    if (liveLogcatAttempted && liveLogcatSucceeded) {
+                        if (passedSession != null) append(" و") else append(" استناداً إلى ")
+                        append("فحص logcat المباشر للحزمة $packageName دون أخطاء")
+                    }
+                    append(".")
+                }
+            }
+            else -> {
+                status = VerificationStatus.INCONCLUSIVE
+                newStackTrace = null
+                comparisonSummary = buildString {
+                    append("النتيجة غير حاسمة: لا توجد حتى الآن جلسة اختبار حي منفّذة أو تقارير قياس فعلية للإصدار ")
+                    append(trimmedVersion.ifBlank { trimmedBuildId })
+                    if (packageName != null && !liveLogcatAttempted) {
+                        append("، وخدمة Shizuku غير مفعّلة لقراءة logcat المباشر")
+                    } else if (logcatFailureMessage != null) {
+                        append(" (تعذرت قراءة logcat: $logcatFailureMessage)")
+                    }
+                    append(".")
+                }
+            }
+        }
+
+        val testScopeDetails = buildString {
+            appendLine("السيناريو: $trimmedScenario")
+            appendLine("حزمة التطبيق: ${packageName ?: "غير محددة"}")
+            appendLine("تقارير الإصدار الجديد (${trimmedVersion.ifBlank { "—" }}): ${targetVersionCrashes.size}")
+            appendLine("جلسات الاختبار المطابقة: ${matchedSessions.size}")
+            appendLine("فحص Shizuku logcat: ${if (!liveLogcatAttempted) "غير متاح" else if (liveLogcatSucceeded) "مكتمل (${logcatParsedCrashes.size} أعطال)" else "تعذر (${logcatFailureMessage ?: "خطأ"})"}")
+            if (workspaceBuildLogs.isNotEmpty()) {
+                appendLine("سجل بناء مساحة العمل: ${if (hasBuildFailure) "يحتوي أخطاء" else "سليم"}")
+            }
+            if (simulatedOutcome != null) {
+                appendLine("ملاحظة: تم تجاهل أي نتيجة محاكاة لصالح القياسات الفعلية.")
+            }
+        }.trim()
+
+        val record = CrashVerificationRecord(
+            id = UUID.randomUUID().toString(),
+            projectId = crash.projectId,
+            applicationId = crash.applicationId,
+            crashId = crash.id,
+            fixSuggestionId = fixSuggestion?.id,
+            fixCommitSha = fixSuggestion?.branchName?.takeIf { it.isNotBlank() },
+            githubPrUrl = fixSuggestion?.githubPrUrl,
+            previousAppVersion = crash.appVersion,
+            newAppVersion = trimmedVersion,
+            buildId = trimmedBuildId,
+            testSessionId = crashedSession?.id ?: failedSession?.id ?: passedSession?.id,
+            scenarioName = trimmedScenario,
+            status = status,
+            comparisonSummary = comparisonSummary,
+            oldStackTrace = crash.stackTrace,
+            newStackTrace = newStackTrace,
+            testScopeDetails = testScopeDetails,
+            verifiedAt = System.currentTimeMillis(),
+            crashExceptionType = crash.exceptionType,
+            crashMessage = crash.message,
+            environmentValid = status != VerificationStatus.INCONCLUSIVE
+        )
+
+        crashDao.insertVerification(record)
+
+        when (status) {
+            VerificationStatus.FIX_VERIFIED_IN_TEST -> {
+                crashDao.updateCrashStatus(crash.id, isResolved = true)
+                addNotification(
+                    SystemNotification(
+                        id = UUID.randomUUID().toString(),
+                        projectId = crash.projectId,
+                        title = "تم التحقق من إصلاح العطل",
+                        message = "اجتاز ${crash.exceptionType} التحقق في ${trimmedVersion.ifBlank { trimmedBuildId }}.",
+                        type = NotificationType.VERIFICATION_PASSED,
+                        targetCrashId = crash.id
+                    )
+                )
+            }
+            VerificationStatus.CRASH_REPRODUCED,
+            VerificationStatus.DIFFERENT_CRASH_DETECTED,
+            VerificationStatus.TEST_FAILED -> {
+                addNotification(
+                    SystemNotification(
+                        id = UUID.randomUUID().toString(),
+                        projectId = crash.projectId,
+                        title = "فشل التحقق من الإصلاح",
+                        message = comparisonSummary,
+                        type = NotificationType.VERIFICATION_FAILED,
+                        targetCrashId = crash.id
+                    )
+                )
+            }
+            VerificationStatus.INCONCLUSIVE -> Unit
+        }
+
+        record
+    }
+
+    private fun simpleExceptionName(raw: String): String =
+        raw.trim().substringAfterLast('.').substringBefore(':').trim()
+
+    override suspend fun addVerificationRecord(record: CrashVerificationRecord) {
         requireOwnedProject(record.projectId)
         val crash = getCrashDetails(record.crashId).first()
             ?: throw SecurityException("The crash is not available to the active account.")
         require(record.projectId == crash.projectId) { "The verification project does not match the crash." }
         if (record.status != VerificationStatus.INCONCLUSIVE) {
-            throw UnsupportedOperationException("Verification records require execution evidence; no real Android test runner is connected.")
+            val hasVersionOrBuild = record.newAppVersion.isNotBlank() || record.buildId.isNotBlank()
+            val hasEvidenceLink = !record.testSessionId.isNullOrBlank() ||
+                !record.fixSuggestionId.isNullOrBlank() ||
+                !record.fixCommitSha.isNullOrBlank() ||
+                !record.newStackTrace.isNullOrBlank()
+            val hasSummary = record.comparisonSummary.isNotBlank() || record.testScopeDetails.isNotBlank()
+            require(hasVersionOrBuild && hasEvidenceLink && hasSummary) {
+                "Verification records with definitive status require execution evidence, version/build info, and comparison summary."
+            }
         }
         crashDao.insertVerification(record)
     }

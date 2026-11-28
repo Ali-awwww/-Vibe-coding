@@ -72,7 +72,7 @@ fun DevDebugCenterScreen(
                     IconButton(
                         onClick = {
                             if (!navController.popBackStack()) {
-                                navController.navigate(Screen.VibeStudio)
+                                navController.navigate(Screen.VibeStudio())
                             }
                         },
                         modifier = Modifier.testTag("dev_debug_back_btn")
@@ -187,7 +187,7 @@ fun DevDebugCenterScreen(
                     CircularProgressIndicator(modifier = Modifier.testTag("dev_debug_loading"))
                 }
             } else if (workspaces.isEmpty()) {
-                EmptyWorkspaceState(onGoToVibeStudio = { navController.navigate(Screen.VibeStudio) })
+                EmptyWorkspaceState(onGoToVibeStudio = { navController.navigate(Screen.VibeStudio()) })
             } else {
                 LazyColumn(
                     modifier = Modifier

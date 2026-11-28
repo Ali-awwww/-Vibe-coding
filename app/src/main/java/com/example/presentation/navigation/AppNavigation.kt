@@ -272,11 +272,26 @@ fun AppNavigation(
             AIModelsScreen(navController = navController)
         }
 
-        composable<Screen.VibeStudio> {
+        composable<Screen.VibeStudio> { backStackEntry ->
+            val route: Screen.VibeStudio = backStackEntry.toRoute()
             val vibeViewModel: VibeStudioViewModel = viewModel {
                 DependencyProvider.provideVibeStudioViewModel(context)
             }
-            VibeStudioScreen(navController = navController, viewModel = vibeViewModel)
+            VibeStudioScreen(
+                initialWorkspaceId = route.initialWorkspaceId,
+                navController = navController,
+                viewModel = vibeViewModel
+            )
+        }
+
+        composable<Screen.AppBuilder> {
+            val builderViewModel: VibeStudioViewModel = viewModel {
+                DependencyProvider.provideVibeStudioViewModel(context)
+            }
+            com.example.presentation.ui.screens.vibe.AppBuilderWizardScreen(
+                navController = navController,
+                viewModel = builderViewModel
+            )
         }
 
         composable<Screen.DevDebugCenter> { backStackEntry ->

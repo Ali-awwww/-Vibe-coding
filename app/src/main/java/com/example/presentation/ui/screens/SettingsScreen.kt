@@ -25,6 +25,9 @@ import java.util.Date
 import java.util.Locale
 
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.example.BuildConfig
+import com.example.R
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -253,6 +256,20 @@ fun SettingsScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("تسجيل الخروج الآمن")
             }
+
+            Text(
+                text = stringResource(
+                    R.string.settings_app_version,
+                    BuildConfig.VERSION_NAME,
+                    BuildConfig.VERSION_CODE
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 4.dp, bottom = 8.dp)
+                    .testTag("settings_app_version_text")
+            )
         }
 
         // Sign out confirm dialog

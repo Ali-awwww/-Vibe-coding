@@ -130,11 +130,16 @@ class SetupGuideViewModel(
             )
             val result = runCatching { repository.verifyIntegration(applicationId) }
                 .getOrElse { failure -> Result.failure(failure) }
+            val verified = result.getOrNull()
             _uiState.value = _uiState.value.copy(
                 isVerifying = false,
-                verificationResult = result.getOrNull() ?: false,
+                verificationResult = verified ?: false,
                 error = result.exceptionOrNull()?.message,
-                errorResId = null
+                errorResId = if (result.isSuccess && verified == false) {
+                    R.string.setup_guide_verification_waiting_event
+                } else {
+                    null
+                }
             )
         }
     }

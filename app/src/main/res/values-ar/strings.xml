@@ -868,4 +868,29 @@
     <string name="settings_pii_scrubbing_status">حسب المشروع</string>
     <string name="settings_rate_limit_description">تقييد محلي داخل التطبيق لكل مشروع؛ ولا يحل محل تحديد المعدل على الخادم.</string>
     <string name="settings_rate_limit_status">محلي فقط</string>
+
+    <!-- v1.0.6 Verification, Live Testing & Build Wizard -->
+    <string name="setup_guide_verification_checking">جارٍ فحص المزودين المربوطين وأحداث التشخيص…</string>
+    <string name="setup_guide_verification_waiting_event">تم الاتصال بالمزود بنجاح، لكن لم يصل أي حدث تشخيصي لهذا التطبيق بعد.</string>
+    <string name="fix_verify_dialog_title">التحقق من الإصلاح</string>
+    <string name="fix_verify_dialog_desc">يفحص النظام جلسات الاختبار الحقيقية وسجلات الأعطال على الإصدار المستهدف وبيانات Shizuku للتحقق من زوال العطل.</string>
+    <string name="fix_verify_scenario_label">سيناريو التحقق</string>
+    <string name="fix_verify_run_now">بدء التحقق الفعلي</string>
+    <string name="live_testing_open_crash_watcher">إعداد Shizuku ومراقب الأعطال</string>
+    <string name="live_testing_shizuku_ready">ناقل الاختبار المباشر عبر Shizuku جاهز</string>
+    <string name="live_testing_quick_commands">أوامر سريعة:</string>
+    <string name="builder_wizard_title">معالج بناء التطبيقات بالذكاء الاصطناعي</string>
+    <string name="builder_step_platform">المنصة</string>
+    <string name="builder_step_describe">الوصف</string>
+    <string name="builder_step_blueprint">المخطط</string>
+    <string name="builder_step_build">البناء</string>
+    <string name="builder_step_open_ide">فتح IDE</string>
+    <string name="builder_step_counter">الخطوة %1$d من %2$d</string>
+    <string name="builder_back">رجوع</string>
+    <string name="builder_next">التالي</string>
+    <string name="builder_open_ide_cta">فتح بيئة التطوير (Open IDE)</string>
+    <string name="builder_built_success_title">مساحة عمل التطبيق جاهزة</string>
+    <string name="builder_dashboard_title">بناء تطبيق بالذكاء الاصطناعي</string>
+    <string name="builder_dashboard_subtitle">معالج متسلسل من 5 خطوات: اختيار المنصة، الوصف، مراجعة المخطط، البناء، وفتح بيئة التطوير</string>
+    <string name="settings_app_version">إصدار التطبيق: v%1$s (%2$d)</string>
 </resources>

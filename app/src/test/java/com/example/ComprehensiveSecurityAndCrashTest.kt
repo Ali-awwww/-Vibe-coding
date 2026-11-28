@@ -387,7 +387,10 @@ class ComprehensiveSecurityAndCrashTest {
             scenarioName = "not-executed",
             simulatedOutcome = VerificationStatus.FIX_VERIFIED_IN_TEST
         )
-        assertTrue(simulatedVerification.isFailure)
+        assertTrue(simulatedVerification.isSuccess)
+        val simulatedRecord = simulatedVerification.getOrThrow()
+        assertEquals(VerificationStatus.INCONCLUSIVE, simulatedRecord.status)
+        assertFalse(simulatedRecord.environmentValid)
     }
 
 

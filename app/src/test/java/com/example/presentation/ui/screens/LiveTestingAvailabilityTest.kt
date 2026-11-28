@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -170,6 +171,50 @@ class LiveTestingAvailabilityTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithText(arabicContext.getString(R.string.live_testing_agent_unavailable_title))
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun activeAgentTransportEnablesStartAndConnectButtons() {
+        val application = Application(
+            id = "app-live",
+            projectId = "project-live",
+            name = "Live app",
+            packageName = "com.example.live",
+            agentConnectionStatus = AgentConnectionStatus.ONLINE
+        )
+
+        composeRule.setContent {
+            val navController = rememberNavController()
+            CrashIntelligenceTheme(darkTheme = true) {
+                ApplicationCard(
+                    application = application,
+                    navController = navController,
+                    onStartTesting = {},
+                    onConnectAgent = {},
+                    agentTransportAvailable = true
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("live_testing_start_button").assertIsEnabled()
+        composeRule.onNodeWithTag("live_testing_connect_agent_button").assertIsDisplayed().assertIsEnabled()
+    }
+
+    @Test
+    fun shizukuBannerDisplaysCrashWatcherShortcutWhenShizukuNotReady() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                LiveShizukuTransportBanner(onOpenCrashWatcher = {})
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(appContext().getString(R.string.live_testing_shizuku_ready))
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("live_testing_open_watcher_button")
+            .assertIsDisplayed()
+            .assertIsEnabled()
     }
 
     private fun appContext(): Context = ApplicationProvider.getApplicationContext()

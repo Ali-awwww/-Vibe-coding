@@ -8,6 +8,8 @@ import com.example.data.local.AppDatabase
 import com.example.data.remote.BugsnagApi
 import com.example.data.remote.SentryApi
 import com.example.data.repository.CrashRepositoryImpl
+import com.example.data.repository.DeviceAgentInfo
+import com.example.data.repository.LiveAgentTransport
 import com.example.data.repository.LiveTestingRepositoryImpl
 import com.example.data.repository.SymbolicationRepositoryImpl
 import com.example.domain.model.*
@@ -138,13 +140,40 @@ class IntegrationWorkflowTest {
     }
 
 
+    private class UnavailableLiveAgentTransport : LiveAgentTransport {
+        override val isTransportAvailable: Boolean = false
+        override suspend fun checkReadiness(packageName: String): Result<DeviceAgentInfo> =
+            Result.failure(UnsupportedOperationException("Unavailable"))
+        override suspend fun dumpLogcat(packageName: String): Result<List<String>> =
+            Result.failure(UnsupportedOperationException("Unavailable"))
+        override suspend fun clearLogcat(): Result<Unit> =
+            Result.failure(UnsupportedOperationException("Unavailable"))
+        override suspend fun launchPackage(packageName: String): Result<String> =
+            Result.failure(UnsupportedOperationException("Unavailable"))
+        override suspend fun forceStopPackage(packageName: String): Result<String> =
+            Result.failure(UnsupportedOperationException("Unavailable"))
+    }
+
+    private class FakeLiveAgentTransport : LiveAgentTransport {
+        override val isTransportAvailable: Boolean = true
+        override suspend fun checkReadiness(packageName: String): Result<DeviceAgentInfo> =
+            Result.success(DeviceAgentInfo("test-device", "Pixel Test", "Android 15"))
+        override suspend fun dumpLogcat(packageName: String): Result<List<String>> =
+            Result.success(listOf("01-01 12:00:00.000 1000 1000 I $packageName: heartbeat ok"))
+        override suspend fun clearLogcat(): Result<Unit> = Result.success(Unit)
+        override suspend fun launchPackage(packageName: String): Result<String> =
+            Result.success("Launched $packageName")
+        override suspend fun forceStopPackage(packageName: String): Result<String> =
+            Result.success("Stopped $packageName")
+    }
+
     @Test
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun liveTestingFailsClosedWhenNoAuthenticatedAgentTransportExists() = runTest {
+    fun liveTestingFailsClosedWhenTransportIsUnavailable() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val viewModelStore = ViewModelStore()
         try {
-            val liveRepository = LiveTestingRepositoryImpl(db.crashDao())
+            val liveRepository = LiveTestingRepositoryImpl(db.crashDao(), UnavailableLiveAgentTransport())
             val legacySession = TestSession(
                 id = "legacy-local-session",
                 projectId = "proj-live",
@@ -215,6 +244,61 @@ class IntegrationWorkflowTest {
                 }.isFailure
             )
             assertEquals(1, db.crashDao().getTestEvents(legacySession.id).first().size)
+        } finally {
+            viewModelStore.clear()
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun liveTestingWithActiveTransportStartsRunsAllowlistedCommandsAndStops() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val viewModelStore = ViewModelStore()
+        try {
+            val project = Project(id = "proj-live-2", name = "Live Project", ownerId = "usr-dev")
+            repository.addProject(project)
+            val app = Application(
+                id = "app-live-2",
+                projectId = "proj-live-2",
+                name = "Live App",
+                packageName = "com.example.live"
+            )
+            repository.addApplication(app)
+
+            val liveRepository = LiveTestingRepositoryImpl(
+                crashDao = db.crashDao(),
+                transport = FakeLiveAgentTransport()
+            )
+            val viewModel = LiveTestingViewModel(liveRepository, repository)
+            viewModelStore.put("live-testing-active", viewModel)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.isAgentTransportAvailable)
+            viewModel.connectAgent(app.id)
+            advanceUntilIdle()
+            assertEquals(AgentConnectionStatus.ONLINE, db.crashDao().getApplicationById(app.id)?.agentConnectionStatus)
+
+            viewModel.startSession(app, version = "1.0.6", buildId = "build-6")
+            advanceUntilIdle()
+
+            val sessionId = viewModel.activeSession.value?.id
+            assertNotNull(sessionId)
+            viewModel.sendCommandToAgent(sessionId!!, "ping")
+            advanceUntilIdle()
+            viewModel.sendCommandToAgent(sessionId, "dump_logs")
+            advanceUntilIdle()
+
+            val events = db.crashDao().getTestEvents(sessionId).first()
+            assertTrue(events.any { it.type == TestEventType.APP_START })
+            assertTrue(events.any { it.type == TestEventType.SDK_EVENT && it.details.contains("ping") })
+
+            viewModel.stopSession()
+            advanceUntilIdle()
+            assertEquals(
+                TestSessionStatus.COMPLETED,
+                db.crashDao().getTestSessionById(sessionId).first()?.status
+            )
         } finally {
             viewModelStore.clear()
             Dispatchers.resetMain()
@@ -358,9 +442,11 @@ class IntegrationWorkflowTest {
             simulatedOutcome = VerificationStatus.FIX_VERIFIED_IN_TEST
         )
 
-        assertTrue(verificationResult.isFailure)
-        assertTrue(verificationResult.exceptionOrNull() is UnsupportedOperationException)
-        assertTrue(repository.getVerificationsByCrash("crash-bank-1").first().isEmpty())
+        assertTrue(verificationResult.isSuccess)
+        val record = verificationResult.getOrThrow()
+        assertEquals(VerificationStatus.INCONCLUSIVE, record.status)
+        assertFalse(record.environmentValid)
+        assertEquals(1, repository.getVerificationsByCrash("crash-bank-1").first().size)
 
         val notifications = repository.getNotifications().first()
         assertFalse(notifications.any { it.type == NotificationType.VERIFICATION_PASSED })

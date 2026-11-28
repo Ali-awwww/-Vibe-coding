@@ -23,8 +23,8 @@ android {
     applicationId = "com.aistudio.crashintelligence.vyfrip"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.0.5"
+    versionCode = 6
+    versionName = "1.0.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -90,7 +90,15 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all {
+        it.maxHeapSize = "2048m"
+        it.forkEvery = 1L
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,10 @@ fun FixHistoryScreen(
     viewModel: FixHistoryViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var reverifyTarget by remember { mutableStateOf<CrashVerificationRecord?>(null) }
+    var verifyVersion by remember { mutableStateOf("") }
+    var verifyBuildId by remember { mutableStateOf("") }
+    var verifyScenario by remember { mutableStateOf("") }
 
     LaunchedEffect(projectId) {
         viewModel.loadData(projectId)
@@ -95,7 +100,6 @@ fun FixHistoryScreen(
                 )
             ) {
                 item { VerificationRulesBanner() }
-                item { VerificationUnavailableBanner() }
                 item {
                     StatusFilterRow(
                         selectedStatus = uiState.selectedStatus,
@@ -115,11 +119,42 @@ fun FixHistoryScreen(
                     if (uiState.error == null) item { EmptyVerificationsView() }
                 } else {
                     items(uiState.filteredVerifications, key = { it.id }) { record ->
-                        VerificationCard(record = record, onReVerify = null)
+                        VerificationCard(
+                            record = record,
+                            onReVerify = {
+                                verifyVersion = record.newAppVersion.ifBlank { record.previousAppVersion }
+                                verifyBuildId = record.buildId
+                                verifyScenario = record.scenarioName.ifBlank { "إعادة التحقق من الإصلاح" }
+                                reverifyTarget = record
+                            }
+                        )
                     }
                 }
             }
         }
+    }
+
+    reverifyTarget?.let { target ->
+        FixVerificationInputDialog(
+            version = verifyVersion,
+            buildId = verifyBuildId,
+            scenario = verifyScenario,
+            isVerifying = uiState.isVerifying,
+            onVersionChange = { verifyVersion = it },
+            onBuildIdChange = { verifyBuildId = it },
+            onScenarioChange = { verifyScenario = it },
+            onDismiss = { reverifyTarget = null },
+            onConfirm = {
+                reverifyTarget = null
+                viewModel.reVerifyFix(
+                    crashId = target.crashId,
+                    fixSuggestionId = target.fixSuggestionId,
+                    newVersion = verifyVersion,
+                    buildId = verifyBuildId,
+                    scenarioName = verifyScenario
+                )
+            }
+        )
     }
 }
 
@@ -175,7 +210,7 @@ fun StatusFilterRow(
                 label = { Text(getVerificationStatusLabel(status), fontSize = 12.sp) },
                 leadingIcon = {
                     Surface(
-                        color = getVerificationStatusColor(),
+                        color = getVerificationStatusColor(status),
                         shape = MaterialTheme.shapes.extraSmall,
                         modifier = Modifier.size(8.dp)
                     ) {}
@@ -196,7 +231,7 @@ fun VerificationCard(
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(record.verifiedAt))
     }
     val validPrUrl = record.githubPrUrl?.takeIf(::isGitHubPullRequestUrl)
-    val displayedSummary = stringResource(R.string.verification_unavailable_desc)
+    val displayedSummary = record.comparisonSummary.ifBlank { getVerificationStatusLabel(record.status) }
 
     EngCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(VibeDesignTokens.Spacing.Medium)) {
@@ -205,7 +240,7 @@ fun VerificationCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                VerificationStatusBadge()
+                VerificationStatusBadge(record.status)
                 Text(
                     formattedDate,
                     style = MaterialTheme.typography.labelSmall,
@@ -280,7 +315,7 @@ fun VerificationCard(
             }
 
             Text(
-                "الحالة المسجلة (غير موثقة): ${getVerificationStatusLabel(record.status)}",
+                record.scenarioName.ifBlank { getVerificationStatusLabel(record.status) },
                 color = VibeDesignTokens.Color.TextMuted,
                 style = MaterialTheme.typography.labelSmall
             )
@@ -303,22 +338,22 @@ fun VerificationCard(
                     )
                 }
 
-                FilledTonalButton(
-                    onClick = { onReVerify?.invoke() },
-                    enabled = onReVerify != null,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        if (onReVerify != null) Icons.Default.Refresh else Icons.Default.Block,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        if (onReVerify != null) stringResource(R.string.re_verify)
-                        else stringResource(R.string.verification_unavailable_action),
-                        fontSize = 12.sp
-                    )
+                if (onReVerify != null) {
+                    FilledTonalButton(
+                        onClick = onReVerify,
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("fix_history_reverify_${record.id}"),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.re_verify), fontSize = 12.sp)
+                    }
                 }
             }
 
@@ -346,7 +381,7 @@ fun VerificationCard(
                             displayedSummary,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(12.dp),
-                            color = VibeDesignTokens.Color.TextMuted,
+                            color = VibeDesignTokens.Color.TextPrimary,
                             lineHeight = 18.sp
                         )
                     }
@@ -364,7 +399,7 @@ fun VerificationCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                stringResource(R.string.verification_history_untrusted_details),
+                                record.testScopeDetails,
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(12.dp),
                                 color = VibeDesignTokens.Color.TextMuted
@@ -372,14 +407,25 @@ fun VerificationCard(
                         }
                     }
 
-                    Text(
-                        stringResource(R.string.old_stack_trace),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = VibeDesignTokens.Color.Cyan
-                    )
-                    StackTraceCard(record.oldStackTrace)
+                    if (!record.newStackTrace.isNullOrBlank()) {
+                        Text(
+                            stringResource(R.string.new_stack_trace),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = VibeDesignTokens.Color.Error
+                        )
+                        StackTraceCard(record.newStackTrace)
+                    }
 
+                    if (record.oldStackTrace.isNotBlank()) {
+                        Text(
+                            stringResource(R.string.old_stack_trace),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = VibeDesignTokens.Color.Cyan
+                        )
+                        StackTraceCard(record.oldStackTrace)
+                    }
                 }
             }
         }
@@ -401,9 +447,16 @@ private fun VerificationMetadataColumn(label: String, value: String, modifier: M
 }
 
 @Composable
-fun VerificationStatusBadge() {
-    val color = VibeDesignTokens.Color.TextMuted
-    val label = stringResource(R.string.status_legacy_unverified)
+fun VerificationStatusBadge(status: VerificationStatus = VerificationStatus.INCONCLUSIVE) {
+    val color = getVerificationStatusColor(status)
+    val label = getVerificationStatusLabel(status)
+    val icon = when (status) {
+        VerificationStatus.FIX_VERIFIED_IN_TEST -> Icons.Default.CheckCircle
+        VerificationStatus.CRASH_REPRODUCED -> Icons.Default.BugReport
+        VerificationStatus.DIFFERENT_CRASH_DETECTED -> Icons.Default.Warning
+        VerificationStatus.TEST_FAILED -> Icons.Default.Error
+        VerificationStatus.INCONCLUSIVE -> Icons.Default.HelpOutline
+    }
 
     Surface(
         color = color.copy(alpha = 0.14f),
@@ -415,17 +468,21 @@ fun VerificationStatusBadge() {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            Icon(Icons.Default.HelpOutline, contentDescription = label, modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription = label, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text(label, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         }
     }
 }
 
-
-
-fun getVerificationStatusColor(): Color =
-    VibeDesignTokens.Color.TextMuted
+fun getVerificationStatusColor(status: VerificationStatus = VerificationStatus.INCONCLUSIVE): Color =
+    when (status) {
+        VerificationStatus.FIX_VERIFIED_IN_TEST -> VibeDesignTokens.Color.Success
+        VerificationStatus.CRASH_REPRODUCED,
+        VerificationStatus.TEST_FAILED -> VibeDesignTokens.Color.Error
+        VerificationStatus.DIFFERENT_CRASH_DETECTED -> VibeDesignTokens.Color.Violet
+        VerificationStatus.INCONCLUSIVE -> VibeDesignTokens.Color.TextMuted
+    }
 
 
 

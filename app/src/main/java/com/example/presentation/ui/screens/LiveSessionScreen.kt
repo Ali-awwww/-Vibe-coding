@@ -1,10 +1,12 @@
 package com.example.presentation.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -15,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,12 +40,23 @@ fun LiveSessionScreen(
 ) {
     val session by viewModel.activeSession.collectAsState()
     val events by viewModel.events.collectAsState()
+    val operationError by viewModel.operationError.collectAsState()
+    val operationErrorResId by viewModel.operationErrorResId.collectAsState()
+    val errorMessage = operationErrorResId?.let { stringResource(it) } ?: operationError
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
     val agentTransportAvailable = viewModel.isAgentTransportAvailable
 
     LaunchedEffect(sessionId) {
         viewModel.observeSession(sessionId)
         viewModel.observeEvents(sessionId)
+    }
+
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearOperationError()
+        }
     }
 
     // Auto-scroll to bottom when new events arrive
@@ -53,6 +67,7 @@ fun LiveSessionScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -84,7 +99,10 @@ fun LiveSessionScreen(
                 actions = {
                     session?.let {
                         if (agentTransportAvailable && it.status != TestSessionStatus.COMPLETED && it.status != TestSessionStatus.FAILED) {
-                            TextButton(onClick = { viewModel.stopSession() }) {
+                            TextButton(
+                                onClick = { viewModel.stopSession() },
+                                modifier = Modifier.heightIn(min = 48.dp).testTag("live_session_end_button")
+                            ) {
                                 Text(stringResource(R.string.live_session_end_button), color = MaterialTheme.colorScheme.error)
                             }
                         }
@@ -145,9 +163,50 @@ fun LiveSessionScreen(
                     }
                 }
 
-                if (session?.status == TestSessionStatus.APP_RUNNING) {
-                    CommandInput(onSendCommand = { cmd -> viewModel.sendCommandToAgent(session!!.id, cmd) })
+                val activeSession = session
+                if (activeSession != null && (
+                        activeSession.status == TestSessionStatus.APP_RUNNING ||
+                        activeSession.status == TestSessionStatus.CONNECTED ||
+                        activeSession.status == TestSessionStatus.PREPARING
+                    )
+                ) {
+                    QuickCommandBar(
+                        onQuickCommand = { cmd -> viewModel.sendCommandToAgent(activeSession.id, cmd) }
+                    )
+                    CommandInput(onSendCommand = { cmd -> viewModel.sendCommandToAgent(activeSession.id, cmd) })
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickCommandBar(onQuickCommand: (String) -> Unit) {
+    val commands = remember { listOf("ping", "dump_logs", "clear_logs", "launch", "force_stop") }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.live_testing_quick_commands),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            commands.forEach { cmd ->
+                AssistChip(
+                    onClick = { onQuickCommand(cmd) },
+                    label = { Text(cmd) },
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("live_cmd_chip_$cmd")
+                )
             }
         }
     }

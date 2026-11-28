@@ -20,6 +20,7 @@ import com.example.domain.model.*
 import androidx.compose.ui.res.stringResource
 import com.example.presentation.navigation.Screen
 import com.example.presentation.viewmodel.LiveTestingViewModel
+import com.example.util.shizuku.ShizukuManager
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -70,6 +71,11 @@ fun LiveTestingScreen(
         ) {
             if (!isAgentTransportAvailable) {
                 AgentTransportUnavailableNotice(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                )
+            } else {
+                LiveShizukuTransportBanner(
+                    onOpenCrashWatcher = { navController.navigate(Screen.CrashWatcher) },
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
                 )
             }
@@ -165,12 +171,64 @@ fun LiveTestingScreen(
         )
     }
 
-    // Effect to navigate when active session starts
-    val activeSession by viewModel.activeSession.collectAsState()
-    LaunchedEffect(activeSession) {
-        activeSession?.let {
-            if (isAgentTransportAvailable && it.status == TestSessionStatus.PREPARING) {
-                navController.navigate(Screen.LiveSession(it.id))
+    val navigateToSessionId by viewModel.navigateToSessionId.collectAsState()
+    LaunchedEffect(navigateToSessionId) {
+        navigateToSessionId?.let { sessionId ->
+            if (isAgentTransportAvailable) {
+                viewModel.clearSessionNavigation()
+                navController.navigate(Screen.LiveSession(sessionId))
+            }
+        }
+    }
+}
+
+@Composable
+fun LiveShizukuTransportBanner(
+    onOpenCrashWatcher: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isRunning = remember { ShizukuManager.isShizukuRunning() }
+    val hasPermission = remember { ShizukuManager.checkPermission() }
+    val isReady = isRunning && hasPermission
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isReady) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(
+                    imageVector = if (isReady) Icons.Default.VerifiedUser else Icons.Default.SettingsInputAntenna,
+                    contentDescription = null,
+                    tint = if (isReady) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.live_testing_shizuku_ready),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = when {
+                            isReady -> stringResource(R.string.crash_watcher_shizuku_status_ok)
+                            isRunning -> stringResource(R.string.crash_watcher_shizuku_status_unauthorized)
+                            else -> stringResource(R.string.crash_watcher_shizuku_status_dead)
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            if (!isReady) {
+                OutlinedButton(
+                    onClick = onOpenCrashWatcher,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("live_testing_open_watcher_button")
+                ) {
+                    Icon(Icons.Default.Build, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.live_testing_open_crash_watcher))
+                }
             }
         }
     }
@@ -293,7 +351,7 @@ fun ApplicationCard(
                 if (agentTransportAvailable && application.agentConnectionStatus == AgentConnectionStatus.OFFLINE) {
                     TextButton(
                         onClick = onConnectAgent,
-                        modifier = Modifier.testTag("live_testing_connect_agent_button")
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("live_testing_connect_agent_button")
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
@@ -304,7 +362,7 @@ fun ApplicationCard(
                 Button(
                     onClick = onStartTesting,
                     enabled = agentTransportAvailable && application.agentConnectionStatus == AgentConnectionStatus.ONLINE,
-                    modifier = Modifier.testTag("live_testing_start_button")
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("live_testing_start_button")
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))

@@ -868,4 +868,29 @@
     <string name="settings_pii_scrubbing_status">Per project</string>
     <string name="settings_rate_limit_description">In-process per-project throttling; it does not replace server-side rate limiting.</string>
     <string name="settings_rate_limit_status">Local only</string>
+
+    <!-- v1.0.6 Verification, Live Testing & Build Wizard -->
+    <string name="setup_guide_verification_checking">Checking configured providers and diagnostic events…</string>
+    <string name="setup_guide_verification_waiting_event">Connected to the provider, but no diagnostic event has been recorded for this app yet.</string>
+    <string name="fix_verify_dialog_title">Verify Fix</string>
+    <string name="fix_verify_dialog_desc">Check real test sessions, project crash reports on the target build, and Shizuku diagnostics to verify whether the crash was resolved.</string>
+    <string name="fix_verify_scenario_label">Verification scenario</string>
+    <string name="fix_verify_run_now">Run verification</string>
+    <string name="live_testing_open_crash_watcher">Open Crash Watcher Setup</string>
+    <string name="live_testing_shizuku_ready">On-device Shizuku Agent transport ready</string>
+    <string name="live_testing_quick_commands">Quick commands:</string>
+    <string name="builder_wizard_title">AI App Builder</string>
+    <string name="builder_step_platform">Platform</string>
+    <string name="builder_step_describe">Describe</string>
+    <string name="builder_step_blueprint">Blueprint</string>
+    <string name="builder_step_build">Build</string>
+    <string name="builder_step_open_ide">Open IDE</string>
+    <string name="builder_step_counter">Step %1$d of %2$d</string>
+    <string name="builder_back">Back</string>
+    <string name="builder_next">Next</string>
+    <string name="builder_open_ide_cta">Open IDE Workspace</string>
+    <string name="builder_built_success_title">Application Workspace Ready</string>
+    <string name="builder_dashboard_title">AI App Builder</string>
+    <string name="builder_dashboard_subtitle">Step-by-step wizard: choose platform, describe your app, review blueprint, build, and open IDE</string>
+    <string name="settings_app_version">App Version: v%1$s (%2$d)</string>
 </resources>

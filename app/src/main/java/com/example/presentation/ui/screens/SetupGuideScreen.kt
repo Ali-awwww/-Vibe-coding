@@ -298,14 +298,24 @@ fun VerificationSection(
             Text(stringResource(R.string.setup_guide_verification_body), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
             Spacer(Modifier.height(12.dp))
             when {
-                isVerifying -> CircularProgressIndicator(Modifier.size(24.dp))
-                result == true -> Text(stringResource(R.string.setup_guide_verification_success), color = MaterialTheme.colorScheme.primary)
-                verificationError != null -> Text(verificationError, color = MaterialTheme.colorScheme.error)
-                result == false -> Text(stringResource(R.string.setup_guide_verification_failed), color = MaterialTheme.colorScheme.error)
-                !isVerificationAvailable -> Text(stringResource(R.string.setup_guide_verification_unavailable), color = MaterialTheme.colorScheme.error)
+                isVerifying -> {
+                    CircularProgressIndicator(Modifier.size(24.dp))
+                    Spacer(Modifier.height(6.dp))
+                    Text(stringResource(R.string.setup_guide_verification_checking), style = MaterialTheme.typography.bodySmall)
+                }
+                result == true -> Text(stringResource(R.string.setup_guide_verification_success), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                verificationError != null -> Text(verificationError, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                result == false -> Text(stringResource(R.string.setup_guide_verification_failed), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                !isVerificationAvailable -> Text(stringResource(R.string.setup_guide_verification_unavailable), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
             }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onVerify, enabled = !isVerifying && isVerificationAvailable, modifier = Modifier.testTag("setup_guide_verify_button")) {
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onVerify,
+                enabled = !isVerifying && isVerificationAvailable,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("setup_guide_verify_button")
+            ) {
                 Text(if (isVerificationAvailable) stringResource(R.string.setup_guide_verification_start) else stringResource(R.string.setup_guide_verification_unavailable_button))
             }
         }

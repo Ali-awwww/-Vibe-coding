@@ -6,6 +6,7 @@ import com.example.R
 import com.example.domain.model.*
 import com.example.domain.repository.CrashRepository
 import com.example.domain.repository.LiveTestingRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -35,6 +36,12 @@ class LiveTestingViewModel(
 
     private val _operationErrorResId = MutableStateFlow<Int?>(null)
     val operationErrorResId = _operationErrorResId.asStateFlow()
+
+    private val _navigateToSessionId = MutableStateFlow<String?>(null)
+    val navigateToSessionId = _navigateToSessionId.asStateFlow()
+
+    private var observeSessionJob: Job? = null
+    private var observeEventsJob: Job? = null
 
     val isAgentTransportAvailable: Boolean = repository.isAgentTransportAvailable
 
@@ -104,17 +111,24 @@ class LiveTestingViewModel(
             )
             val result = repository.startTestSession(session)
             result.onSuccess {
-                _activeSession.value = session
+                _activeSession.value = session.copy(status = TestSessionStatus.APP_RUNNING)
                 observeSession(session.id)
                 observeEvents(session.id)
+                _navigateToSessionId.value = session.id
             }.onFailure { error ->
                 _operationError.value = error.message ?: "تعذر بدء جلسة الاختبار."
                 _operationErrorResId.value = null
             }
         }
     }
+
+    fun clearSessionNavigation() {
+        _navigateToSessionId.value = null
+    }
+
     fun observeSession(sessionId: String) {
-        viewModelScope.launch {
+        observeSessionJob?.cancel()
+        observeSessionJob = viewModelScope.launch {
             repository.getTestSessionById(sessionId).collect {
                 _activeSession.value = it
             }
@@ -126,7 +140,8 @@ class LiveTestingViewModel(
             _events.value = emptyList()
             return
         }
-        viewModelScope.launch {
+        observeEventsJob?.cancel()
+        observeEventsJob = viewModelScope.launch {
             repository.getTestEvents(sessionId).collect {
                 _events.value = it
             }

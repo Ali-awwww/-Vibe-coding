@@ -458,6 +458,14 @@ enum class StudioPanel {
     CHAT, EXPLORER, PREVIEW, TERMINAL, LOGS, PROBLEMS, GIT, TESTING, DIFF, CHECKPOINTS, CONSOLE, RESOURCES
 }
 
+enum class BuildWizardStep(val stepNumber: Int) {
+    CHOOSE_PLATFORM(1),
+    DESCRIBE_APP(2),
+    REVIEW_BLUEPRINT(3),
+    BUILD(4),
+    OPEN_IDE(5)
+}
+
 data class StudioUiState(
     val activeWorkspace: Workspace? = null,
     val openFiles: List<WorkspaceFile> = emptyList(),
@@ -505,11 +513,15 @@ data class StudioUiState(
 
     // AI App Builder State
     val isAppBuilderOpen: Boolean = false,
+    val appBuilderStep: BuildWizardStep = BuildWizardStep.CHOOSE_PLATFORM,
     val appBuilderPrompt: String = "",
     val appBuilderPreferredPlatform: String = "Web Full-Stack",
     val appBuilderBlueprint: AppBlueprint? = null,
     val isAnalyzingRequirements: Boolean = false,
     val appBuildProgress: AppBuildProgress? = null,
+    val appBuilderBuiltWorkspace: Workspace? = null,
+    val appBuilderBuiltFileCount: Int = 0,
+    val appBuilderError: String? = null,
 
     // AI Testing & Quality Assurance Engine
     val isTestingPanelOpen: Boolean = false,

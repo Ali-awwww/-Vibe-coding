@@ -81,6 +81,16 @@ class VibeStudioViewModel(
         }
     }
 
+    fun selectWorkspaceById(workspaceId: String) {
+        viewModelScope.launch {
+            val workspace = _workspaces.value.firstOrNull { it.id == workspaceId }
+                ?: repository.getWorkspaceById(workspaceId)
+            if (workspace != null) {
+                selectWorkspace(workspace)
+            }
+        }
+    }
+
     fun selectWorkspace(workspace: Workspace?) {
         if (workspace == null) {
             workspaceCollectorOwner.cancel()
@@ -914,15 +924,19 @@ class VibeStudioViewModel(
         _uiState.update { it.copy(isConsoleOpen = show) }
     }
 
-    // AI App Builder - Natural Language to Working Application
+    // AI App Builder - Sequential 5-Step Wizard
     fun openAppBuilder(initialPrompt: String = "") {
         _uiState.update {
             it.copy(
                 isAppBuilderOpen = true,
+                appBuilderStep = BuildWizardStep.CHOOSE_PLATFORM,
                 appBuilderPrompt = initialPrompt,
                 appBuilderBlueprint = null,
                 isAnalyzingRequirements = false,
-                appBuildProgress = null
+                appBuildProgress = null,
+                appBuilderBuiltWorkspace = null,
+                appBuilderBuiltFileCount = 0,
+                appBuilderError = null
             )
         }
     }
@@ -931,39 +945,111 @@ class VibeStudioViewModel(
         _uiState.update {
             it.copy(
                 isAppBuilderOpen = false,
+                appBuilderStep = BuildWizardStep.CHOOSE_PLATFORM,
                 isAnalyzingRequirements = false,
-                appBuildProgress = null
+                appBuildProgress = null,
+                appBuilderError = null
             )
         }
     }
 
+    fun clearAppBuilderError() {
+        _uiState.update { it.copy(appBuilderError = null) }
+    }
+
     fun updateAppBuilderPrompt(prompt: String) {
-        _uiState.update { it.copy(appBuilderPrompt = prompt) }
+        _uiState.update { it.copy(appBuilderPrompt = prompt, appBuilderError = null) }
     }
 
     fun updateAppBuilderPlatform(platform: String) {
-        _uiState.update { it.copy(appBuilderPreferredPlatform = platform) }
+        _uiState.update { it.copy(appBuilderPreferredPlatform = platform, appBuilderError = null) }
+    }
+
+    fun selectWizardPlatform(platform: String) {
+        updateAppBuilderPlatform(platform)
+    }
+
+    fun nextFromPlatformStep() {
+        _uiState.update {
+            it.copy(
+                appBuilderStep = BuildWizardStep.DESCRIBE_APP,
+                appBuilderError = null
+            )
+        }
+    }
+
+    fun previousWizardStep() {
+        _uiState.update { state ->
+            when (state.appBuilderStep) {
+                BuildWizardStep.CHOOSE_PLATFORM -> state
+                BuildWizardStep.DESCRIBE_APP -> state.copy(
+                    appBuilderStep = BuildWizardStep.CHOOSE_PLATFORM,
+                    appBuilderError = null
+                )
+                BuildWizardStep.REVIEW_BLUEPRINT -> state.copy(
+                    appBuilderStep = BuildWizardStep.DESCRIBE_APP,
+                    appBuilderError = null
+                )
+                BuildWizardStep.BUILD -> {
+                    val canStepBack = state.appBuildProgress == null ||
+                        state.appBuildProgress.stage == AppBuildStage.FAILED ||
+                        state.appBuildProgress.stage == AppBuildStage.IDLE
+                    if (canStepBack) {
+                        state.copy(
+                            appBuilderStep = BuildWizardStep.REVIEW_BLUEPRINT,
+                            appBuildProgress = null,
+                            appBuilderError = null
+                        )
+                    } else {
+                        state
+                    }
+                }
+                BuildWizardStep.OPEN_IDE -> state.copy(
+                    appBuilderStep = BuildWizardStep.REVIEW_BLUEPRINT,
+                    appBuilderError = null
+                )
+            }
+        }
     }
 
     fun analyzeAppRequirements(prompt: String, preferredPlatform: String? = null) {
+        val cleanPrompt = prompt.trim()
+        if (cleanPrompt.isBlank()) {
+            _uiState.update { it.copy(appBuilderError = "يرجى كتابة وصف واضح لفكرة التطبيق قبل التحليل.") }
+            return
+        }
         viewModelScope.launch {
-            val userId = requireAuthenticatedUserId() ?: return@launch
-            _uiState.update { it.copy(isAnalyzingRequirements = true, error = null) }
-            repository.analyzeAppRequirements(userId, prompt, preferredPlatform)
+            val userId = requireAuthenticatedUserId() ?: run {
+                _uiState.update { it.copy(appBuilderError = "يلزم تسجيل الدخول بحساب صالح لتحليل المتطلبات.") }
+                return@launch
+            }
+            val effectivePlatform = preferredPlatform ?: _uiState.value.appBuilderPreferredPlatform
+            _uiState.update {
+                it.copy(
+                    isAnalyzingRequirements = true,
+                    appBuilderError = null,
+                    error = null
+                )
+            }
+            repository.analyzeAppRequirements(userId, cleanPrompt, effectivePlatform)
                 .onSuccess { blueprint ->
                     _uiState.update {
                         it.copy(
                             isAnalyzingRequirements = false,
                             appBuilderBlueprint = blueprint,
-                            appBuilderPrompt = prompt
+                            appBuilderPrompt = cleanPrompt,
+                            appBuilderStep = BuildWizardStep.REVIEW_BLUEPRINT,
+                            appBuilderError = null
                         )
                     }
                 }
                 .onFailure { error ->
+                    val message = "فشل تحليل المتطلبات: ${error.message ?: "خطأ غير متوقع"}"
                     _uiState.update {
                         it.copy(
                             isAnalyzingRequirements = false,
-                            error = "فشل تحليل المتطلبات: ${error.message}"
+                            appBuilderError = message,
+                            error = message
                         )
                     }
                 }
@@ -971,14 +1057,24 @@ class VibeStudioViewModel(
     }
 
     fun updateBlueprint(blueprint: AppBlueprint) {
-        _uiState.update { it.copy(appBuilderBlueprint = blueprint) }
+        _uiState.update { it.copy(appBuilderBlueprint = blueprint, appBuilderError = null) }
     }
 
     fun buildApplication(blueprint: AppBlueprint) {
+        if (blueprint.name.isBlank()) {
+            _uiState.update { it.copy(appBuilderError = "يرجى إدخال اسم المشروع قبل بدء البناء.") }
+            return
+        }
         viewModelScope.launch {
-            val userId = requireAuthenticatedUserId() ?: return@launch
+            val userId = requireAuthenticatedUserId() ?: run {
+                _uiState.update { it.copy(appBuilderError = "يلزم تسجيل الدخول بحساب صالح لبناء المشروع.") }
+                return@launch
+            }
             _uiState.update {
                 it.copy(
+                    appBuilderStep = BuildWizardStep.BUILD,
+                    appBuilderError = null,
+                    error = null,
                     appBuildProgress = AppBuildProgress(
                         stage = AppBuildStage.ANALYZING_REQUIREMENTS,
                         progressPercent = 0.1f,
@@ -990,28 +1086,53 @@ class VibeStudioViewModel(
             repository.buildApplicationFromBlueprint(userId, blueprint) { progress ->
                 _uiState.update { it.copy(appBuildProgress = progress) }
             }.onSuccess { createdWorkspace ->
+                val generatedCount = runCatching {
+                    repository.getFiles(createdWorkspace.id).first().count { !it.isFolder }
+                }.getOrDefault(0)
                 _uiState.update {
                     it.copy(
-                        isAppBuilderOpen = false,
-                        appBuildProgress = null,
-                        activeWorkspace = createdWorkspace
+                        appBuilderStep = BuildWizardStep.OPEN_IDE,
+                        appBuilderBuiltWorkspace = createdWorkspace,
+                        appBuilderBuiltFileCount = generatedCount,
+                        appBuildProgress = AppBuildProgress(
+                            stage = AppBuildStage.COMPLETED,
+                            progressPercent = 1f,
+                            currentTask = "تم إنشاء المشروع بنجاح"
+                        ),
+                        activeWorkspace = createdWorkspace,
+                        appBuilderError = null
                     )
                 }
-                selectWorkspace(createdWorkspace)
-                togglePanel(StudioPanel.PREVIEW)
             }.onFailure { error ->
+                val message = "فشل في بناء التطبيق: ${error.message ?: "خطأ غير متوقع"}"
                 _uiState.update {
                     it.copy(
+                        appBuilderStep = BuildWizardStep.BUILD,
                         appBuildProgress = AppBuildProgress(
                             stage = AppBuildStage.FAILED,
                             progressPercent = 0f,
-                            currentTask = "فشل في بناء التطبيق: ${error.message}"
+                            currentTask = message
                         ),
-                        error = error.message
+                        appBuilderError = message,
+                        error = message
                     )
                 }
             }
         }
+    }
+
+    fun openBuiltWorkspaceInIde(): Workspace? {
+        val workspace = _uiState.value.appBuilderBuiltWorkspace ?: _uiState.value.activeWorkspace ?: return null
+        _uiState.update {
+            it.copy(
+                isAppBuilderOpen = false,
+                appBuildProgress = null,
+                appBuilderError = null
+            )
+        }
+        selectWorkspace(workspace)
+        togglePanel(StudioPanel.PREVIEW)
+        return workspace
     }
 
     // -------------------------------------------------------------

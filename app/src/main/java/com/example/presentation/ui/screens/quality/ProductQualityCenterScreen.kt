@@ -200,7 +200,7 @@ private fun navigateToInspectedScreen(navController: NavController, routeClass: 
             routeClass.contains("Analytics") -> navController.navigate(Screen.Analytics)
             routeClass.contains("LiveTesting") -> navController.navigate(Screen.LiveTesting)
             routeClass.contains("AIModels") -> navController.navigate(Screen.AIModels)
-            routeClass.contains("VibeStudio") -> navController.navigate(Screen.VibeStudio)
+            routeClass.contains("VibeStudio") -> navController.navigate(Screen.VibeStudio())
             routeClass.contains("DevDebugCenter") -> navController.navigate(Screen.DevDebugCenter())
             routeClass.contains("ModelTeams") -> navController.navigate(Screen.ModelTeams)
             routeClass.contains("TeamValidation") -> navController.navigate(Screen.TeamValidation)

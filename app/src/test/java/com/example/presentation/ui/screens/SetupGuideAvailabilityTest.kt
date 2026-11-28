@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -48,10 +49,10 @@ class SetupGuideAvailabilityTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun repositoryDoesNotVerifyOrMarkUnsupportedCrashlyticsAsConfigured() = runBlocking {
+    fun repositoryExposesTransportButFailsWithoutDaoAndKeepsCrashlyticsUnsupported() = runBlocking {
         val repository = SdkIntegrationRepositoryImpl()
 
-        assertFalse(repository.isVerificationTransportAvailable)
+        assertTrue(repository.isVerificationTransportAvailable)
         assertTrue(repository.verifyIntegration("application-1").isFailure)
 
         val firebaseGuide = repository.getSetupGuide(
@@ -94,6 +95,27 @@ class SetupGuideAvailabilityTest {
 
         composeRule.onNodeWithTag("setup_guide_verify_button").assertIsNotEnabled()
         composeRule.onNodeWithText(appContext().getString(R.string.setup_guide_verification_unavailable))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun verificationButtonIsEnabledWhenTransportIsAvailableAndShowsWaitingEvent() {
+        composeRule.setContent {
+            CrashIntelligenceTheme(darkTheme = true) {
+                VerificationSection(
+                    isVerifying = false,
+                    result = false,
+                    isVerificationAvailable = true,
+                    error = null,
+                    errorResId = R.string.setup_guide_verification_waiting_event,
+                    onVerify = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("setup_guide_verify_button").assertIsEnabled()
+        composeRule.onNodeWithText(appContext().getString(R.string.setup_guide_verification_waiting_event))
             .assertIsDisplayed()
     }
 

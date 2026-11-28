@@ -1,15 +1,66 @@
 package com.example.data.repository
 
 import com.example.data.local.CrashDao
+import com.example.data.remote.BugsnagApi
+import com.example.data.remote.SentryApi
 import com.example.domain.model.*
 import com.example.domain.repository.SdkIntegrationRepository
+import com.example.service.CrashWatcherState
+import com.example.util.SecurityUtils
+import com.example.util.shizuku.ShizukuManager
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import retrofit2.HttpException
+
+interface DiagnosticVerificationTransport {
+    val isAvailable: Boolean
+    suspend fun isWatcherMonitoring(packageName: String): Boolean
+    suspend fun hasRecentLogcatActivity(packageName: String): Boolean
+}
+
+class ShizukuDiagnosticVerificationTransport : DiagnosticVerificationTransport {
+    override val isAvailable: Boolean = true
+
+    override suspend fun isWatcherMonitoring(packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+        return CrashWatcherState.isMonitoring.value &&
+            packageName in CrashWatcherState.monitoredPackages.value
+    }
+
+    override suspend fun hasRecentLogcatActivity(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        if (packageName.isBlank() || !ShizukuManager.checkPermission()) return@withContext false
+        val process = ShizukuManager.executeProcess(
+            arrayOf("logcat", "-d", "-t", "80", "-b", "crash", "-b", "main")
+        ) ?: return@withContext false
+        try {
+            val lines = process.inputStream.bufferedReader().use { it.readLines() }
+            val exitCode = process.waitFor()
+            exitCode == 0 && lines.any { it.contains(packageName, ignoreCase = false) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        } finally {
+            runCatching { process.destroy() }
+        }
+    }
+}
 
 class SdkIntegrationRepositoryImpl(
-    @Suppress("unused") private val crashDao: CrashDao? = null
+    private val crashDao: CrashDao? = null,
+    private val sentryApi: SentryApi? = null,
+    private val bugsnagApi: BugsnagApi? = null,
+    private val transport: DiagnosticVerificationTransport = ShizukuDiagnosticVerificationTransport()
 ) : SdkIntegrationRepository {
 
-    // A real authenticated diagnostic-event receiver is not configured in this build.
-    override val isVerificationTransportAvailable: Boolean = false
+    private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+
+    override val isVerificationTransportAvailable: Boolean
+        get() = transport.isAvailable
 
     override suspend fun detectTechnology(fileNames: List<String>): ProjectScanResult {
         val files = fileNames.map { it.lowercase() }
@@ -96,7 +147,7 @@ class SdkIntegrationRepositoryImpl(
                 IntegrationStep(
                     id = "sentry_dashboard",
                     title = "Confirm the event in Sentry",
-                    description = "Open the linked Sentry project and confirm that the test event appears. This external check is not a verified Vibe Coding integration until the authenticated receiver is available.",
+                    description = "Open the linked Sentry project and confirm that the test event appears, then tap Verify Integration below.",
                     fileToModify = "Sentry Issues dashboard"
                 )
             ),
@@ -175,10 +226,155 @@ class SdkIntegrationRepositoryImpl(
         unavailableReason = reason
     )
 
-    override suspend fun verifyIntegration(applicationId: String): Result<Boolean> =
-        Result.failure(
-            UnsupportedOperationException(
-                "SDK verification is unavailable because no authenticated diagnostic-event receiver is configured."
+    override suspend fun verifyIntegration(applicationId: String): Result<Boolean> {
+        if (applicationId.isBlank()) {
+            return Result.failure(IllegalArgumentException("معرّف التطبيق مطلوب للتحقق من التكامل."))
+        }
+        val dao = crashDao
+            ?: return Result.failure(IllegalStateException("قاعدة البيانات غير متاحة للتحقق من تكامل التطبيق."))
+
+        val app = dao.getApplicationById(applicationId)
+            ?: return Result.failure(NoSuchElementException("لم يتم العثور على التطبيق المطلوب."))
+
+        val integrations = dao.getIntegrations(app.projectId).first()
+        val realCrashes = dao.getCrashesByProject(app.projectId).first()
+            .filter { !it.isSimulatedQa() && (it.applicationId == app.id || it.applicationId.isBlank()) }
+
+        // 1. Check Sentry integration if configured for this project
+        val sentryIntegration = integrations.firstOrNull { it.type == IntegrationType.SENTRY }
+        if (sentryIntegration != null) {
+            val config = parseConfig<SentryConfig>(sentryIntegration.configJson)
+            if (config == null || config.token.isBlank() || config.org.isBlank() || config.project.isBlank()) {
+                dao.insertIntegration(sentryIntegration.copy(status = IntegrationStatus.ERROR))
+                dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.ERROR)
+                return Result.failure(IllegalStateException("بيانات ربط Sentry غير مكتملة أو غير صالحة."))
+            }
+            val api = sentryApi
+            if (api != null) {
+                try {
+                    val issues = api.getIssues(
+                        authToken = "Bearer ${config.token}",
+                        orgSlug = config.org,
+                        projectSlug = config.project
+                    )
+                    dao.insertIntegration(
+                        sentryIntegration.copy(
+                            status = IntegrationStatus.CONNECTED,
+                            lastSyncedAt = System.currentTimeMillis()
+                        )
+                    )
+                    val hasRealSignal = issues.isNotEmpty() || realCrashes.any { it.source == IntegrationType.SENTRY }
+                    return if (hasRealSignal) {
+                        dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.CONFIGURED)
+                        Result.success(true)
+                    } else {
+                        dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.PENDING)
+                        Result.success(false)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (http: HttpException) {
+                    val status = if (http.code() == 401 || http.code() == 403) {
+                        IntegrationStatus.UNAUTHORIZED
+                    } else {
+                        IntegrationStatus.ERROR
+                    }
+                    dao.insertIntegration(sentryIntegration.copy(status = status))
+                    dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.ERROR)
+                    return Result.failure(IllegalStateException("فشل التحقق عبر Sentry API (HTTP ${http.code()})."))
+                } catch (error: Exception) {
+                    dao.insertIntegration(sentryIntegration.copy(status = IntegrationStatus.ERROR))
+                    dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.ERROR)
+                    return Result.failure(IllegalStateException("تعذر الاتصال بخادم Sentry: ${error.message ?: "خطأ شبكة"}"))
+                }
+            }
+        }
+
+        // 2. Check Bugsnag integration if configured for this project
+        val bugsnagIntegration = integrations.firstOrNull { it.type == IntegrationType.BUGSNAG }
+        if (bugsnagIntegration != null) {
+            val config = parseConfig<BugsnagConfig>(bugsnagIntegration.configJson)
+            if (config == null || config.token.isBlank() || config.projectId.isBlank()) {
+                dao.insertIntegration(bugsnagIntegration.copy(status = IntegrationStatus.ERROR))
+                dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.ERROR)
+                return Result.failure(IllegalStateException("بيانات ربط Bugsnag غير مكتملة أو غير صالحة."))
+            }
+            val api = bugsnagApi
+            if (api != null) {
+                try {
+                    val errors = api.getErrors(
+                        authToken = "token ${config.token}",
+                        projectId = config.projectId
+                    )
+                    dao.insertIntegration(
+                        bugsnagIntegration.copy(
+                            status = IntegrationStatus.CONNECTED,
+                            lastSyncedAt = System.currentTimeMillis()
+                        )
+                    )
+                    val hasRealSignal = errors.isNotEmpty() || realCrashes.any { it.source == IntegrationType.BUGSNAG }
+                    return if (hasRealSignal) {
+                        dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.CONFIGURED)
+                        Result.success(true)
+                    } else {
+                        dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.PENDING)
+                        Result.success(false)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (http: HttpException) {
+                    val status = if (http.code() == 401 || http.code() == 403) {
+                        IntegrationStatus.UNAUTHORIZED
+                    } else {
+                        IntegrationStatus.ERROR
+                    }
+                    dao.insertIntegration(bugsnagIntegration.copy(status = status))
+                    dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.ERROR)
+                    return Result.failure(IllegalStateException("فشل التحقق عبر Bugsnag API (HTTP ${http.code()})."))
+                } catch (error: Exception) {
+                    dao.insertIntegration(bugsnagIntegration.copy(status = IntegrationStatus.ERROR))
+                    dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.ERROR)
+                    return Result.failure(IllegalStateException("تعذر الاتصال بخادم Bugsnag: ${error.message ?: "خطأ شبكة"}"))
+                }
+            }
+        }
+
+        // 3. Check real stored diagnostic events from Webhook / On-Device Watcher / Custom
+        val hasRecordedEvent = realCrashes.any {
+            it.source == IntegrationType.WEBHOOK ||
+                it.source == IntegrationType.ON_DEVICE_WATCHER ||
+                it.source == IntegrationType.CUSTOM ||
+                it.source == IntegrationType.SENTRY ||
+                it.source == IntegrationType.BUGSNAG
+        }
+        if (hasRecordedEvent) {
+            dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.CONFIGURED)
+            return Result.success(true)
+        }
+
+        // 4. Check on-device Shizuku watcher or active logcat telemetry for this package
+        if (app.packageName.isNotBlank() &&
+            (transport.isWatcherMonitoring(app.packageName) || transport.hasRecentLogcatActivity(app.packageName))
+        ) {
+            dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.CONFIGURED)
+            return Result.success(true)
+        }
+
+        // 5. No configured provider or diagnostic signal detected -> honest failure/pending
+        dao.updateApplicationSdkStatus(app.id, SdkSetupStatus.PENDING)
+        return Result.failure(
+            IllegalStateException(
+                "لم يُرصد أي مصدر تشخيص نشط أو حدث حقيقي للتطبيق ${app.name}. اربط Sentry أو Bugsnag أو فعّل مراقب الجهاز عبر Shizuku ثم أعد المحاولة."
             )
         )
+    }
+
+    private inline fun <reified T> parseConfig(encryptedOrRawJson: String): T? {
+        return try {
+            val decrypted = SecurityUtils.decryptSecret(encryptedOrRawJson)
+            moshi.adapter(T::class.java).fromJson(decrypted)
+        } catch (_: Exception) {
+            null
+        }
+    }
 }
