@@ -25,9 +25,7 @@ import java.util.Date
 import java.util.Locale
 
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import com.example.BuildConfig
-import com.example.R
 
 
 @OptIn(ExperimentalMaterial3Api::class)
