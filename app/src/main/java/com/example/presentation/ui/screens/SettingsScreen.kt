@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
+import com.example.presentation.ui.components.UpdateSection
 import com.example.presentation.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -244,6 +245,7 @@ fun SettingsScreen(
 
             // تطبيقاتنا
             Button(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://apps-showcase.pages.dev")).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }, modifier = Modifier.fillMaxWidth().testTag("settings_open_our_apps")) { Icon(Icons.Default.Apps, null); Spacer(Modifier.width(8.dp)); Text("تطبيقاتنا") }
+        UpdateSection()
             // Sign Out Button
             Button(
                 onClick = { showSignOutDialog = true },
